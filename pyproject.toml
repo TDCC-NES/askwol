@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "askwol"
+version = "0.1.0"
+description = "OWL ontology checker: validates namespace resolution and term existence"
+requires-python = ">=3.10"
+license = "MIT"
+readme = "README.md"
+authors = [
+    { name = "Kathrin Füllenbach", email = "nes@tdcc.nl" },
+    { name = "Dani Metilli", email = "nes@tdcc.nl" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "rdflib>=7.0",
+    "httpx>=0.27",
+    "click>=8.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "pydantic>=2.0",
+    "rich>=13.0",
+    "python-multipart>=0.0.9",
+    "pyshacl>=0.28",
+    "owlrl>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",
+]
+
+[project.scripts]
+askwol = "askwol.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/TDCC-NES/askwol"
+Repository = "https://github.com/TDCC-NES/askwol"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/askwol"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["src"]

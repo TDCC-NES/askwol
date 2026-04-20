@@ -1,0 +1,74 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+
+<https://w3id.org/askwol/shapes/OntologyMetadataShape>
+    a sh:NodeShape ;
+    sh:targetClass owl:Ontology ;
+
+    sh:property [
+        sh:name "Title" ;
+        sh:path [ sh:alternativePath ( dcterms:title rdfs:label ) ] ;
+        sh:minCount 1 ;
+        sh:severity sh:Violation ;
+        sh:message "Add a title for the ontology using dcterms:title or rdfs:label." ;
+    ] ;
+
+    sh:property [
+        sh:name "Description" ;
+        sh:path [ sh:alternativePath ( dcterms:description rdfs:comment ) ] ;
+        sh:minCount 1 ;
+        sh:severity sh:Violation ;
+        sh:message "Add a description for the ontology using dcterms:description or rdfs:comment." ;
+    ] ;
+
+    sh:property [
+        sh:name "Creator" ;
+        sh:path dcterms:creator ;
+        sh:minCount 1 ;
+        sh:severity sh:Violation ;
+        sh:message "Add at least one creator using dcterms:creator." ;
+    ] ;
+
+    sh:property [
+        sh:name "License" ;
+        sh:path dcterms:license ;
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:severity sh:Violation ;
+        sh:message "Add a license IRI using dcterms:license." ;
+    ] ;
+
+    sh:property [
+        sh:name "Version" ;
+        sh:path [ sh:alternativePath ( owl:versionInfo owl:versionIRI ) ] ;
+        sh:minCount 1 ;
+        sh:severity sh:Violation ;
+        sh:message "Add version information using owl:versionInfo or owl:versionIRI." ;
+    ] ;
+
+    sh:property [
+        sh:name "Created date" ;
+        sh:path [ sh:alternativePath ( dcterms:created dcterms:issued ) ] ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Consider adding a creation or issue date using dcterms:created or dcterms:issued." ;
+    ] ;
+
+    sh:property [
+        sh:name "Modified date" ;
+        sh:path dcterms:modified ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Consider adding a modification date using dcterms:modified." ;
+    ] ;
+
+    sh:property [
+        sh:name "Publisher" ;
+        sh:path dcterms:publisher ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "Consider adding a publisher using dcterms:publisher." ;
+    ] .

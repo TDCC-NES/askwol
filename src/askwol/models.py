@@ -1,0 +1,218 @@
+"""Pydantic models for validation results and reports."""
+
+from __future__ import annotations
+
+from enum import Enum
+
+from pydantic import BaseModel, Field
+
+
+class Status(str, Enum):
+    OK = "ok"
+    FAIL = "fail"
+    WARN = "warn"
+    SKIP = "skip"
+
+
+class NamespaceCheck(BaseModel):
+    """Result of checking whether a namespace URI resolves."""
+
+    prefix: str
+    uri: str
+    status: Status
+    http_status: int | None = None
+    content_type: str | None = None
+    is_valid_rdf: bool | None = None
+    error: str | None = None
+
+
+class TermCheck(BaseModel):
+    """Result of checking whether a term exists in its remote vocabulary."""
+
+    term_uri: str
+    prefix: str
+    local_name: str
+    status: Status
+    error: str | None = None
+
+
+class NamespaceReport(BaseModel):
+    """Aggregated results for one namespace: resolution + term checks."""
+
+    prefix: str
+    uri: str
+    resolution: NamespaceCheck
+    terms: list[TermCheck] = Field(default_factory=list)
+
+    @property
+    def total_terms(self) -> int:
+        return len(self.terms)
+
+    @property
+    def valid_terms(self) -> int:
+        return sum(1 for t in self.terms if t.status == Status.OK)
+
+    @property
+    def invalid_terms(self) -> int:
+        return sum(1 for t in self.terms if t.status == Status.FAIL)
+
+
+class UnusedPrefix(BaseModel):
+    """A prefix declared but never used in any triple."""
+
+    prefix: str
+    uri: str
+
+
+class LangTagIssue(BaseModel):
+    """A single language-tag consistency issue on one subject+property."""
+
+    subject: str
+    property: str
+    issue_type: str  # "missing_tag" or "missing_language"
+    languages_found: list[str] = Field(default_factory=list)
+    languages_expected: list[str] = Field(default_factory=list)
+    detail: str
+
+
+class LangTagPropertySummary(BaseModel):
+    """Per-property summary of language tag usage."""
+
+    property: str
+    languages: list[str] = Field(default_factory=list)
+    total_subjects: int = 0
+    consistent_subjects: int = 0
+    examples: list[str] = Field(default_factory=list)
+
+
+class LangTagReport(BaseModel):
+    """Summary of language tag consistency across the ontology."""
+
+    properties_checked: int = 0
+    languages_used: list[str] = Field(default_factory=list)
+    property_summaries: list[LangTagPropertySummary] = Field(default_factory=list)
+    issues: list[LangTagIssue] = Field(default_factory=list)
+
+
+class MetadataCheck(BaseModel):
+    """One ontology metadata check derived from the SHACL shapes."""
+
+    key: str
+    label: str
+    property: str
+    severity: str  # required or recommended
+    status: Status
+    message: str | None = None
+
+
+class MetadataReport(BaseModel):
+    """Summary of ontology-level metadata completeness."""
+
+    checks: list[MetadataCheck] = Field(default_factory=list)
+
+    @property
+    def passed_checks(self) -> int:
+        return sum(1 for c in self.checks if c.status == Status.OK)
+
+    @property
+    def failed_checks(self) -> int:
+        return sum(1 for c in self.checks if c.status == Status.FAIL)
+
+    @property
+    def warning_checks(self) -> int:
+        return sum(1 for c in self.checks if c.status == Status.WARN)
+
+    @property
+    def total_checks(self) -> int:
+        return len(self.checks)
+
+
+class DefinitionDocumentationIssue(BaseModel):
+    """One internal class or property definition missing a label or comment."""
+
+    term: str
+    display_name: str
+    term_type: str
+    missing: list[str] = Field(default_factory=list)
+    message: str | None = None
+
+
+class DefinitionDocumentationCheck(BaseModel):
+    """Documentation status for one internal class or property definition."""
+
+    term: str
+    display_name: str
+    term_type: str
+    has_label: bool = False
+    has_comment: bool = False
+    status: Status
+    message: str | None = None
+
+
+class DefinitionDocumentationReport(BaseModel):
+    """Summary of documentation completeness for internal definitions."""
+
+    total_definitions: int = 0
+    documented_definitions: int = 0
+    checks: list[DefinitionDocumentationCheck] = Field(default_factory=list)
+    issues: list[DefinitionDocumentationIssue] = Field(default_factory=list)
+
+
+class ReasonerCheck(BaseModel):
+    """One result from the consistency and satisfiability checks."""
+
+    key: str
+    label: str
+    status: Status
+    message: str | None = None
+
+
+class ReasonerReport(BaseModel):
+    """Summary of lightweight reasoner checks on the current ontology."""
+
+    scoped_to_current_ontology: bool = True
+    imports_followed: bool = False
+    consistent: bool = True
+    inconsistent_individuals: list[str] = Field(default_factory=list)
+    unsatisfiable_classes: list[str] = Field(default_factory=list)
+    checks: list[ReasonerCheck] = Field(default_factory=list)
+
+
+class ValidationReport(BaseModel):
+    """Full validation report for an ontology file."""
+
+    file: str
+    namespaces: list[NamespaceReport] = Field(default_factory=list)
+    parse_errors: list[str] = Field(default_factory=list)
+    unused_prefixes: list[UnusedPrefix] = Field(default_factory=list)
+    lang_tags: LangTagReport | None = None
+    ontology_metadata: MetadataReport | None = None
+    definition_docs: DefinitionDocumentationReport | None = None
+    reasoner: ReasonerReport | None = None
+
+    @property
+    def total_namespaces(self) -> int:
+        return len(self.namespaces)
+
+    @property
+    def total_terms(self) -> int:
+        return sum(ns.total_terms for ns in self.namespaces)
+
+    @property
+    def has_issues(self) -> bool:
+        for ns in self.namespaces:
+            if ns.resolution.status == Status.FAIL:
+                return True
+            if ns.invalid_terms > 0:
+                return True
+        if self.unused_prefixes:
+            return True
+        if self.lang_tags and self.lang_tags.issues:
+            return True
+        if self.ontology_metadata and any(c.status != Status.OK for c in self.ontology_metadata.checks):
+            return True
+        if self.definition_docs and self.definition_docs.issues:
+            return True
+        if self.reasoner and (not self.reasoner.consistent or self.reasoner.unsatisfiable_classes):
+            return True
+        return len(self.parse_errors) > 0
