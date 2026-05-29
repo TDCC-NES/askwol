@@ -1,0 +1,25 @@
+services:
+  askwol:
+    build: .
+    image: askwol:latest
+    container_name: askwol
+    restart: unless-stopped
+    # Bind only to localhost – a reverse proxy on the host (e.g. Caddy/nginx)
+    # is expected to terminate TLS and forward to this port. Remove the
+    # 127.0.0.1: prefix to expose directly (development only).
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Path for the usage-tracking SQLite DB (persisted via the volume below).
+      - ASKWOL_USAGE_DB=/data/usage.db
+      # Set this to a long random string to enable the /stats dashboard.
+      # Example: ASKWOL_STATS_TOKEN=$(openssl rand -hex 32) in your .env file.
+      - ASKWOL_STATS_TOKEN=${ASKWOL_STATS_TOKEN:-}
+    volumes:
+      # Persist usage.db across container restarts/rebuilds.
+      - ./data:/data
+    # Use the production-style command by default (2 workers, no reload).
+    # For development, copy docker-compose.override.yml.example to
+    # docker-compose.override.yml to enable hot-reload + bind-mounted source.
+    # The live override file is gitignored so it never lands on the server.

@@ -1,0 +1,19 @@
+# Development override: bind-mount src/ and run uvicorn with --reload.
+# Docker Compose merges this file automatically when you run `docker compose up`
+# in this directory. Delete or rename this file (e.g. to .yml.example) on the
+# production server so the production CMD from the Dockerfile is used instead.
+services:
+  askwol:
+    volumes:
+      # Mount source code so edits on the host are picked up instantly.
+      - ./src:/app/src:ro
+    command:
+      - uvicorn
+      - askwol.web:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+      - --reload-dir
+      - /app/src

@@ -21,7 +21,7 @@
 ## Quick start
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/kathrinrin/askwol.git
 cd askwol
 python -m venv .venv
 source .venv/bin/activate
@@ -64,6 +64,102 @@ PYTHONPATH=src .venv/bin/uvicorn askwol.web:app --reload --port 8000
 
 Endpoints: `GET /` (upload form), `POST /validate` (HTML report), `POST /api/validate` (JSON), `GET /guide` (modeling guide), `GET /health`, `GET /docs` (Swagger / OpenAPI).
 
+## Deployment (Docker)
+
+The repo ships with a `Dockerfile` and `docker-compose.yml` so the web app can be deployed on any Linux server with Docker.
+
+### Run locally
+
+```bash
+# build the image and start it in the foreground (Ctrl+C to stop)
+docker compose up --build
+
+# or run detached in the background
+docker compose up -d --build
+
+# tail the logs
+docker compose logs -f askwol
+
+# stop and remove the container
+docker compose down
+
+# rebuild after code changes
+docker compose up -d --build
+```
+
+Then open http://localhost:8000.
+
+#### Development with hot-reload
+
+A `docker-compose.override.yml.example` is shipped that bind-mounts `src/` into
+the container and runs uvicorn with `--reload`. Copy it once and Docker Compose
+will merge it automatically:
+
+```bash
+cp docker-compose.override.yml.example docker-compose.override.yml
+docker compose up --build      # first time (and whenever deps change)
+# … edit files under src/askwol/ … uvicorn reloads on save
+```
+
+The live override file is gitignored, so it never lands on the server.
+
+### Deploy on a server
+
+Prerequisites: Linux host with Docker, a domain pointing to the server, and a reverse proxy (e.g. [Caddy](https://caddyserver.com/) or nginx) for HTTPS termination.
+
+```bash
+# on the server
+git clone https://github.com/kathrinrin/askwol.git /opt/askwol
+cd /opt/askwol
+# do NOT copy docker-compose.override.yml.example here – without it, the
+# production CMD from the Dockerfile (2 workers, no reload) is used.
+docker compose up -d --build
+```
+
+The container binds to `127.0.0.1:8000` only. Point your reverse proxy at it, e.g. a minimal Caddyfile:
+
+```caddy
+askwol.example.com {
+    encode zstd gzip
+    request_body { max_size 25MB }
+    reverse_proxy 127.0.0.1:8000
+}
+```
+
+Caddy will obtain a Let's Encrypt certificate automatically. Updates:
+
+```bash
+cd /opt/askwol && git pull && docker compose up -d --build
+```
+
+Logs: `docker compose logs -f askwol`.
+
+**Security notes:** askwol fetches arbitrary URLs (namespace resolution + URL upload). On a public deployment, consider blocking outbound requests to private IP ranges to prevent SSRF, and keep the upload size cap on the reverse proxy.
+
+### Usage tracking
+
+A lightweight, privacy-friendly tracker logs each validation request to a local SQLite database. No cookies, no JavaScript, no third-party services. IPs are hashed with a per-database secret so they cannot be recovered from the stored data.
+
+Recorded per event: timestamp, request kind (`validate` / `validate_upload`), source (the submitted URL or filename), HTTP status, duration in ms, and a truncated SHA-256 hash of the client IP.
+
+Environment variables:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ASKWOL_USAGE_DB` | `usage.db` | Path to the SQLite file. The Docker setup uses `/data/usage.db`, persisted to `./data/` on the host. |
+| `ASKWOL_STATS_TOKEN` | *(unset)* | Required to view the `/stats` JSON dashboard. If unset, `/stats` returns 503. |
+| `ASKWOL_USAGE_DISABLED` | *(unset)* | Set to `1` to disable tracking entirely. |
+
+Enable the dashboard:
+
+```bash
+echo "ASKWOL_STATS_TOKEN=$(openssl rand -hex 32)" >> .env
+docker compose up -d
+curl "http://127.0.0.1:8000/stats?token=$(grep ASKWOL_STATS_TOKEN .env | cut -d= -f2)"
+```
+
+Returns aggregated counts for the last 30 days: total events, unique IP hashes, events per day, per status, and the top requested sources.
+
 ### Python API
 
 ```python
@@ -90,14 +186,20 @@ Turtle (`.ttl`), RDF/XML (`.rdf`, `.owl`), JSON-LD (`.jsonld`), N-Triples (`.nt`
 
 ```
 src/askwol/
-├── cli.py           # Click CLI
-├── web.py           # FastAPI web app
-├── parser.py        # rdflib ontology parsing
-├── resolver.py      # async HTTP namespace resolution
-├── term_validator.py
-├── cache.py         # in-memory ontology cache
-├── models.py        # Pydantic models
-└── report.py        # output formatting
+├── cli.py                # Click CLI
+├── web.py                # FastAPI web app + HTML report
+├── parser.py             # rdflib ontology parsing
+├── resolver.py           # async HTTP namespace resolution
+├── term_validator.py     # remote term existence checks
+├── definition_docs.py    # SHACL-based definition/documentation checks
+├── metadata_validator.py # SHACL-based ontology metadata checks
+├── reasoner_checks.py    # OWL RL reasoning sanity checks
+├── lang_tags.py          # language-tag consistency checks
+├── cache.py              # in-memory ontology cache
+├── models.py             # Pydantic models
+├── report.py             # CLI output formatting
+├── usage.py              # privacy-friendly request tracking (SQLite)
+└── shapes/               # SHACL shapes (metadata + documentation)
 ```
 
 ## Tests

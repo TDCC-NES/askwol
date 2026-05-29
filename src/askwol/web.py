@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import tempfile
+import time
 from html import escape
 from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from rdflib import RDF, RDFS, OWL, Graph, URIRef
 
@@ -21,6 +22,7 @@ from askwol.models import NamespaceReport, Status, UnusedPrefix, ValidationRepor
 from askwol.parser import parse_ontology
 from askwol.resolver import resolve_all_namespaces
 from askwol.term_validator import validate_terms
+from askwol import usage
 
 app = FastAPI(
     title="askwol",
@@ -33,25 +35,51 @@ _global_cache = OntologyCache()
 
 UPLOAD_HTML = """<!DOCTYPE html>
 <html>
-<head><title>askwol</title>
+<head><title>Ask Wol</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F989;</text></svg>">
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 680px; margin: 50px auto; padding: 0 20px; color: #333; line-height: 1.6; }
-  h1 { margin-bottom: 0.2em; }
-  h2 { color: #555; margin-top: 1.5em; border-bottom: 1px solid #eee; padding-bottom: 0.2em; }
-  form { margin: 1em 0; padding: 1.2em; background: #f9f9f9; border-radius: 8px; border: 1px solid #eee; }
-  input[type=file], input[type=url] { margin: 0.5em 0; display: block; width: 100%; box-sizing: border-box; }
-  input[type=url] { padding: 0.4em; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95em; }
-  .or-divider { text-align: center; color: #999; margin: 0.8em 0; font-size: 0.9em; }
-  button { padding: 0.5em 1.8em; font-size: 1em; cursor: pointer; background: #4a7c59; color: white; border: none; border-radius: 4px; }
-  button:hover { background: #3d6a4a; }
-  code { background: #f0f0f0; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; }
-  a { color: #4a7c59; }
-  .about { margin-top: 2.5em; padding-top: 1.5em; border-top: 1px solid #eee; color: #666; font-size: 0.95em; }
+  :root { --accent: #4a7c59; --accent-dark: #3d6a4a; --border: #e5e7eb; --muted: #6b7280; --bg-soft: #f9fafb; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; max-width: 720px; margin: 50px auto; padding: 0 20px; color: #1f2937; line-height: 1.6; }
+  h1 { margin: 0.4em 0 0.1em; font-weight: 700; font-size: 2.4em; letter-spacing: -0.02em; display: flex; align-items: center; gap: 0.35em; }
+  h1 .owl { font-size: 1.4em; line-height: 1; }
+  h2 { color: #374151; margin-top: 1.8em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; font-weight: 600; }
+  code { background: #f3f4f6; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; }
+  a { color: var(--accent); }
+  .topnav { margin-bottom: 1.2em; font-size: 0.95em; color: #4b5563; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 8px; padding: 0.6em 0.9em; }
+
+  /* Card form */
+  .card { margin: 1.2em 0; padding: 1.5em; background: #fff; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 1.2em; }
+  .tab { padding: 0.55em 1.1em; font-size: 0.95em; cursor: pointer; background: none; border: none; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500; }
+  .tab:hover { color: #1f2937; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Inputs */
+  label { display: block; font-size: 0.85em; color: var(--muted); margin-bottom: 0.35em; font-weight: 500; text-transform: uppercase; letter-spacing: 0.02em; }
+  input[type=url], input[type=file] { width: 100%; padding: 0.6em 0.75em; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95em; font-family: inherit; background: #fff; }
+  input[type=url]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(74,124,89,0.15); }
+  input[type=file] { padding: 0.5em; }
+
+  /* Examples */
+  .examples-label { font-size: 0.8em; color: var(--muted); margin: 1em 0 0.4em; }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.4em; }
+  .chip { padding: 0.3em 0.85em; font-size: 0.85em; background: #f3f4f6; color: #374151; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+  .chip:hover { background: #eef3ef; color: var(--accent-dark); border-color: #cfdcd2; }
+
+  /* Submit */
+  .actions { margin-top: 1.4em; }
+  button.submit { padding: 0.65em 1.8em; font-size: 1em; cursor: pointer; background: var(--accent); color: white; border: none; border-radius: 6px; font-weight: 500; font-family: inherit; transition: background 0.15s; }
+  button.submit:hover { background: var(--accent-dark); }
+
+  .about { margin-top: 2.5em; padding-top: 1.5em; border-top: 1px solid var(--border); color: #4b5563; font-size: 0.95em; }
   .about .wol-link { float: right; display: block; margin: 0 0 1em 1.5em; }
   .about img { width: 140px; border-radius: 6px; display: block; cursor: pointer; }
-  .footer { margin-top: 2em; font-size: 0.85em; color: #aaa; text-align: center; }
-  .topnav { margin-bottom: 1em; font-size: 0.95em; color: #555; background: #f7f7f7; border: 1px solid #eee; border-radius: 8px; padding: 0.6em 0.9em; }
+  .footer { margin-top: 2em; font-size: 0.85em; color: #9ca3af; text-align: center; }
 </style>
 </head>
 <body>
@@ -61,19 +89,61 @@ UPLOAD_HTML = """<!DOCTYPE html>
     <a href="/guide">Modeling guide</a> &middot;
     <a href="/docs">API docs</a>
   </p>
-  <h1>&#x1F989; askwol</h1>
-  <p>Upload an <a href="https://www.w3.org/OWL/">OWL</a> ontology and
-  get an instant health check: a visual class diagram, namespace
-  verification, term validation, and a clean-up report.</p>
+  <h1><span class="owl" aria-hidden="true">&#x1F989;</span> Ask Wol</h1>
+  <p>Your friendly owl for instant <a href="https://www.w3.org/OWL/">OWL</a>
+  ontology reviews: a visual class diagram, namespace and term checks,
+  metadata and documentation review, and a clean-up report.</p>
 
-  <form action="/validate" method="post" enctype="multipart/form-data">
-    <p>Upload a file (Turtle, RDF/XML, JSON-LD, N-Triples, or N3):</p>
-    <input type="file" name="file" accept=".ttl,.rdf,.owl,.jsonld,.nt,.n3">
-    <div class="or-divider">or enter a URL</div>
-    <input type="url" name="url" placeholder="https://example.org/ontology.ttl">
-    <br>
-    <button type="submit">Ask Wol</button>
+  <form class="card" action="/validate" method="post" enctype="multipart/form-data">
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab active" data-tab="url" role="tab">From URL</button>
+      <button type="button" class="tab" data-tab="file" role="tab">Upload file</button>
+    </div>
+
+    <div id="panel-url" class="tab-panel active">
+      <label for="url-input">Ontology URL</label>
+      <input type="url" id="url-input" name="url" placeholder="https://example.org/ontology.ttl" value="http://xmlns.com/foaf/spec/index.rdf">
+      <div class="examples-label">Or try a well-known ontology</div>
+      <div class="chips">
+        <button type="button" class="chip" data-url="http://xmlns.com/foaf/spec/index.rdf">FOAF</button>
+        <button type="button" class="chip" data-url="http://purl.org/dc/terms/">Dublin Core</button>
+        <button type="button" class="chip" data-url="https://www.w3.org/ns/prov.ttl">PROV-O</button>
+        <button type="button" class="chip" data-url="https://www.w3.org/2006/time">Time</button>
+        <button type="button" class="chip" data-url="https://opengeospatial.github.io/ogc-geosparql/geosparql11/geo.ttl">GeoSPARQL</button>
+      </div>
+    </div>
+
+    <div id="panel-file" class="tab-panel">
+      <label for="file-input">Ontology file</label>
+      <input type="file" id="file-input" name="file" accept=".ttl,.rdf,.owl,.jsonld,.nt,.n3">
+      <div class="examples-label" style="margin-top:0.8em">Accepts Turtle, RDF/XML, JSON-LD, N-Triples, or N3.</div>
+    </div>
+
+    <div class="actions">
+      <button type="submit" class="submit">Ask Wol</button>
+    </div>
   </form>
+  <script>
+    // Tab switching: also clears the inactive panel's value so server gets only one input
+    const urlInput = document.getElementById('url-input');
+    const fileInput = document.getElementById('file-input');
+    document.querySelectorAll('.tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        const target = tab.dataset.tab;
+        document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === tab));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + target));
+        // Disable the inactive input so it isn't submitted
+        if (target === 'url') { fileInput.disabled = true; urlInput.disabled = false; }
+        else { urlInput.disabled = true; fileInput.disabled = false; }
+      });
+    });
+    document.querySelectorAll('.chip').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        urlInput.value = btn.dataset.url;
+        urlInput.focus();
+      });
+    });
+  </script>
 
   <h2>What do you get?</h2>
   <ol>
@@ -157,9 +227,23 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/stats", include_in_schema=False)
+async def stats_endpoint(token: str | None = None):
+    """Internal usage dashboard. Requires ASKWOL_STATS_TOKEN env var to match `?token=`."""
+    expected = usage.stats_token()
+    if not expected:
+        return JSONResponse(
+            {"error": "stats disabled - set ASKWOL_STATS_TOKEN to enable"},
+            status_code=503,
+        )
+    if token != expected:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return JSONResponse(usage.stats(days=30))
+
+
 GUIDE_HTML = """<!DOCTYPE html>
 <html>
-<head><title>askwol - Modeling Guide</title>
+<head><title>Ask Wol - Modeling Guide</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F989;</text></svg>">
 <style>
   body { font-family: system-ui, sans-serif; max-width: 720px; margin: 50px auto; padding: 0 20px; color: #333; line-height: 1.7; }
@@ -519,15 +603,34 @@ async def guide():
 
 @app.post("/validate", include_in_schema=False)
 async def validate(
+    request: Request,
     file: UploadFile | None = File(None),
     url: str | None = Form(None),
 ):
     """Validate an ontology from file upload or URL."""
+    started = time.perf_counter()
+    client_ip = request.client.host if request.client else None
+    source: str | None = None
+    kind = "validate"
+
     if url and url.strip():
-        return await _validate_url(url.strip())
-    if file and file.filename:
-        return await _validate_upload(file)
-    return HTMLResponse("<p>Please provide a file or URL.</p>", status_code=400)
+        source = url.strip()
+        response = await _validate_url(source)
+    elif file and file.filename:
+        source = file.filename
+        kind = "validate_upload"
+        response = await _validate_upload(file)
+    else:
+        response = HTMLResponse("<p>Please provide a file or URL.</p>", status_code=400)
+
+    usage.record(
+        kind,
+        source=source,
+        status=str(response.status_code),
+        duration_ms=int((time.perf_counter() - started) * 1000),
+        ip=client_ip,
+    )
+    return response
 
 
 async def _validate_url(url: str) -> HTMLResponse:
@@ -535,14 +638,46 @@ async def _validate_url(url: str) -> HTMLResponse:
     if parsed_url.scheme not in ("http", "https"):
         return HTMLResponse("<p>Only http/https URLs are supported.</p>", status_code=400)
 
+    # Ask the server for RDF via content negotiation. Many namespace URIs
+    # return HTML by default and only serve RDF when explicitly asked.
+    accept_header = (
+        "text/turtle, application/rdf+xml;q=0.9, application/ld+json;q=0.8, "
+        "application/n-triples;q=0.7, text/n3;q=0.6, */*;q=0.1"
+    )
+
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
-            resp = await client.get(url)
+            resp = await client.get(url, headers={"Accept": accept_header})
             resp.raise_for_status()
     except httpx.HTTPError as exc:
         return HTMLResponse(f"<p>Could not fetch URL: {escape(str(exc))}</p>", status_code=422)
 
-    suffix = Path(parsed_url.path).suffix or ".ttl"
+    # Pick a suffix from the Content-Type so the parser can sniff the format.
+    # Fall back to the URL path, then to .ttl.
+    ctype = (resp.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
+    ctype_suffix = {
+        "text/turtle": ".ttl",
+        "application/x-turtle": ".ttl",
+        "application/rdf+xml": ".rdf",
+        "application/xml": ".rdf",
+        "text/xml": ".rdf",
+        "application/ld+json": ".jsonld",
+        "application/json": ".jsonld",
+        "application/n-triples": ".nt",
+        "text/plain": ".nt",
+        "text/n3": ".n3",
+    }.get(ctype)
+
+    if ctype in ("text/html", "application/xhtml+xml"):
+        return HTMLResponse(
+            f"<p>The URL <code>{escape(url)}</code> returned an HTML page "
+            f"(<code>{escape(ctype)}</code>) instead of RDF. The server does not "
+            f"support content negotiation for this namespace. Try a direct link "
+            f"to the ontology file (e.g. <code>.ttl</code> or <code>.rdf</code>).</p>",
+            status_code=415,
+        )
+
+    suffix = ctype_suffix or Path(parsed_url.path).suffix or ".ttl"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(resp.content)
         tmp_path = Path(tmp.name)
@@ -605,6 +740,7 @@ def _build_mermaid(graph: Graph, namespaces: dict[str, str]) -> str:
 
     # Collect properties with domain/range
     properties: list[tuple[str, str | None, str | None, str]] = []  # (name, domain, range, kind)
+    seen_props: set[str] = set()
     for pred_type, kind in [(OWL.ObjectProperty, "obj"), (OWL.DatatypeProperty, "data")]:
         for s, _, _ in graph.triples((None, RDF.type, pred_type)):
             if not isinstance(s, URIRef):
@@ -615,11 +751,36 @@ def _build_mermaid(graph: Graph, namespaces: dict[str, str]) -> str:
             domain = domains[0] if domains else None
             rng = ranges[0] if ranges else None
             properties.append((prop_name, domain, rng, kind))
+            seen_props.add(str(s))
             # Ensure domain/range classes appear even if not explicitly typed
             if domain:
                 classes.add(domain)
             if rng and kind == "obj":
                 classes.add(rng)
+
+    # Also pick up plain rdf:Property (used by Dublin Core, schema.org, etc.)
+    # — infer kind from the range URI (xsd:* or rdfs:Literal => data, else obj).
+    xsd_ns = "http://www.w3.org/2001/XMLSchema#"
+    rdfs_literal = "http://www.w3.org/2000/01/rdf-schema#Literal"
+    for s, _, _ in graph.triples((None, RDF.type, RDF.Property)):
+        if not isinstance(s, URIRef) or str(s) in seen_props:
+            continue
+        prop_name = _shorten(str(s), namespaces)
+        domains = [str(o) for _, _, o in graph.triples((s, RDFS.domain, None)) if isinstance(o, URIRef)]
+        ranges = [str(o) for _, _, o in graph.triples((s, RDFS.range, None)) if isinstance(o, URIRef)]
+        domain = domains[0] if domains else None
+        rng = ranges[0] if ranges else None
+        if rng and (rng.startswith(xsd_ns) or rng == rdfs_literal):
+            kind = "data"
+        elif rng:
+            kind = "obj"
+        else:
+            kind = "data"  # no range => assume literal/annotation
+        properties.append((prop_name, domain, rng, kind))
+        if domain:
+            classes.add(domain)
+        if rng and kind == "obj":
+            classes.add(rng)
 
     # Collect subClassOf
     subclass_rels: list[tuple[str, str]] = []
@@ -803,7 +964,7 @@ async def validate_api(
 def _render_report(report: ValidationReport, mermaid: str = "") -> str:
     source = escape(report.file)
     parts = [
-        "<!DOCTYPE html><html><head><title>askwol - results</title>",
+        "<!DOCTYPE html><html><head><title>Ask Wol - results</title>",
         '<link rel="icon" href="data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\'><text y=\'.9em\' font-size=\'90\'>&#x1F989;</text></svg>">',
         "<style>",
         "  body { font-family: system-ui, sans-serif; max-width: 780px; margin: 40px auto; padding: 0 20px; color: #333; line-height: 1.5; }",
@@ -868,10 +1029,16 @@ def _render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<div id="diagram-viewport" class="diagram-viewport">')
         parts.append(f'<pre class="mermaid">\n{mermaid}\n</pre>')
         parts.append('</div>')
+        # Hidden copy of the Mermaid source so JS can copy / export it even
+        # after Mermaid has replaced the <pre> with the rendered SVG.
+        parts.append(f'<textarea id="mermaid-src" style="display:none">{escape(mermaid)}</textarea>')
         parts.append('<div class="diagram-controls">')
         parts.append('<button onclick="pzIn&amp;&amp;pzIn()">+ Zoom in</button>')
         parts.append('<button onclick="pzOut&amp;&amp;pzOut()">&minus; Zoom out</button>')
         parts.append('<button onclick="pzReset&amp;&amp;pzReset()">Reset view</button>')
+        parts.append('<button onclick="copyMermaid&amp;&amp;copyMermaid(this)">Copy Mermaid</button>')
+        parts.append('<button onclick="downloadSVG&amp;&amp;downloadSVG()">Download SVG</button>')
+        parts.append('<button onclick="downloadPNG&amp;&amp;downloadPNG()">Download PNG</button>')
         parts.append('<span style="font-size:0.8em;color:#999;margin-left:0.5em;">Ctrl+scroll to zoom, drag to pan</span>')
         parts.append('</div>')
         parts.append("</div>")
@@ -1206,11 +1373,21 @@ def _render_report(report: ValidationReport, mermaid: str = "") -> str:
     if mermaid:
         parts.append("""<script type="module">
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-mermaid.initialize({startOnLoad:false,theme:"neutral",securityLevel:"loose"});
-await mermaid.run();
 const vp = document.getElementById('diagram-viewport');
+function showError(msg) {
+  if (vp) vp.innerHTML = '<div style="padding:1em;color:#c00;font-family:monospace;font-size:0.85em;white-space:pre-wrap;">Diagram error: ' + msg + '</div>';
+  console.error('[askwol diagram]', msg);
+}
+try {
+  mermaid.initialize({startOnLoad:false,theme:"neutral",securityLevel:"loose"});
+  await mermaid.run();
+} catch (e) {
+  showError(String(e && e.message || e));
+}
 const svg = vp && vp.querySelector('svg');
-if (svg) {
+if (!svg) {
+  showError('Mermaid did not produce an SVG. Check the Mermaid source via the "Copy Mermaid" button.');
+} else {
   // Read Mermaid's own viewBox (it always sets one)
   const vb = svg.viewBox.baseVal;
   let origX = vb.x, origY = vb.y, origW = vb.width, origH = vb.height;
@@ -1220,6 +1397,8 @@ if (svg) {
     origX = bbox.x - 20; origY = bbox.y - 20;
     origW = bbox.width + 40; origH = bbox.height + 40;
   }
+  // Remember pristine values for export (before aspect-ratio padding)
+  const pristineX = origX, pristineY = origY, pristineW = origW, pristineH = origH;
 
   // Fill the container  -  disable preserveAspectRatio so viewBox maps 1:1
   svg.removeAttribute('style');
@@ -1283,6 +1462,71 @@ if (svg) {
   window.pzIn = () => { const nw=curW/zf, nh=curH/zf; curX+=(curW-nw)/2; curY+=(curH-nh)/2; curW=nw; curH=nh; setVB(); };
   window.pzOut = () => { const nw=curW*zf, nh=curH*zf; curX+=(curW-nw)/2; curY+=(curH-nh)/2; curW=nw; curH=nh; setVB(); };
   window.pzReset = () => { curX=origX; curY=origY; curW=origW; curH=origH; setVB(); };
+
+  // Build a clean, exportable SVG (original size, preserved aspect ratio)
+  function buildExportSVG() {
+    const clone = svg.cloneNode(true);
+    clone.setAttribute('viewBox', `${pristineX} ${pristineY} ${pristineW} ${pristineH}`);
+    clone.setAttribute('width', String(pristineW));
+    clone.setAttribute('height', String(pristineH));
+    clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+    return '<?xml version="1.0" encoding="UTF-8"?>\\n' + new XMLSerializer().serializeToString(clone);
+  }
+
+  function triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  window.copyMermaid = async (btn) => {
+    const src = document.getElementById('mermaid-src').value;
+    try {
+      await navigator.clipboard.writeText(src);
+      const old = btn.textContent; btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    } catch (e) {
+      alert('Could not copy: ' + e);
+    }
+  };
+
+  window.downloadSVG = () => {
+    const blob = new Blob([buildExportSVG()], {type: 'image/svg+xml'});
+    triggerDownload(blob, 'ontology-diagram.svg');
+  };
+
+  window.downloadPNG = () => {
+    const svgStr = buildExportSVG();
+    // Use a data URL (works more reliably than blob: across browsers)
+    const dataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const scale = 2;
+      const w = Math.max(1, Math.round(pristineW * scale));
+      const h = Math.max(1, Math.round(pristineH * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      try {
+        canvas.toBlob((blob) => {
+          if (blob) triggerDownload(blob, 'ontology-diagram.png');
+          else alert('PNG conversion failed (empty blob).');
+        }, 'image/png');
+      } catch (e) {
+        alert('Could not export PNG: ' + e.message + '\\nTry the SVG download instead.');
+      }
+    };
+    img.onerror = () => alert('Could not render PNG. Try downloading the SVG instead.');
+    img.src = dataUrl;
+  };
 }
 </script>""")
     parts.append("</body></html>")

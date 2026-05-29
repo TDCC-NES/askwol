@@ -8,3 +8,7 @@ build/
 .pytest_cache/
 .ruff_cache/
 *.tmp
+data/
+usage.db
+.env
+docker-compose.override.yml
