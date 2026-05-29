@@ -148,14 +148,9 @@ def run_reasoner_checks(graph: Graph) -> ReasonerReport:
         if contradiction_found:
             unsatisfiable_classes.append(str(cls))
 
-    checks: list[ReasonerCheck] = [
-        ReasonerCheck(
-            key="scope",
-            label="Reasoning scope",
-            status=Status.OK,
-            message="Current ontology only - owl:imports are not followed for this check.",
-        )
-    ]
+    # "Reasoning scope" is metadata about how the check is run (already shown
+    # in the section subtitle), not a check result. Don't list it as a check.
+    checks: list[ReasonerCheck] = []
 
     if inconsistent_individuals:
         checks.append(

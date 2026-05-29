@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from rdflib import Graph, Literal, URIRef
+from rdflib import BNode, Graph, Literal, URIRef
 
 from askwol.models import LangTagIssue, LangTagPropertySummary, LangTagReport
 
@@ -55,8 +55,10 @@ def check_lang_tags(graph: Graph, ns_map: dict[str, str]) -> LangTagReport:
       using that property should also use language tags (no bare strings).
     - All subjects should use the same set of languages for each property.
     """
-    # property URI -> subject URI -> set of language tags (None = untagged)
+    # property URI -> subject (URI string or bnode id) -> set of language tags
     prop_data: dict[str, dict[str, set[str | None]]] = defaultdict(lambda: defaultdict(set))
+    # remember which subjects were blank nodes
+    bnode_subjects: set[str] = set()
 
     for s, p, o in graph:
         if not isinstance(p, URIRef) or not isinstance(o, Literal):
@@ -65,6 +67,8 @@ def check_lang_tags(graph: Graph, ns_map: dict[str, str]) -> LangTagReport:
         if p_str not in LABEL_PROPERTIES:
             continue
         s_str = str(s)
+        if isinstance(s, BNode):
+            bnode_subjects.add(s_str)
         lang = o.language  # None when untagged
         prop_data[p_str][s_str].add(lang)
 
@@ -96,11 +100,13 @@ def check_lang_tags(graph: Graph, ns_map: dict[str, str]) -> LangTagReport:
         # Track which subjects are fully consistent (have all expected langs, no bare strings)
         consistent: list[str] = []
         for subj_uri, subj_langs in sorted(subjects.items()):
-            subj_short = _shorten(subj_uri, ns_map)
+            is_bnode = subj_uri in bnode_subjects
+            subj_short = "(blank node)" if is_bnode else _shorten(subj_uri, ns_map)
             actual_langs = {l for l in subj_langs if l is not None}
 
             if actual_langs == prop_langs and None not in subj_langs:
-                consistent.append(subj_short)
+                if not is_bnode:
+                    consistent.append(subj_short)
                 continue
 
             # Check 1: untagged literal when tags are expected
@@ -111,7 +117,8 @@ def check_lang_tags(graph: Graph, ns_map: dict[str, str]) -> LangTagReport:
                     issue_type="missing_tag",
                     languages_found=sorted(actual_langs),
                     languages_expected=expected,
-                    detail=f"Has untagged value  -  add a language tag",
+                    detail="Has untagged value  -  add a language tag",
+                    is_blank_node=is_bnode,
                 ))
 
             # Check 2: missing languages
@@ -126,6 +133,7 @@ def check_lang_tags(graph: Graph, ns_map: dict[str, str]) -> LangTagReport:
                     languages_found=sorted(actual_langs),
                     languages_expected=expected,
                     detail=f"Missing: {', '.join(sorted(missing))}",
+                    is_blank_node=is_bnode,
                 ))
 
         property_summaries.append(LangTagPropertySummary(

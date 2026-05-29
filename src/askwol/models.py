@@ -73,6 +73,7 @@ class LangTagIssue(BaseModel):
     languages_found: list[str] = Field(default_factory=list)
     languages_expected: list[str] = Field(default_factory=list)
     detail: str
+    is_blank_node: bool = False
 
 
 class LangTagPropertySummary(BaseModel):
@@ -158,6 +159,65 @@ class DefinitionDocumentationReport(BaseModel):
     issues: list[DefinitionDocumentationIssue] = Field(default_factory=list)
 
 
+class ImportsCheck(BaseModel):
+    """One namespace used by the ontology, and whether it is imported."""
+
+    prefix: str
+    namespace: str
+    status: Status
+    message: str | None = None
+
+
+class ImportsReport(BaseModel):
+    """Summary of owl:imports completeness for used external vocabularies."""
+
+    ontology_iri: str | None = None
+    declared: list[str] = Field(default_factory=list)
+    checks: list[ImportsCheck] = Field(default_factory=list)
+    status: Status = Status.OK
+
+    @property
+    def missing(self) -> list[ImportsCheck]:
+        return [c for c in self.checks if c.status == Status.WARN]
+
+    @property
+    def total(self) -> int:
+        return len(self.checks)
+
+
+class IRIStrategyReport(BaseModel):
+    """Hash vs slash IRI strategy used by the ontology's own defined terms."""
+
+    ontology_iri: str | None = None
+    strategy: str = "none"  # "hash" | "slash" | "mixed" | "none"
+    hash_count: int = 0
+    slash_count: int = 0
+    hash_examples: list[str] = Field(default_factory=list)
+    slash_examples: list[str] = Field(default_factory=list)
+    status: Status = Status.SKIP
+    message: str | None = None
+
+
+class IRISchemeConflict(BaseModel):
+    """One host that is referenced under both http:// and https://."""
+
+    host: str
+    http_count: int = 0
+    https_count: int = 0
+    http_examples: list[str] = Field(default_factory=list)
+    https_examples: list[str] = Field(default_factory=list)
+
+
+class IRISchemeReport(BaseModel):
+    """Per-host http vs https scheme consistency across all IRIs used."""
+
+    total_hosts: int = 0
+    http_only_hosts: int = 0
+    https_only_hosts: int = 0
+    conflicts: list[IRISchemeConflict] = Field(default_factory=list)
+    status: Status = Status.SKIP
+    message: str | None = None
+
 class ReasonerCheck(BaseModel):
     """One result from the consistency and satisfiability checks."""
 
@@ -188,6 +248,9 @@ class ValidationReport(BaseModel):
     lang_tags: LangTagReport | None = None
     ontology_metadata: MetadataReport | None = None
     definition_docs: DefinitionDocumentationReport | None = None
+    imports: ImportsReport | None = None
+    iri_strategy: IRIStrategyReport | None = None
+    iri_scheme: IRISchemeReport | None = None
     reasoner: ReasonerReport | None = None
 
     @property
@@ -212,6 +275,12 @@ class ValidationReport(BaseModel):
         if self.ontology_metadata and any(c.status != Status.OK for c in self.ontology_metadata.checks):
             return True
         if self.definition_docs and self.definition_docs.issues:
+            return True
+        if self.imports and self.imports.missing:
+            return True
+        if self.iri_strategy and self.iri_strategy.status == Status.WARN:
+            return True
+        if self.iri_scheme and self.iri_scheme.status == Status.WARN:
             return True
         if self.reasoner and (not self.reasoner.consistent or self.reasoner.unsatisfiable_classes):
             return True

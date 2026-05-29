@@ -1,0 +1,33 @@
+@prefix : <https://w3id.org/test/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+
+# A small, *clean* sample ontology where every askwol check should pass.
+# Pair with `broken.ttl` which deliberately trips every check.
+
+<https://w3id.org/test/> rdf:type owl:Ontology ;
+    dcterms:title "Test ontology"@en ;
+    dcterms:description "A small ontology used as a clean sample for askwol's automated checks."@en ;
+    dcterms:creator "askwol test suite" ;
+    dcterms:publisher "askwol test suite" ;
+    dcterms:license <https://creativecommons.org/publicdomain/zero/1.0/> ;
+    dcterms:created "2025-01-01"^^xsd:date ;
+    dcterms:modified "2025-01-02"^^xsd:date ;
+    owl:versionInfo "1.0.0" .
+
+:MyClass rdf:type owl:Class ;
+    rdfs:label "My Class"@en ;
+    rdfs:comment "A class defined by the test ontology."@en .
+
+:myProperty rdf:type owl:ObjectProperty ;
+    rdfs:label "my property"@en ;
+    rdfs:comment "Relates instances of MyClass to other instances of MyClass."@en ;
+    rdfs:domain :MyClass ;
+    rdfs:range :MyClass .
+
+:myInstance rdf:type :MyClass ;
+    rdfs:label "Instance 1"@en ;
+    rdfs:comment "An example individual of MyClass."@en .

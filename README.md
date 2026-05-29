@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-38%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-79%20passing-brightgreen.svg)](#tests)
 [![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 
 <!-- Once deployed, add a live link here:
@@ -27,13 +27,22 @@ The W3C originally planned to call their Web Ontology Language **WOL**. Tim Fini
 
 ## What do you get?
 
+A single HTML report (or JSON via the API) with one section per automated check. Every section links to a matching entry in the built-in **modeling guide** at `/guide`, so a failing check always tells you *why* the convention exists.
+
 1. **Ontology diagram** - an interactive class diagram showing classes, properties, and inheritance hierarchy (web UI). Zoom, pan, and explore.
-2. **Namespace resolution** - fetches each namespace URI, checks HTTP status, tries to parse as RDF (Turtle, RDF/XML, JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF links.
-3. **Term validation** - verifies that terms defined in your ontology (classes, properties, individuals) actually exist in the remote vocabularies they reference. Catches typos like `owl:MadeUpClass`.
-4. **Unused prefixes** - flags `@prefix` declarations that are never used in any triple.
-5. **Language tag consistency** - checks whether human-readable labels and definitions use language tags consistently across the ontology.
-6. **Metadata & documentation review** - SHACL-based checks against best-practice ontology metadata and definition documentation shapes.
-7. **OWL RL reasoner sanity check** - runs a lightweight reasoner to surface obvious inconsistencies.
+2. **Ontology metadata** - SHACL check on the ontology header: title, description, creator, license IRI, version are required; created/modified dates and publisher are recommended.
+3. **Imports** - external vocabularies actually used in the ontology must be declared with `owl:imports`. Core W3C vocabularies (RDF, RDFS, OWL, XSD) are excluded.
+4. **IRI strategy** - the ontology's own defined terms should consistently use either hash (`#Term`) or slash (`/Term`), not both.
+5. **IRI scheme** - each host should be referenced under a single URI scheme. `http://example.org/X` and `https://example.org/X` are different IRIs.
+6. **Namespace resolution** - fetches each declared namespace URI, checks HTTP status, tries to parse as RDF (Turtle, RDF/XML, JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF links.
+7. **Term validation** - verifies that terms referenced from a remote vocabulary actually exist there. Catches typos like `owl:MadeUpClass`.
+8. **Definition documentation** - SHACL check that every internally defined class and property carries both an `rdfs:label` and an `rdfs:comment`. Reused external terms are ignored.
+9. **Language tag consistency** - labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) should use the same language tags across subjects.
+10. **OWL RL reasoner checks** - lightweight reasoning on the current ontology (imports are not followed), with three distinct facets:
+    - **Ontology consistency** - the ontology as a whole has a model.
+    - **Inconsistent individuals** - specific named individuals that violate a class restriction (e.g. typed in two `owl:disjointWith` classes).
+    - **Unsatisfiable classes** - named classes whose definition forces them to be empty (equivalent to `owl:Nothing`).
+11. **Unused prefixes** - flags `@prefix` declarations that are never used in any triple.
 
 ## Quick start
 
@@ -213,20 +222,38 @@ Turtle (`.ttl`), RDF/XML (`.rdf`, `.owl`), JSON-LD (`.jsonld`), N-Triples (`.nt`
 ```
 src/askwol/
 ├── cli.py                # Click CLI
-├── web.py                # FastAPI web app + HTML report
+├── web.py                # FastAPI app, routes, orchestration
 ├── parser.py             # rdflib ontology parsing
 ├── resolver.py           # async HTTP namespace resolution
 ├── term_validator.py     # remote term existence checks
-├── definition_docs.py    # SHACL-based definition/documentation checks
 ├── metadata_validator.py # SHACL-based ontology metadata checks
-├── reasoner_checks.py    # OWL RL reasoning sanity checks
+├── definition_docs.py    # SHACL-based definition documentation checks
+├── imports_check.py      # owl:imports completeness check
+├── iri_strategy.py       # hash vs slash IRI consistency
+├── iri_scheme.py         # http vs https per-host consistency
 ├── lang_tags.py          # language-tag consistency checks
+├── reasoner_checks.py    # OWL RL reasoning sanity checks
+├── mermaid_diagram.py    # interactive class diagram
 ├── cache.py              # in-memory ontology cache
 ├── models.py             # Pydantic models
-├── report.py             # CLI output formatting
+├── report.py             # CLI / markdown output
+├── report_html.py        # HTML report rendering (CHECKS registry)
+├── templates.py          # modeling guide content (GUIDE_SECTIONS)
 ├── usage.py              # privacy-friendly request tracking (SQLite)
 └── shapes/               # SHACL shapes (metadata + documentation)
+
+tests/
+├── test_*.py             # unit + integration tests
+
+examples/
+├── sample.ttl            # clean ontology - every check passes
+└── broken.ttl            # deliberately broken - every check fires
 ```
+
+The HTML report sections and the modeling guide are kept in lockstep by an
+import-time `assert` in `report_html.py`: the `CHECKS` registry and the
+`group="check"` entries in `GUIDE_SECTIONS` must list the same anchors in the
+same order, otherwise the module fails to load (and the test suite catches it).
 
 ## Tests
 
@@ -234,11 +261,12 @@ src/askwol/
 pytest tests/ -v
 ```
 
-## Roadmap
-
-- [ ] Scan for SKOS concepts, should be defined separately 
-- [ ] Test with more ontologies
-
+79 tests cover every automated check on both good and bad inputs, the HTML
+report rendering, the FastAPI routes via `TestClient`, and a pinned end-to-end
+smoke test on [`examples/broken.ttl`](examples/broken.ttl) that fails loudly
+if any single check ever stops detecting issues. The clean counterpart is
+[`examples/sample.ttl`](examples/sample.ttl). Drop either one into the upload
+form at http://localhost:8000/ to see the report end to end.
 
 ## License
 
