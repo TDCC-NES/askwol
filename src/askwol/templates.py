@@ -123,36 +123,48 @@ UPLOAD_HTML = """<!DOCTYPE html>
   </script>
 
   <h2>What do you get?</h2>
+  <p>One HTML report (or JSON via the API) with a section per check, each
+  linked to the matching entry in the <a href="/guide">modeling guide</a>:</p>
   <ol>
-    <li><strong>Ontology diagram</strong>  -  an interactive class
-    diagram showing your classes, properties, and inheritance hierarchy.
-    Zoom, pan, and explore.</li>
-    <li><strong>Namespace resolution</strong>  -  fetches each namespace
-    URI, checks HTTP status, tries to parse as RDF. Falls back to scanning
-    HTML for RDF links.</li>
-    <li><strong>Term validation</strong>  -  verifies that terms defined
-    in your ontology (classes, properties, individuals) actually exist in
-    the remote vocabularies they reference. Only terms that appear as
-    <em>subjects</em> are checked  -  these are the concepts your
-    ontology defines, not the vocabulary it references. Catches typos like
+    <li><strong>Ontology diagram</strong>  -  an interactive class diagram
+    showing your classes, properties, and inheritance hierarchy. Zoom,
+    pan, and explore.</li>
+    <li><strong>Ontology metadata</strong>  -  SHACL check on the ontology
+    header: title, description, creator, license IRI, and version are
+    required; created/modified dates and publisher are recommended.</li>
+    <li><strong>Imports</strong>  -  external vocabularies actually used
+    in your ontology must be declared with <code>owl:imports</code>. Core
+    W3C vocabularies (RDF, RDFS, OWL, XSD) are excluded.</li>
+    <li><strong>IRI strategy</strong>  -  your ontology&rsquo;s own
+    defined terms should consistently use either hash
+    (<code>#Term</code>) or slash (<code>/Term</code>), not both.</li>
+    <li><strong>IRI scheme</strong>  -  each host should be referenced
+    under a single URI scheme. <code>http://example.org/X</code> and
+    <code>https://example.org/X</code> are different IRIs.</li>
+    <li><strong>Namespaces</strong>  -  fetches each declared namespace
+    URI, checks HTTP status, and tries to parse as RDF (Turtle, RDF/XML,
+    JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF
+    links.</li>
+    <li><strong>Terms</strong>  -  verifies that terms your ontology
+    references from a remote vocabulary actually exist there. Only terms
+    that appear as <em>subjects</em> are checked. Catches typos like
     <code>owl:MadeUpClass</code>.</li>
-    <li><strong>Ontology metadata</strong>  -  evaluates SHACL
-    shapes for the ontology itself: title, description, creator,
-    license, version, and other key metadata.</li>
-    <li><strong>Definition documentation</strong>  -  checks that
-    your internally defined classes and properties have both
-    <code>rdfs:label</code> and <code>rdfs:comment</code>.</li>
-    <li><strong>Reasoner checks</strong>  -  checks the current ontology
-    for ontology consistency, inconsistent individuals, and unsatisfiable
-    classes. Imports are not
-    followed for this check.</li>
-    <li><strong>Unused prefixes</strong>  -  flags
-    <code>@prefix</code> declarations that are never used in any triple.
-    Keeps your ontology tidy.</li>
-    <li><strong>Language tag consistency</strong>  -  checks that
-    language-tagged properties like <code>rdfs:label</code> and
-    <code>skos:definition</code> use the same set of languages on every
-    subject. Catches missing translations and bare strings.</li>
+    <li><strong>Definition documentation</strong>  -  SHACL check that
+    every internally defined class and property carries both an
+    <code>rdfs:label</code> and an <code>rdfs:comment</code>. Reused
+    external terms are ignored.</li>
+    <li><strong>Language tag consistency</strong>  -  language-tagged
+    properties like <code>rdfs:label</code>, <code>rdfs:comment</code>,
+    <code>skos:prefLabel</code>, and <code>skos:definition</code> should
+    use the same set of languages across subjects. Catches missing
+    translations and bare strings.</li>
+    <li><strong>Reasoner checks</strong>  -  lightweight OWL RL reasoning
+    on the current ontology (imports are not followed), reported as three
+    facets: <em>ontology consistency</em>, <em>inconsistent
+    individuals</em>, and <em>unsatisfiable classes</em>.</li>
+    <li><strong>Unused prefixes</strong>  -  flags <code>@prefix</code>
+    declarations that are never used in any triple. Keeps your ontology
+    tidy.</li>
   </ol>
 
   <div class="about">
