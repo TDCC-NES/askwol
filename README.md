@@ -1,8 +1,23 @@
 # askwol 🦉
 
-**askwol** gives your [OWL](https://www.w3.org/OWL/) ontology an instant health check: a visual class diagram, namespace verification, term validation, and a clean-up report.
+> **Drop in an OWL ontology - get back a class diagram, namespace and term checks, metadata review, and a clean-up report. In seconds.**
 
-> The W3C originally planned to call their Web Ontology Language **WOL**. Tim Finin [proposed rearranging it to **OWL**](http://lists.w3.org/Archives/Public/www-webont-wg/2001Dec/0169.html) because *"owls are associated with wisdom."* Scrambling three letters is of course exactly what [Owl](https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)) from Milne's *Winnie-the-Pooh* is famous for  -  he spells his own name **"WOL"**: *"wise though he was in many ways, able to read and write and spell his own name WOL, yet somehow went all to pieces over delicate words like MEASLES and BUTTEREDTOAST"* (Ch. 4, 1926).
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Tests](https://img.shields.io/badge/tests-38%20passing-brightgreen.svg)](#tests)
+[![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
+
+<!-- Once deployed, add a live link here:
+👉 **Try it live:** https://askwol.example.com
+-->
+
+<p align="center">
+  <img src="docs/screenshot.png" alt="askwol web UI screenshot" width="720">
+</p>
+
+## Why askwol?
+
+The W3C originally planned to call their Web Ontology Language **WOL**. Tim Finin [proposed rearranging it to **OWL**](http://lists.w3.org/Archives/Public/www-webont-wg/2001Dec/0169.html) because *"owls are associated with wisdom."* Scrambling three letters is, of course, exactly what [Owl](https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)) from Milne's *Winnie-the-Pooh* is famous for - he spells his own name **"WOL"**: *"wise though he was in many ways, able to read and write and spell his own name WOL, yet somehow went all to pieces over delicate words like MEASLES and BUTTEREDTOAST"* (Ch. 4, 1926).
 
 <p align="center">
   <a href="https://commons.wikimedia.org/wiki/File:Winnie-the-Pooh_67.png">
@@ -12,13 +27,24 @@
 
 ## What do you get?
 
-1. **Ontology diagram**  -  an interactive class diagram showing classes, properties, and inheritance hierarchy (web UI). Zoom, pan, and explore.
-2. **Namespace resolution**  -  fetches each namespace URI, checks HTTP status, tries to parse as RDF (Turtle, RDF/XML, JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF links.
-3. **Term validation**  -  verifies that terms defined in your ontology (classes, properties, individuals) actually exist in the remote vocabularies they reference. Catches typos like `owl:MadeUpClass`.
-4. **Unused prefixes**  -  flags `@prefix` declarations that are never used in any triple.
-5. **Language tag consistency**  -  checks whether human-readable labels and definitions use language tags consistently across the ontology.
+1. **Ontology diagram** - an interactive class diagram showing classes, properties, and inheritance hierarchy (web UI). Zoom, pan, and explore.
+2. **Namespace resolution** - fetches each namespace URI, checks HTTP status, tries to parse as RDF (Turtle, RDF/XML, JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF links.
+3. **Term validation** - verifies that terms defined in your ontology (classes, properties, individuals) actually exist in the remote vocabularies they reference. Catches typos like `owl:MadeUpClass`.
+4. **Unused prefixes** - flags `@prefix` declarations that are never used in any triple.
+5. **Language tag consistency** - checks whether human-readable labels and definitions use language tags consistently across the ontology.
+6. **Metadata & documentation review** - SHACL-based checks against best-practice ontology metadata and definition documentation shapes.
+7. **OWL RL reasoner sanity check** - runs a lightweight reasoner to surface obvious inconsistencies.
 
 ## Quick start
+
+The fastest way (no clone needed):
+
+```bash
+pipx install git+https://github.com/kathrinrin/askwol.git
+askwol check your-ontology.ttl
+```
+
+Or for development:
 
 ```bash
 git clone https://github.com/kathrinrin/askwol.git

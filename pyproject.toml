@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "askwol"
 version = "0.1.0"
-description = "OWL ontology checker: validates namespace resolution and term existence"
+description = "OWL ontology review and validation: class diagram, namespace and term checks, metadata and documentation review"
 requires-python = ">=3.10"
 license = "MIT"
 readme = "README.md"
