@@ -50,15 +50,21 @@ def _guide_link(report_anchor: str) -> str:
     check = _CHECK_BY_REPORT.get(report_anchor)
     if not check:
         return ""
-    href = f"/guide#{check['guide_anchor']}"
+    href = f"guide#{check['guide_anchor']}"
     return (f'<p style="font-size:0.85em;color:#666;margin:0.4em 0 0;">'
             f'&rarr; Learn more in the <a href="{href}">modeling guide</a>.</p>')
 
 
 def render_report(report: ValidationReport, mermaid: str = "") -> str:
     source = escape(report.file)
+    # If the source is a URL, render it as a clickable link; otherwise (an
+    # uploaded filename) keep it as inline code.
+    if report.file.startswith(("http://", "https://")):
+        source_html = f'<a href="{source}" target="_blank" rel="noopener"><code>{source}</code></a>'
+    else:
+        source_html = f'<code>{source}</code>'
     parts = [
-        "<!DOCTYPE html><html><head><title>Ask Wol - results</title>",
+        "<!DOCTYPE html><html><head><title>Ask Wol: results</title>",
         '<link rel="icon" href="data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\'><text y=\'.9em\' font-size=\'90\'>&#x1F989;</text></svg>">',
         "<style>",
         "  body { font-family: system-ui, sans-serif; max-width: 780px; margin: 40px auto; padding: 0 20px; color: #333; line-height: 1.5; }",
@@ -81,7 +87,14 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         "  .back { margin-top: 2em; }",
         "  .error { color: #c00; background: #fff0f0; padding: 0.8em; border-radius: 6px; }",
         "  .diagram { margin: 1.5em 0; border: 1px solid #e0e0e0; border-radius: 8px; padding: 1em; background: #fafafa; position: relative; }",
-        "  .diagram-viewport { width: 100%; height: 500px; overflow: hidden; border: 1px solid #eee; border-radius: 4px; background: #fff; }",
+        "  .diagram-viewport { position: relative; width: 100%; height: 500px; overflow: hidden; border: 1px solid #eee; border-radius: 4px; background: #fff; }",
+        # Keep the raw Mermaid source and the freshly-rendered SVG hidden until
+        # our script has fitted the viewBox, so users never see the source text
+        # flash or the unpositioned diagram jump into place.
+        "  .diagram-viewport pre.mermaid { visibility: hidden; margin: 0; }",
+        "  .diagram-viewport.ready pre.mermaid { visibility: visible; }",
+        "  .diagram-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #999; font-size: 0.9em; }",
+        "  .diagram-viewport.ready .diagram-loading { display: none; }",
         "  .diagram-controls { display: flex; gap: 0.4em; margin-top: 0.5em; }",
         "  .diagram-controls button { background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 0.3em 0.7em; cursor: pointer; font-size: 0.85em; }",
         "  .diagram-controls button:hover { background: #e8e8e8; }",
@@ -94,8 +107,8 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         "  .footer { margin-top: 2em; font-size: 0.85em; color: #aaa; text-align: center; }",
         "</style>",
         "</head><body>",
-        '<p class="topnav"><strong>Navigation:</strong> <a href="/">Home</a> &middot; <a href="/guide">Modeling guide</a> &middot; <a href="/docs">API docs</a></p>',
-        f'<h1>Results for <code>{source}</code></h1>',
+        '<p class="topnav"><strong>Navigation:</strong> <a href="./">Home</a> &middot; <a href="guide">Modeling guide</a> &middot; <a href="docs">API docs</a></p>',
+        f'<h1>Results for {source_html}</h1>',
     ]
 
     if report.parse_errors:
@@ -124,6 +137,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<div class="diagram">')
         parts.append("<h2>Ontology diagram</h2>")
         parts.append('<div id="diagram-viewport" class="diagram-viewport">')
+        parts.append('<div class="diagram-loading">Rendering diagram&hellip;</div>')
         parts.append(f'<pre class="mermaid">\n{mermaid}\n</pre>')
         parts.append('</div>')
         # Hidden copy of the Mermaid source so JS can copy / export it even
@@ -225,7 +239,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             label = 'hash (<code>#Term</code>)' if iri.strategy == 'hash' else 'slash (<code>/Term</code>)'
             count = iri.hash_count if iri.strategy == 'hash' else iri.slash_count
             return [_row('iri-strategy', _ok, 'IRI strategy',
-                         f'{label} - {count} term{"s" if count != 1 else ""}')]
+                         f'{label} &middot; {count} term{"s" if count != 1 else ""}')]
         if report_anchor == 'iri-scheme':
             sch = report.iri_scheme
             if not sch:
@@ -258,8 +272,8 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 issue_count = len(lt.issues)
                 if issue_count:
                     return [_row('language-tags', _warn, 'Language tag consistency',
-                                 f'{lang_str} &ndash; {issue_count} issue{"s" if issue_count != 1 else ""}')]
-                return [_row('language-tags', _ok, 'Language tag consistency', f'{lang_str} &ndash; consistent')]
+                                 f'{lang_str} &middot; {issue_count} issue{"s" if issue_count != 1 else ""}')]
+                return [_row('language-tags', _ok, 'Language tag consistency', f'{lang_str} &middot; consistent')]
             return [_row('language-tags', _info, 'Language tag consistency',
                          'no language tags used in labels/definitions')]
         return []
@@ -276,7 +290,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     parts.append("</table></div>")
 
     # Tip: link to the modeling guide
-    parts.append('<p style="font-size:0.9em;color:#666;margin:0.5em 0 1em;">Not sure what a check means? See the <a href="/guide">modeling guide</a> for explanations and best practices.</p>')
+    parts.append('<p style="font-size:0.9em;color:#666;margin:0.5em 0 1em;">Not sure what a check means? See the <a href="guide">modeling guide</a> for explanations and best practices.</p>')
 
     # Per-namespace details  -  split into "interesting" and "standard OK"
     STANDARD_NS = {
@@ -342,7 +356,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 summary_parts.append(f"{t_skip} skipped")
             parts.append(f'<p style="font-size:0.9em;color:#666;">'
                          f'{len(ns.terms)} term{"s" if len(ns.terms) != 1 else ""} used '
-                         f'({" &middot; ".join(summary_parts)}) &mdash; '
+                         f'({" &middot; ".join(summary_parts)}), '
                          f'see <a href="#terms">Terms</a> section</p>')
         else:
             parts.append("<p><em>No terms used from this namespace.</em></p>")
@@ -416,7 +430,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append(_guide_link('imports'))
         parts.append('<p class="subtitle">External vocabularies whose terms you use as subjects should be declared with <code>owl:imports</code> in the ontology header. Core RDF/OWL vocabularies and your ontology&rsquo;s own namespace are excluded.</p>')
         if imp.status == Status.SKIP:
-            parts.append(_status_subtitle('info', 'no <code>owl:Ontology</code> declaration found - declare one to enable this check'))
+            parts.append(_status_subtitle('info', 'no <code>owl:Ontology</code> declaration found; declare one to enable this check'))
         elif imp.missing:
             parts.append(_status_subtitle('warn', f'{len(imp.missing)} external vocabulary(ies) used but not declared in <code>owl:imports</code>'))
         elif imp.checks:
@@ -466,7 +480,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         elif iri.status == Status.WARN:
             parts.append(_status_subtitle(
                 'warn',
-                f'<strong>Mixed</strong> - {iri.hash_count} hash-style and {iri.slash_count} slash-style terms in the same ontology. Pick one and migrate the others.',
+                f'<strong>Mixed</strong>: {iri.hash_count} hash-style and {iri.slash_count} slash-style terms in the same ontology. Pick one and migrate the others.',
             ))
             parts.append(f'<details open><summary style="cursor:pointer;font-weight:600;">Show examples</summary>')
             if iri.hash_examples:
@@ -633,7 +647,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                          f'<td><a href="{t_iri}" target="_blank" rel="noopener"><code>{t_iri}</code></a></td></tr>')
         parts.append('</table></details>')
     if skipped_terms_flat:
-        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Terms not checkable - namespace unavailable ({len(skipped_terms_flat)})</summary>')
+        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Terms not checkable, namespace unavailable ({len(skipped_terms_flat)})</summary>')
         parts.append('<table><tr><th>Term</th><th>Prefix</th></tr>')
         for ns, t in skipped_terms_flat:
             parts.append(f'<tr><td><code>{escape(t.local_name)}</code></td>'
@@ -788,7 +802,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<section class="section">')
         parts.append(_section_heading('reasoner', 'Reasoner checks', r_status, r_label))
         parts.append(_guide_link('reasoner'))
-        parts.append('<p class="subtitle">A lightweight OWL RL reasoner runs against the <strong>current ontology only</strong>  -  <code>owl:imports</code> are not followed. It surfaces three things: overall <strong>ontology consistency</strong>, specific <strong>inconsistent individuals</strong> (e.g. typed in two <code>owl:disjointWith</code> classes), and <strong>unsatisfiable classes</strong> (definitions equivalent to <code>owl:Nothing</code>).</p>')
+        parts.append('<p class="subtitle">A lightweight OWL RL reasoner runs against the <strong>current ontology only</strong>; <code>owl:imports</code> are not followed. It surfaces three things: overall <strong>ontology consistency</strong>, specific <strong>inconsistent individuals</strong> (e.g. typed in two <code>owl:disjointWith</code> classes), and <strong>unsatisfiable classes</strong> (definitions equivalent to <code>owl:Nothing</code>).</p>')
         reas_summary = 'consistent' if r_ok else f'{len(reasoner.inconsistent_individuals)} inconsistency issue(s), {len(reasoner.unsatisfiable_classes)} unsatisfiable class(es)'
         parts.append(_status_subtitle(r_status, reas_summary))
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show reasoner checks ({len(reasoner.checks)})</summary>')
@@ -829,31 +843,93 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
 
     parts.append('<p class="footer"><strong>External links:</strong> <a href="https://tdcc.nl/nes-ontology-engineers/" target="_blank" rel="noopener">TDCC-NES ontology engineers</a> &middot; <a href="https://www.w3.org/OWL/" target="_blank" rel="noopener">W3C OWL</a> &middot; <a href="https://www.w3.org/TR/owl2-primer/" target="_blank" rel="noopener">OWL 2 Primer</a></p>')
     if mermaid:
+        # Classic (non-module) script so "Copy Mermaid" works even if the
+        # module below fails to load (blocked CDN) or the diagram fails to
+        # render (invalid source). It only depends on the hidden textarea.
+        parts.append("""<script>
+window.copyMermaid = async (btn) => {
+  const el = document.getElementById('mermaid-src');
+  const src = el ? el.value : '';
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(src);
+    } else {
+      // Fallback for non-secure contexts (e.g. plain http)
+      el.style.display = 'block';
+      el.select();
+      document.execCommand('copy');
+      el.style.display = 'none';
+    }
+    if (btn) { const old = btn.textContent; btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = old; }, 1500); }
+  } catch (e) {
+    alert('Could not copy automatically. The Mermaid source is:\\n\\n' + src);
+  }
+};
+</script>""")
         parts.append("""<script type="module">
-import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
 const vp = document.getElementById('diagram-viewport');
 function showError(msg) {
   if (vp) vp.innerHTML = '<div style="padding:1em;color:#c00;font-family:monospace;font-size:0.85em;white-space:pre-wrap;">Diagram error: ' + msg + '</div>';
   console.error('[askwol diagram]', msg);
 }
+let errShown = false;
+function fail(msg) { showError(msg); errShown = true; }
+
+// Load Mermaid via a dynamic import so a blocked or failed load can be caught
+// and reported. A static top-level import would abort the whole script
+// silently, leaving the raw diagram source on screen with no explanation.
+let mermaid;
 try {
-  mermaid.initialize({startOnLoad:false,theme:"neutral",securityLevel:"loose"});
-  await mermaid.run();
+  mermaid = (await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs")).default;
 } catch (e) {
-  showError(String(e && e.message || e));
+  fail('The Mermaid library could not be loaded, so no diagram was produced.\\n\\n'
+    + 'It is fetched from a CDN (cdn.jsdelivr.net). If you are offline, or behind a '
+    + 'firewall, proxy, or Content-Security-Policy that blocks that host, the diagram '
+    + 'cannot render. The rest of the report is unaffected.');
+}
+
+if (mermaid) {
+  try {
+    mermaid.initialize({startOnLoad:false,theme:"neutral",securityLevel:"loose"});
+    // Validate the source first so we can surface the precise syntax error
+    // (mermaid.run swallows parse errors, leaving only an empty container).
+    const src = (document.getElementById('mermaid-src') || {}).value || '';
+    if (src) {
+      try {
+        await mermaid.parse(src);
+      } catch (e) {
+        fail('The Mermaid source is invalid, so the diagram could not be rendered.\\n\\n'
+          + String(e && e.message || e)
+          + '\\n\\nThis is a bug in askwol\\'s diagram generation, not a problem with your ontology. '
+          + 'Use the "Copy Mermaid" button to capture the source for a bug report.');
+      }
+    }
+    if (!errShown) await mermaid.run();
+  } catch (e) {
+    fail(String(e && e.message || e));
+  }
 }
 const svg = vp && vp.querySelector('svg');
 if (!svg) {
-  showError('Mermaid did not produce an SVG. Check the Mermaid source via the "Copy Mermaid" button.');
+  if (!errShown) {
+    fail('The diagram could not be rendered for an unexpected reason. '
+      + 'Use the "Copy Mermaid" button to capture the source for a bug report.');
+  }
 } else {
-  // Read Mermaid's own viewBox (it always sets one)
-  const vb = svg.viewBox.baseVal;
-  let origX = vb.x, origY = vb.y, origW = vb.width, origH = vb.height;
-  if (origW === 0 || origH === 0) {
-    // Fallback if somehow no viewBox
-    const bbox = svg.getBBox();
-    origX = bbox.x - 20; origY = bbox.y - 20;
-    origW = bbox.width + 40; origH = bbox.height + 40;
+  // Prefer the diagram's true content bounds (getBBox) over Mermaid's own
+  // viewBox: classDiagram reserves empty space at the top for a (here absent)
+  // title, which otherwise shows up as a blank band above the graph. A small
+  // uniform padding keeps the graph off the edges.
+  let origX, origY, origW, origH;
+  let box = null;
+  try { box = svg.getBBox(); } catch (e) { box = null; }
+  if (box && box.width > 0 && box.height > 0) {
+    const pad = 12;
+    origX = box.x - pad; origY = box.y - pad;
+    origW = box.width + pad * 2; origH = box.height + pad * 2;
+  } else {
+    const vb = svg.viewBox.baseVal;
+    origX = vb.x; origY = vb.y; origW = vb.width; origH = vb.height;
   }
   // Remember pristine values for export (before aspect-ratio padding)
   const pristineX = origX, pristineY = origY, pristineW = origW, pristineH = origH;
@@ -881,6 +957,10 @@ if (!svg) {
   let curX = origX, curY = origY, curW = origW, curH = origH;
   function setVB() { svg.setAttribute('viewBox', `${curX} ${curY} ${curW} ${curH}`); }
   setVB();
+
+  // The diagram is now fitted: reveal it (and drop the loading placeholder) in
+  // one paint so users never see the raw source or the pre-fit jump.
+  vp.classList.add('ready');
 
   // Zoom: shrink/grow viewBox around mouse
   let dragging = false, lastMX, lastMY;
@@ -940,17 +1020,6 @@ if (!svg) {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-
-  window.copyMermaid = async (btn) => {
-    const src = document.getElementById('mermaid-src').value;
-    try {
-      await navigator.clipboard.writeText(src);
-      const old = btn.textContent; btn.textContent = 'Copied!';
-      setTimeout(() => { btn.textContent = old; }, 1500);
-    } catch (e) {
-      alert('Could not copy: ' + e);
-    }
-  };
 
   window.downloadSVG = () => {
     const blob = new Blob([buildExportSVG()], {type: 'image/svg+xml'});

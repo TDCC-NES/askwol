@@ -75,7 +75,7 @@ def test_render_minimal_report_contains_all_section_anchors():
         assert f'id="{check["report_anchor"]}"' in html, f"missing section anchor: {check['report_anchor']}"
     # Every "Learn more" link points at the matching guide anchor.
     for check in CHECKS:
-        assert f'/guide#{check["guide_anchor"]}' in html
+        assert f'guide#{check["guide_anchor"]}' in html
 
 
 def test_render_parse_error_short_circuits():

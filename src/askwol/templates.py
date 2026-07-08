@@ -11,8 +11,38 @@ from __future__ import annotations
 
 
 UPLOAD_HTML = """<!DOCTYPE html>
-<html>
-<head><title>Ask Wol</title>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ask Wol: OWL ontology reviewer</title>
+<meta name="description" content="askwol is a free, open-source OWL ontology reviewer. Get an instant class diagram plus namespace, term, metadata, documentation, IRI, language-tag, and reasoner checks for your RDF or OWL ontology.">
+<meta name="keywords" content="OWL, ontology, RDF, Semantic Web, ontology validator, ontology review, SHACL, linked data, knowledge graph, Turtle, JSON-LD">
+<meta name="author" content="TDCC-NES Ontology Engineers">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#4a7c59">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="askwol">
+<meta property="og:title" content="Ask Wol: OWL ontology reviewer">
+<meta property="og:description" content="Instant OWL ontology review: class diagram, namespace and term checks, metadata and documentation review, and a clean-up report.">
+<meta property="og:image" content="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Winnie-the-Pooh_67.png/250px-Winnie-the-Pooh_67.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Ask Wol: OWL ontology reviewer">
+<meta name="twitter:description" content="Instant OWL ontology review: class diagram, namespace and term checks, metadata and documentation review, and a clean-up report.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "askwol",
+  "description": "A free, open-source OWL ontology reviewer: class diagram, namespace and term checks, metadata and documentation review, and a clean-up report.",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Any",
+  "url": "https://github.com/TDCC-NES/askwol",
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+  "author": {"@type": "Organization", "name": "TDCC-NES Ontology Engineers", "url": "https://tdcc.nl/nes-ontology-engineers/"},
+  "license": "https://github.com/TDCC-NES/askwol/blob/main/LICENSE"
+}
+</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F989;</text></svg>">
 <style>
   :root { --accent: #4a7c59; --accent-dark: #3d6a4a; --border: #e5e7eb; --muted: #6b7280; --bg-soft: #f9fafb; }
@@ -62,16 +92,16 @@ UPLOAD_HTML = """<!DOCTYPE html>
 <body>
   <p class="topnav">
     <strong>Navigation:</strong>
-    <a href="/">Home</a> &middot;
-    <a href="/guide">Modeling guide</a> &middot;
-    <a href="/docs">API docs</a>
+    <a href="./">Home</a> &middot;
+    <a href="guide">Modeling guide</a> &middot;
+    <a href="docs">API docs</a>
   </p>
   <h1><span class="owl" aria-hidden="true">&#x1F989;</span> Ask Wol</h1>
   <p>Your friendly owl for instant <a href="https://www.w3.org/OWL/">OWL</a>
   ontology reviews: a visual class diagram, namespace and term checks,
   metadata and documentation review, and a clean-up report.</p>
 
-  <form class="card" action="/validate" method="post" enctype="multipart/form-data">
+  <form class="card" action="validate" method="post" enctype="multipart/form-data">
     <div class="tabs" role="tablist">
       <button type="button" class="tab active" data-tab="url" role="tab">From URL</button>
       <button type="button" class="tab" data-tab="file" role="tab">Upload file</button>
@@ -87,6 +117,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
         <button type="button" class="chip" data-url="https://www.w3.org/ns/prov.ttl">PROV-O</button>
         <button type="button" class="chip" data-url="https://www.w3.org/2006/time">Time</button>
         <button type="button" class="chip" data-url="https://opengeospatial.github.io/ogc-geosparql/geosparql11/geo.ttl">GeoSPARQL</button>
+        <button type="button" class="chip" data-url="https://www.w3.org/TR/owl-guide/wine.rdf">Wine</button>
       </div>
     </div>
 
@@ -124,48 +155,52 @@ UPLOAD_HTML = """<!DOCTYPE html>
 
   <h2>What do you get?</h2>
   <p>One HTML report (or JSON via the API) with a section per check, each
-  linked to the matching entry in the <a href="/guide">modeling guide</a>:</p>
+  linked to the matching entry in the <a href="guide">modeling guide</a>:</p>
   <ol>
-    <li><strong>Ontology diagram</strong>  -  an interactive class diagram
+    <li><strong>Ontology diagram</strong>: an interactive class diagram
     showing your classes, properties, and inheritance hierarchy. Zoom,
     pan, and explore.</li>
-    <li><strong>Ontology metadata</strong>  -  SHACL check on the ontology
-    header: title, description, creator, license IRI, and version are
+    <li><strong>Ontology metadata</strong>: a SHACL check on the ontology
+    header. Title, description, creator, license IRI, and version are
     required; created/modified dates and publisher are recommended.</li>
-    <li><strong>Imports</strong>  -  external vocabularies actually used
+    <li><strong>Imports</strong>: external vocabularies actually used
     in your ontology must be declared with <code>owl:imports</code>. Core
     W3C vocabularies (RDF, RDFS, OWL, XSD) are excluded.</li>
-    <li><strong>IRI strategy</strong>  -  your ontology&rsquo;s own
+    <li><strong>IRI strategy</strong>: your ontology&rsquo;s own
     defined terms should consistently use either hash
     (<code>#Term</code>) or slash (<code>/Term</code>), not both.</li>
-    <li><strong>IRI scheme</strong>  -  each host should be referenced
+    <li><strong>IRI scheme</strong>: each host should be referenced
     under a single URI scheme. <code>http://example.org/X</code> and
     <code>https://example.org/X</code> are different IRIs.</li>
-    <li><strong>Namespaces</strong>  -  fetches each declared namespace
+    <li><strong>Namespaces</strong>: fetches each declared namespace
     URI, checks HTTP status, and tries to parse as RDF (Turtle, RDF/XML,
     JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF
     links.</li>
-    <li><strong>Terms</strong>  -  verifies that terms your ontology
+    <li><strong>Terms</strong>: verifies that terms your ontology
     references from a remote vocabulary actually exist there. Only terms
     that appear as <em>subjects</em> are checked. Catches typos like
     <code>owl:MadeUpClass</code>.</li>
-    <li><strong>Definition documentation</strong>  -  SHACL check that
+    <li><strong>Definition documentation</strong>: a SHACL check that
     every internally defined class and property carries both an
     <code>rdfs:label</code> and an <code>rdfs:comment</code>. Reused
     external terms are ignored.</li>
-    <li><strong>Language tag consistency</strong>  -  language-tagged
+    <li><strong>Language tag consistency</strong>: language-tagged
     properties like <code>rdfs:label</code>, <code>rdfs:comment</code>,
     <code>skos:prefLabel</code>, and <code>skos:definition</code> should
     use the same set of languages across subjects. Catches missing
     translations and bare strings.</li>
-    <li><strong>Reasoner checks</strong>  -  lightweight OWL RL reasoning
+    <li><strong>Reasoner checks</strong>: lightweight OWL RL reasoning
     on the current ontology (imports are not followed), reported as three
     facets: <em>ontology consistency</em>, <em>inconsistent
     individuals</em>, and <em>unsatisfiable classes</em>.</li>
-    <li><strong>Unused prefixes</strong>  -  flags <code>@prefix</code>
+    <li><strong>Unused prefixes</strong>: flags <code>@prefix</code>
     declarations that are never used in any triple. Keeps your ontology
     tidy.</li>
   </ol>
+
+  <p><strong>What you don&rsquo;t get:</strong> askwol checks syntax and
+  structure, but not content or meaning, which remain the essence of the
+  Semantic Web.</p>
 
   <div class="about">
     <a class="wol-link" href="https://commons.wikimedia.org/wiki/File:Winnie-the-Pooh_67.png" target="_blank" rel="noopener" title="Open the image on Wikimedia Commons">
@@ -179,21 +214,25 @@ UPLOAD_HTML = """<!DOCTYPE html>
       rearranging it to <strong>OWL</strong></a> because <em>&ldquo;owls are
       associated with wisdom.&rdquo;</em> Scrambling three letters is of course
       what <a href="https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)">Owl</a>
-      from Milne&rsquo;s <em>Winnie-the-Pooh</em> is famous for  -  he spells
-      his own name <strong>WOL</strong>.
+      from Milne&rsquo;s <em>Winnie-the-Pooh</em> is famous for. He spells
+      his own name <strong>WOL</strong>, as Dave de Roure
+      <a href="https://lists.w3.org/Archives/Public/www-webont-wg/2002Sep/0301.html">first
+      pointed out</a> to the working group.
     </p>
-    <h2 style="border:none; padding:0; margin-top:1.2em;">Built by TDCC-NES Ontology Engineers</h2>
+    <h2 style="border:none; padding:0; margin-top:1.2em;">About</h2>
     <p>
       <i>askwol</i> is developed and maintained by the
-      <a href="https://tdcc.nl/nes-ontology-engineers/">TDCC-NES Ontology Engineers</a>:
-      <strong>Kathrin F&uuml;llenbach</strong> and <strong>Dani Metilli</strong>.
-      For questions, collaboration, or support, contact us at
-      <a href="mailto:nes@tdcc.nl">nes@tdcc.nl</a>.
+      <a href="https://tdcc.nl/nes-ontology-engineers/">TDCC-NES Ontology Engineers</a>
+      (<strong>Kathrin F&uuml;llenbach</strong> and <strong>Dani Metilli</strong>), funded by
+      <a href="https://www.openscience.nl/en/">Open Science NL</a>. We help with ontology
+      selection and reuse, co-development, knowledge graph design, and training.
     </p>
     <p>
-      Our work is fully funded by <a href="https://www.openscience.nl/en/">Open Science NL</a>.
-      We support ontology selection and reuse, co-development,
-      implementation, knowledge graph design, and training.
+      <i>askwol</i> is free and open source under the
+      <a href="https://github.com/TDCC-NES/askwol/blob/main/LICENSE">MIT licence</a>.
+      Found a bug or have an idea? Open an issue on
+      <a href="https://github.com/TDCC-NES/askwol">GitHub</a> or reach us at
+      <a href="mailto:nes@tdcc.nl">nes@tdcc.nl</a>.
     </p>
   </div>
 
@@ -304,10 +343,10 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p><strong>Hash URIs</strong> &middot; <code>http://example.org/ont<strong>#</strong>Person</code></p>
   <ul>
     <li>The fragment (<code>#Person</code>) is <strong>stripped before the HTTP
-    request</strong> is sent. The server never sees it - it returns the
+    request</strong> is sent. The server never sees it; it returns the
     entire document at <code>http://example.org/ont</code>.</li>
     <li>All terms come back in a single request. Efficient, zero server
-    configuration - just upload one RDF file.</li>
+    configuration; just upload one RDF file.</li>
     <li>Downside: a client asking about one term gets <em>every</em>
     term in the vocabulary. Fine for 50&nbsp;terms, painful for 50&thinsp;000.</li>
   </ul>
@@ -359,7 +398,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   </table>
 
   <h3>Recommendation</h3>
-  <p>If in doubt, <strong>go with slash</strong> - it scales. Use hash
+  <p>If in doubt, <strong>go with slash</strong>. It scales. Use hash
   only when you know the vocabulary is small and will stay that way.
   The Cool URIs note concludes:</p>
   <blockquote style="border-left:3px solid #ccc;padding-left:1em;color:#555;margin:1em 0;">
@@ -380,7 +419,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     {
         "group": "check",
         "anchor": "https-http",
-        "title": "Use http or https - but be consistent per host",
+        "title": "Use http or https, but be consistent per host",
         "toc_label": "IRI scheme (http vs https)",
         "body": """\
   <p><strong>What askwol checks:</strong> every IRI used in the ontology
@@ -438,8 +477,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <div class="warn"><strong>Bad:</strong> A namespace that returns
   404 or a generic HTML page with no RDF link.</div>
   <p>If you host your own ontology, configure your server to support
-  <a href="https://www.w3.org/TR/swbp-vocab-pub/">content negotiation</a>
-   -  serve RDF to machines and HTML to browsers.</p>
+  <a href="https://www.w3.org/TR/swbp-vocab-pub/">content negotiation</a>,
+  serving RDF to machines and HTML to browsers.</p>
 """,
     },
     {
@@ -451,11 +490,11 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p>Don&rsquo;t reinvent the wheel. Before defining a new term, check if
   an established vocabulary already covers it:</p>
   <ul>
-    <li><a href="https://schema.org/">schema.org</a>  -  broad web vocabulary</li>
-    <li><a href="http://xmlns.com/foaf/0.1/">FOAF</a>  -  people and social networks</li>
-    <li><a href="http://purl.org/dc/terms/">Dublin Core</a>  -  metadata (title, creator, date)</li>
-    <li><a href="https://www.w3.org/2004/02/skos/core">SKOS</a>  -  concept schemes and thesauri</li>
-    <li><a href="https://www.w3.org/ns/prov#">PROV-O</a>  -  provenance</li>
+    <li><a href="https://schema.org/">schema.org</a>: broad web vocabulary</li>
+    <li><a href="http://xmlns.com/foaf/0.1/">FOAF</a>: people and social networks</li>
+    <li><a href="http://purl.org/dc/terms/">Dublin Core</a>: metadata (title, creator, date)</li>
+    <li><a href="https://www.w3.org/2004/02/skos/core">SKOS</a>: concept schemes and thesauri</li>
+    <li><a href="https://www.w3.org/ns/prov#">PROV-O</a>: provenance</li>
   </ul>
   <div class="warn">When reusing a term, use the <em>exact</em>
   IRI from the source vocabulary. A typo like <code>foaf:nme</code> instead
@@ -476,14 +515,14 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   combines both checks under a single report section.</p>
 
   <h3>Define each term</h3>
-  <p>Don&rsquo;t just <em>use</em> a term  -  <em>define</em> it.</p>
+  <p>Don&rsquo;t just <em>use</em> a term; <em>define</em> it.</p>
   <pre>&lt;#Person&gt; a owl:Class ;
     rdfs:label "Person"@en ;
     rdfs:comment "A human being."@en .</pre>
   <div class="warn">If you reference <code>ex:Persom</code> but
   never define it, that&rsquo;s probably a typo. askwol catches these.</div>
   <div class="tip">askwol only validates terms that appear as
-  <strong>subjects</strong> in your triples  -  these are the concepts
+  <strong>subjects</strong> in your triples; these are the concepts
   your ontology <em>defines</em>. Terms used only as predicates or objects
   (like <code>rdfs:label</code> or <code>owl:Class</code>) are assumed to
   be well-known vocabulary and are not checked.</div>
@@ -491,8 +530,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <h3>Give concepts human-readable labels</h3>
   <p>Every class and property should have at least:</p>
   <ul>
-    <li><code>rdfs:label</code>  -  a short human-readable name</li>
-    <li><code>rdfs:comment</code>  -  a brief description</li>
+    <li><code>rdfs:label</code>: a short human-readable name</li>
+    <li><code>rdfs:comment</code>: a brief description</li>
   </ul>
   <pre>&lt;#hasMother&gt; a owl:ObjectProperty ;
     rdfs:label "has mother"@en ;
@@ -537,7 +576,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   </ul>
   <div class="warn">SPARQL filters like
   <code>FILTER(LANG(?label) = "en")</code> return nothing for untagged
-  literals  -  your data becomes invisible.</div>
+  literals; your data becomes invisible.</div>
   <div class="tip">askwol checks
   <code>rdfs:label</code>, <code>rdfs:comment</code>,
   <code>skos:prefLabel</code>, <code>skos:definition</code>, and other
@@ -555,22 +594,22 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   these as three separate facets in the
   <a href="/#reasoner">Reasoner checks</a> section of the report:</p>
   <ul>
-    <li><strong>Ontology consistency</strong>  -  the ontology as a whole
+    <li><strong>Ontology consistency</strong>: the ontology as a whole
     has a possible model. This is the overall pass/fail verdict; it fails
     when at least one individual is inconsistent.</li>
-    <li><strong>Inconsistent individuals</strong>  -  specific named
+    <li><strong>Inconsistent individuals</strong>: specific named
     individuals that violate a class restriction (e.g. a <code>Person</code>
     with two values for a functional property, or membership in two
     <code>owl:disjointWith</code> classes). Each offending individual is
     listed by IRI so you can locate the contradiction.</li>
-    <li><strong>Unsatisfiable classes</strong>  -  no class definition is
+    <li><strong>Unsatisfiable classes</strong>: no class definition is
     logically empty. A class is unsatisfiable when its definition forces it
     to be equivalent to <code>owl:Nothing</code> (e.g. via disjoint
     superclasses). The class is syntactically valid but can never have
     instances.</li>
   </ul>
   <div class="tip">askwol runs a lightweight OWL RL reasoner on the
-  <strong>current ontology only</strong>  -  it does <em>not</em> follow
+  <strong>current ontology only</strong>; it does <em>not</em> follow
   <code>owl:imports</code>. This catches the obvious self-contained
   contradictions without the cost of loading every imported vocabulary. For
   deeper checks (against imports, with HermiT or Pellet), use a desktop
@@ -585,9 +624,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "body": """\
   <p>Only declare prefixes you actually use. Leftover
   <code>@prefix</code> declarations clutter the file and confuse
-  readers  -  they suggest a dependency that doesn&rsquo;t exist.</p>
-  <pre>@prefix dct: &lt;http://purl.org/dc/terms/&gt; .   -- used below
-@prefix geo: &lt;http://www.opengis.net/ont/geosparql#&gt; .  -- unused, remove it</pre>
+  readers; they suggest a dependency that doesn&rsquo;t exist.</p>
+  <pre>@prefix dct: &lt;http://purl.org/dc/terms/&gt; .   # used below
+@prefix geo: &lt;http://www.opengis.net/ont/geosparql#&gt; .  # unused, remove it</pre>
   <div class="tip">askwol flags every prefix that is declared
   but never appears in a triple, so you can clean them up.</div>
 """,
@@ -598,7 +637,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Validate early and often",
         "toc_label": "Validate early and often",
         "body": """\
-  <p>Run <a href="/">askwol</a> on your ontology during development, not just
+  <p>Run <a href="./">askwol</a> on your ontology during development, not just
   before release. You get:</p>
   <ul>
     <li>An interactive <strong>class diagram</strong> of your ontology</li>
@@ -661,8 +700,35 @@ def _render_guide_body() -> str:
 
 
 GUIDE_HTML = f"""<!DOCTYPE html>
-<html>
-<head><title>Ask Wol - Modeling Guide</title>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ask Wol: OWL modeling guide</title>
+<meta name="description" content="A practical guide to modeling OWL ontologies: IRI strategy, http vs https, resolvable namespaces, vocabulary reuse, definition documentation, language tags, reasoner checks, and prefix hygiene.">
+<meta name="keywords" content="OWL, ontology, RDF, Semantic Web, modeling guide, IRI strategy, SHACL, namespaces, language tags, OWL reasoner, best practices">
+<meta name="author" content="TDCC-NES Ontology Engineers">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#4a7c59">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="askwol">
+<meta property="og:title" content="Ask Wol: OWL modeling guide">
+<meta property="og:description" content="A practical guide to modeling OWL ontologies: IRI strategy, resolvable namespaces, vocabulary reuse, documentation, language tags, and reasoner checks.">
+<meta property="og:image" content="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Winnie-the-Pooh_67.png/250px-Winnie-the-Pooh_67.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Ask Wol: OWL modeling guide">
+<meta name="twitter:description" content="A practical guide to modeling OWL ontologies: IRI strategy, resolvable namespaces, vocabulary reuse, documentation, language tags, and reasoner checks.">
+<script type="application/ld+json">
+{{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "OWL ontology modeling guide",
+  "description": "A practical guide to modeling OWL ontologies: IRI strategy, http vs https, resolvable namespaces, vocabulary reuse, definition documentation, language tags, reasoner checks, and prefix hygiene.",
+  "author": {{"@type": "Organization", "name": "TDCC-NES Ontology Engineers", "url": "https://tdcc.nl/nes-ontology-engineers/"}},
+  "publisher": {{"@type": "Organization", "name": "TDCC-NES Ontology Engineers"}},
+  "isPartOf": {{"@type": "WebApplication", "name": "askwol"}}
+}}
+</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F989;</text></svg>">
 <style>
   body {{ font-family: system-ui, sans-serif; max-width: 720px; margin: 50px auto; padding: 0 20px; color: #333; line-height: 1.7; }}
@@ -686,14 +752,14 @@ GUIDE_HTML = f"""<!DOCTYPE html>
 <body>
   <p class="topnav">
     <strong>Navigation:</strong>
-    <a href="/">Home</a> &middot;
-    <a href="/guide">Modeling guide</a> &middot;
-    <a href="/docs">API docs</a>
+    <a href="./">Home</a> &middot;
+    <a href="guide">Modeling guide</a> &middot;
+    <a href="docs">API docs</a>
   </p>
   <h1>&#x1F989; How to Model a Good Ontology</h1>
   <p>A practical checklist for building OWL ontologies that are
   interoperable, resolvable, and maintainable. These are the things
-  <a href="/">askwol</a> checks, and why they matter.</p>
+  <a href="./">askwol</a> checks, and why they matter.</p>
 
   <div class="toc">
     <strong>Contents</strong>

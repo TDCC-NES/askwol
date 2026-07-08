@@ -5,7 +5,7 @@ no third-party services. IPs are hashed with a per-database secret so
 they cannot be recovered from the stored data.
 
 Configuration via environment variables:
-- ASKWOL_USAGE_DB: path to the SQLite file (default: ``usage.db``).
+- ASKWOL_USAGE_DB: path to the SQLite file (default: ``data/usage.db``).
 - ASKWOL_USAGE_DISABLED: set to ``1`` to disable tracking entirely.
 - ASKWOL_STATS_TOKEN: required to access the ``/stats`` endpoint.
 """
@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-_DB_PATH = Path(os.environ.get("ASKWOL_USAGE_DB", "usage.db"))
+_DB_PATH = Path(os.environ.get("ASKWOL_USAGE_DB", "data/usage.db"))
 _DISABLED = os.environ.get("ASKWOL_USAGE_DISABLED") == "1"
 _lock = threading.Lock()
 _initialised = False

@@ -16,18 +16,18 @@ def test_parse_sample_ttl():
 
 def test_extracts_terms_by_namespace():
     parsed = parse_ontology(FIXTURE_DIR / "sample.ttl")
-    # The default namespace has our custom terms
-    # Find the prefix that maps to https://w3id.org/test/
+    # The default namespace holds the ontology's own defined terms.
+    # Find the prefix that maps to https://w3id.org/example/datasets/
     test_prefix = None
     for pfx, uri in parsed.namespaces.items():
-        if uri == "https://w3id.org/test/":
+        if uri == "https://w3id.org/example/datasets/":
             test_prefix = pfx
             break
     assert test_prefix is not None
     terms = parsed.terms_by_namespace[test_prefix]
-    assert "MyClass" in terms
-    assert "myProperty" in terms
-    assert "myInstance" in terms
+    assert "Dataset" in terms
+    assert "supersedes" in terms
+    assert "sizeInBytes" in terms
 
 
 def test_extracts_owl_terms():
@@ -47,6 +47,6 @@ def test_extracts_rdf_terms():
     assert "type" not in rdf_terms
 
 
-def test_no_imports_in_sample():
+def test_imports_in_sample():
     parsed = parse_ontology(FIXTURE_DIR / "sample.ttl")
-    assert parsed.imports == []
+    assert parsed.imports == ["http://www.w3.org/ns/dcat"]

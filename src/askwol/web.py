@@ -47,6 +47,7 @@ app = FastAPI(
 # Global cache  -  persists across requests so repeated uploads don't re-fetch
 _global_cache = OntologyCache()
 
+
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def index():
     return UPLOAD_HTML

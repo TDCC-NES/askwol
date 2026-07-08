@@ -2,17 +2,26 @@
 
 from __future__ import annotations
 
+import re
+
 from rdflib import RDF, RDFS, OWL, Graph, URIRef
 
 
 def _shorten(uri: str, namespaces: dict[str, str]) -> str:
     """Shorten a URI to prefix:local using the ontology's own prefixes."""
     uri_str = str(uri)
+    # Prefer the most specific (longest) matching namespace so overlapping
+    # namespaces (e.g. .../food/ vs .../food#) don't leave a '#' in the local
+    # part.
+    best: tuple[str, str] | None = None  # (prefix, local)
     for pfx, ns_uri in namespaces.items():
         if uri_str.startswith(ns_uri):
             local = uri_str[len(ns_uri):]
-            if local:
-                return f"{pfx}:{local}" if pfx else local
+            if local and (best is None or len(ns_uri) > len(namespaces[best[0]])):
+                best = (pfx, local)
+    if best is not None:
+        pfx, local = best
+        return f"{pfx}:{local}" if pfx else local
     # Fallback: use fragment or last path segment
     if "#" in uri_str:
         return uri_str.rsplit("#", 1)[-1]
@@ -23,7 +32,7 @@ def _shorten(uri: str, namespaces: dict[str, str]) -> str:
 
 def _mermaid_id(label: str) -> str:
     """Make a label safe for use as a Mermaid node ID."""
-    return label.replace(":", "_").replace("\u2236", "_").replace("-", "_").replace(".", "_").replace(" ", "_")
+    return re.sub(r"[^0-9A-Za-z_]", "_", label)
 
 
 # U+2236 RATIO looks identical to a colon but doesn't trigger Mermaid's parser
