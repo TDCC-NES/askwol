@@ -49,14 +49,14 @@ A single HTML report (or JSON via the API) with one section per automated check.
 The fastest way (no clone needed):
 
 ```bash
-pipx install git+https://github.com/kathrinrin/askwol.git
+pipx install git+https://github.com/TDCC-NES/askwol.git
 askwol check your-ontology.ttl
 ```
 
 Or for development:
 
 ```bash
-git clone https://github.com/kathrinrin/askwol.git
+git clone https://github.com/TDCC-NES/askwol.git
 cd askwol
 python -m venv .venv
 source .venv/bin/activate
@@ -144,7 +144,7 @@ Prerequisites: Linux host with Docker, a domain pointing to the server, and a re
 
 ```bash
 # on the server
-git clone https://github.com/kathrinrin/askwol.git /opt/askwol
+git clone https://github.com/TDCC-NES/askwol.git /opt/askwol
 cd /opt/askwol
 # do NOT copy docker-compose.override.yml.example here – without it, the
 # production CMD from the Dockerfile (2 workers, no reload) is used.

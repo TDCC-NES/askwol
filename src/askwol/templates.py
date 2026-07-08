@@ -222,7 +222,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p>Your ontology is itself a published research object. It should say
   what it is, who made it, which version it is, and under which license
   it can be reused.</p>
-  <p>askwol evaluates <a href="https://github.com/kathrinrin/askwol/blob/main/src/askwol/shapes/ontology_metadata.ttl" target="_blank" rel="noopener">SHACL shapes for the ontology header</a> and checks these properties:</p>
+  <p>askwol evaluates <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/ontology_metadata.ttl" target="_blank" rel="noopener">SHACL shapes for the ontology header</a> and checks these properties:</p>
   <ul>
     <li><strong>Required:</strong> <code>rdf:type owl:Ontology</code>,
     <code>dcterms:title</code> (or <code>rdfs:label</code>),
@@ -503,7 +503,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   to support multilingual ontologies. Consider
   <code>skos:prefLabel</code> and <code>skos:altLabel</code> for richer
   labeling.</div>
-  <div class="tip">askwol uses <a href="https://github.com/kathrinrin/askwol/blob/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes</a> to check whether each
+  <div class="tip">askwol uses <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes</a> to check whether each
   <em>internally defined</em> class and property has both an
   <code>rdfs:label</code> and an <code>rdfs:comment</code>. Reused external
   vocabulary terms are ignored.</div>

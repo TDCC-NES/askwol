@@ -44,9 +44,9 @@ dev = [
 askwol = "askwol.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/kathrinrin/askwol"
-Repository = "https://github.com/kathrinrin/askwol"
-Issues = "https://github.com/kathrinrin/askwol/issues"
+Homepage = "https://lod-4tu.tudelft.nl/askwol"
+Repository = "https://github.com/TDCC-NES/askwol"
+Issues = "https://github.com/TDCC-NES/askwol/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/askwol"]
