@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-79%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-82%20passing-brightgreen.svg)](#tests)
 [![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 
 <!-- Once deployed, add a live link here:
@@ -17,7 +17,7 @@
 
 ## Why askwol?
 
-The W3C originally planned to call their Web Ontology Language **WOL**. Tim Finin [proposed rearranging it to **OWL**](http://lists.w3.org/Archives/Public/www-webont-wg/2001Dec/0169.html) because *"owls are associated with wisdom."* Scrambling three letters is, of course, exactly what [Owl](https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)) from Milne's *Winnie-the-Pooh* is famous for - he spells his own name **"WOL"**: *"wise though he was in many ways, able to read and write and spell his own name WOL, yet somehow went all to pieces over delicate words like MEASLES and BUTTEREDTOAST"* (Ch. 4, 1926).
+The W3C originally planned to call their Web Ontology Language **WOL**. Tim Finin [proposed rearranging it to **OWL**](http://lists.w3.org/Archives/Public/www-webont-wg/2001Dec/0169.html) because *"owls are associated with wisdom."* Scrambling three letters is, of course, exactly what [Owl](https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)) from Milne's *Winnie-the-Pooh* is famous for - he spells his own name **"Wol"**: *"wise though he was in many ways, able to read and write and spell his own name WOL, yet somehow went all to pieces over delicate words like MEASLES and BUTTEREDTOAST"* (Ch. 4, 1926).
 
 <p align="center">
   <a href="https://commons.wikimedia.org/wiki/File:Winnie-the-Pooh_67.png">
@@ -106,49 +106,45 @@ The repo ships with a `Dockerfile` and `docker-compose.yml` so the web app can b
 ### Run locally
 
 ```bash
-# build the image and start it in the foreground (Ctrl+C to stop)
-docker compose up --build
-
-# or run detached in the background
+# build and start detached
 docker compose up -d --build
 
-# tail the logs
+# rebuild AND recreate after code changes
+# (plain `--build` can reuse the old container, leaving stale code running)
+docker compose up -d --build --force-recreate
+
+# logs / stop
 docker compose logs -f askwol
-
-# stop and remove the container
 docker compose down
-
-# rebuild after code changes
-docker compose up -d --build
 ```
 
-Then open http://localhost:8000.
+Then open http://localhost:8000. If the page still looks stale after a rebuild,
+hard-refresh the browser (Cmd/Ctrl+Shift+R) to clear cached assets.
 
 #### Development with hot-reload
 
-A `docker-compose.override.yml.example` is shipped that bind-mounts `src/` into
-the container and runs uvicorn with `--reload`. Copy it once and Docker Compose
-will merge it automatically:
+`docker-compose.override.yml.example` bind-mounts `src/` and runs uvicorn with
+`--reload`. Copy it once and Compose merges it automatically:
 
 ```bash
 cp docker-compose.override.yml.example docker-compose.override.yml
-docker compose up --build      # first time (and whenever deps change)
-# … edit files under src/askwol/ … uvicorn reloads on save
+docker compose up --build      # first run, and whenever deps change
+# edit files under src/askwol/ - uvicorn reloads on save
 ```
 
-The live override file is gitignored, so it never lands on the server.
+The override file is gitignored, so it never reaches the server.
 
 ### Deploy on a server
 
-Prerequisites: Linux host with Docker, a domain pointing to the server, and a reverse proxy (e.g. [Caddy](https://caddyserver.com/) or nginx) for HTTPS termination.
+Prerequisites: a Linux host with Docker, a domain pointing to it, and a reverse proxy (e.g. [Caddy](https://caddyserver.com/) or nginx) for HTTPS.
 
 ```bash
 # on the server
 git clone https://github.com/TDCC-NES/askwol.git /opt/askwol
 cd /opt/askwol
-# do NOT copy docker-compose.override.yml.example here – without it, the
+# do NOT copy docker-compose.override.yml.example here - without it, the
 # production CMD from the Dockerfile (2 workers, no reload) is used.
-docker compose up -d --build
+docker compose up -d --build --force-recreate
 ```
 
 The container binds to `127.0.0.1:8000` only. Point your reverse proxy at it, e.g. a minimal Caddyfile:
@@ -164,10 +160,17 @@ askwol.example.com {
 Caddy will obtain a Let's Encrypt certificate automatically. Updates:
 
 ```bash
-cd /opt/askwol && git pull && docker compose up -d --build
+cd /opt/askwol && git pull && docker compose up -d --build --force-recreate
 ```
 
+`--force-recreate` guarantees the new image replaces the running container.
 Logs: `docker compose logs -f askwol`.
+
+#### Serving under a sub-path
+
+askwol uses relative links, so it works unchanged whether it sits at the root
+of a domain or under a path prefix (e.g. `https://server/askwol/`). No env vars
+or proxy headers are needed - just point the reverse proxy at `127.0.0.1:8000`.
 
 **Security notes:** askwol fetches arbitrary URLs (namespace resolution + URL upload). On a public deployment, consider blocking outbound requests to private IP ranges to prevent SSRF, and keep the upload size cap on the reverse proxy.
 
@@ -181,7 +184,7 @@ Environment variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ASKWOL_USAGE_DB` | `usage.db` | Path to the SQLite file. The Docker setup uses `/data/usage.db`, persisted to `./data/` on the host. |
+| `ASKWOL_USAGE_DB` | `data/usage.db` | Path to the SQLite file. Local runs and the Docker setup both write here (`/data/usage.db` in the container maps to `./data/` on the host). |
 | `ASKWOL_STATS_TOKEN` | *(unset)* | Required to view the `/stats` JSON dashboard. If unset, `/stats` returns 503. |
 | `ASKWOL_USAGE_DISABLED` | *(unset)* | Set to `1` to disable tracking entirely. |
 
@@ -261,7 +264,7 @@ same order, otherwise the module fails to load (and the test suite catches it).
 pytest tests/ -v
 ```
 
-79 tests cover every automated check on both good and bad inputs, the HTML
+82 tests cover every automated check on both good and bad inputs, the HTML
 report rendering, the FastAPI routes via `TestClient`, and a pinned end-to-end
 smoke test on [`examples/broken.ttl`](examples/broken.ttl) that fails loudly
 if any single check ever stops detecting issues. The clean counterpart is
