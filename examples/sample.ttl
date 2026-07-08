@@ -1,33 +1,37 @@
-@prefix : <https://w3id.org/test/> .
+@prefix : <https://w3id.org/example/datasets/> .
+@prefix dcat: <http://www.w3.org/ns/dcat#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
-@prefix dcterms: <http://purl.org/dc/terms/> .
 
-# A small, *clean* sample ontology where every askwol check should pass.
-# Pair with `broken.ttl` which deliberately trips every check.
+<https://w3id.org/example/datasets/> rdf:type owl:Ontology ;
+    dcterms:title "Datasets sample ontology"@en ;
+    dcterms:description "A minimal ontology demonstrating askwol's modeling guidelines on the topic of datasets."@en ;
+    dcterms:creator "Ada Lovelace" , "Charles Babbage" ;
+    dcterms:publisher <https://example.org/analytical-engine-society> ;
+    dcterms:license <https://creativecommons.org/licenses/by/4.0/> ;
+    dcterms:created "2026-06-14"^^xsd:date ;
+    dcterms:modified "2026-06-14"^^xsd:date ;
+    owl:versionInfo "1.0.0" ;
+    owl:imports <http://www.w3.org/ns/dcat> .
 
-<https://w3id.org/test/> rdf:type owl:Ontology ;
-    dcterms:title "Test ontology"@en ;
-    dcterms:description "A small ontology used as a clean sample for askwol's automated checks."@en ;
-    dcterms:creator "askwol test suite" ;
-    dcterms:publisher "askwol test suite" ;
-    dcterms:license <https://creativecommons.org/publicdomain/zero/1.0/> ;
-    dcterms:created "2025-01-01"^^xsd:date ;
-    dcterms:modified "2025-01-02"^^xsd:date ;
-    owl:versionInfo "1.0.0" .
+:Dataset rdf:type owl:Class ;
+    rdfs:label "Dataset"@en ;
+    rdfs:comment "A collection of related data made available for use or analysis."@en ;
+    rdfs:subClassOf dcat:Dataset .
 
-:MyClass rdf:type owl:Class ;
-    rdfs:label "My Class"@en ;
-    rdfs:comment "A class defined by the test ontology."@en .
+:supersedes rdf:type owl:ObjectProperty ;
+    rdfs:label "supersedes"@en ;
+    rdfs:comment "Relates a dataset to an earlier dataset that it replaces."@en ;
+    rdfs:subPropertyOf dcterms:replaces ;
+    rdfs:domain :Dataset ;
+    rdfs:range :Dataset .
 
-:myProperty rdf:type owl:ObjectProperty ;
-    rdfs:label "my property"@en ;
-    rdfs:comment "Relates instances of MyClass to other instances of MyClass."@en ;
-    rdfs:domain :MyClass ;
-    rdfs:range :MyClass .
-
-:myInstance rdf:type :MyClass ;
-    rdfs:label "Instance 1"@en ;
-    rdfs:comment "An example individual of MyClass."@en .
+:sizeInBytes rdf:type owl:DatatypeProperty ;
+    rdfs:label "size in bytes"@en ;
+    rdfs:comment "The total size of the dataset, expressed in bytes."@en ;
+    rdfs:subPropertyOf dcat:byteSize ;
+    rdfs:domain :Dataset ;
+    rdfs:range xsd:nonNegativeInteger .
