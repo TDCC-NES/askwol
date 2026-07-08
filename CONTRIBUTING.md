@@ -5,7 +5,7 @@ Thanks for considering a contribution!
 ## Quick setup
 
 ```bash
-git clone https://github.com/kathrinrin/askwol.git
+git clone https://github.com/TDCC-NES/askwol.git 
 cd askwol
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
@@ -21,7 +21,7 @@ pytest -q
 
 ## Bug reports
 
-Open a [GitHub issue](https://github.com/kathrinrin/askwol/issues) with:
+Open a [GitHub issue](https://github.com/TDCC-NES/askwol/issues) with:
 - The ontology (or a minimal snippet) that triggers the problem.
 - The command you ran or the URL you submitted.
 - Expected vs. actual output.

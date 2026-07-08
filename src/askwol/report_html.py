@@ -379,7 +379,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<section class="section">')
         parts.append(_section_heading('ontology-metadata', 'Ontology metadata', m_status, m_label))
         parts.append(_guide_link('ontology-metadata'))
-        parts.append('<p class="subtitle">The ontology header (title, creator, license, version, &hellip;) is checked against <a href="https://github.com/kathrinrin/askwol/blob/main/src/askwol/shapes/ontology_metadata.ttl" target="_blank" rel="noopener">SHACL shapes for the ontology header</a>.</p>')
+        parts.append('<p class="subtitle">The ontology header (title, creator, license, version, &hellip;) is checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/ontology_metadata.ttl" target="_blank" rel="noopener">SHACL shapes for the ontology header</a>.</p>')
         summary_bits = [f"{meta.passed_checks} present"]
         if missing_required:
             summary_bits.append(f"{len(missing_required)} required missing")
@@ -660,7 +660,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<section class="section">')
         parts.append(_section_heading('definition-docs', 'Definition documentation', d_status, d_label))
         parts.append(_guide_link('definition-docs'))
-        parts.append('<p class="subtitle">Internally defined classes and properties must each carry an <code>rdfs:label</code> and an <code>rdfs:comment</code>. Reused external vocabulary terms are ignored. Checked against <a href="https://github.com/kathrinrin/askwol/blob/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes for term documentation</a>.</p>')
+        parts.append('<p class="subtitle">Internally defined classes and properties must each carry an <code>rdfs:label</code> and an <code>rdfs:comment</code>. Reused external vocabulary terms are ignored. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes for term documentation</a>.</p>')
         parts.append(_status_subtitle(d_status, f'{docs.documented_definitions} complete &middot; {incomplete} incomplete'))
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show documentation checks ({docs.total_definitions})</summary>')
         parts.append('<table><tr><th>Term</th><th>Type</th><th>Label</th><th>Comment</th></tr>')
