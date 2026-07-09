@@ -168,9 +168,32 @@ Logs: `docker compose logs -f askwol`.
 
 #### Serving under a sub-path
 
-askwol uses relative links, so it works unchanged whether it sits at the root
-of a domain or under a path prefix (e.g. `https://server/askwol/`). No env vars
-or proxy headers are needed - just point the reverse proxy at `127.0.0.1:8000`.
+If askwol sits at the root of a domain (`https://askwol.example.com/`), nothing
+extra is needed.
+
+If you serve it under a path prefix (e.g. `https://server/askwol/`), set
+`ASKWOL_ROOT_PATH` to that prefix. askwol then injects a matching `<base>` tag
+into every page (so the nav links resolve correctly even without a trailing
+slash) and points the API docs at the right location.
+
+```yaml
+# docker-compose.override.yml, or an .env file
+environment:
+  - ASKWOL_ROOT_PATH=/askwol
+```
+
+Point the reverse proxy at `127.0.0.1:8000` and strip the prefix before
+forwarding, e.g. with Caddy:
+
+```caddy
+server.example.com {
+    handle_path /askwol/* {
+        reverse_proxy 127.0.0.1:8000
+    }
+}
+```
+
+Leave `ASKWOL_ROOT_PATH` empty for a root deployment.
 
 **Security notes:** askwol fetches arbitrary URLs (namespace resolution + URL upload). On a public deployment, consider blocking outbound requests to private IP ranges to prevent SSRF, and keep the upload size cap on the reverse proxy.
 

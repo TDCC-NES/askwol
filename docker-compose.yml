@@ -16,6 +16,10 @@ services:
       # Set this to a long random string to enable the /stats dashboard.
       # Example: ASKWOL_STATS_TOKEN=$(openssl rand -hex 32) in your .env file.
       - ASKWOL_STATS_TOKEN=${ASKWOL_STATS_TOKEN:-}
+      # When served behind a reverse proxy under a sub-path, set this to the
+      # prefix (e.g. /askwol) so nav links and API docs resolve correctly.
+      # Leave empty when the app is served at the domain root.
+      - ASKWOL_ROOT_PATH=${ASKWOL_ROOT_PATH:-}
     volumes:
       # Persist usage.db across container restarts/rebuilds.
       - ./data:/data

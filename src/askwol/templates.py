@@ -109,7 +109,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
 
     <div id="panel-url" class="tab-panel active">
       <label for="url-input">Ontology URL</label>
-      <input type="url" id="url-input" name="url" placeholder="https://example.org/ontology.ttl" value="http://xmlns.com/foaf/spec/index.rdf">
+      <input type="url" id="url-input" name="url" placeholder="https://example.org/ontology.ttl" required>
       <div class="examples-label">Or try a well-known ontology</div>
       <div class="chips">
         <button type="button" class="chip" data-url="http://xmlns.com/foaf/spec/index.rdf">FOAF</button>
@@ -123,7 +123,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
 
     <div id="panel-file" class="tab-panel">
       <label for="file-input">Ontology file</label>
-      <input type="file" id="file-input" name="file" accept=".ttl,.rdf,.owl,.jsonld,.nt,.n3">
+      <input type="file" id="file-input" name="file" accept=".ttl,.rdf,.owl,.jsonld,.nt,.n3" required disabled>
       <div class="examples-label" style="margin-top:0.8em">Accepts Turtle, RDF/XML, JSON-LD, N-Triples, or N3.</div>
     </div>
 
@@ -199,8 +199,8 @@ UPLOAD_HTML = """<!DOCTYPE html>
   </ol>
 
   <p><strong>What you don&rsquo;t get:</strong> askwol checks syntax and
-  structure, but not content or meaning, which remain the essence of the
-  Semantic Web.</p>
+  structure, but not content or meaning, which is what ontologies are all
+  about.</p>
 
   <div class="about">
     <a class="wol-link" href="https://commons.wikimedia.org/wiki/File:Winnie-the-Pooh_67.png" target="_blank" rel="noopener" title="Open the image on Wikimedia Commons">
@@ -731,8 +731,10 @@ GUIDE_HTML = f"""<!DOCTYPE html>
 </script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F989;</text></svg>">
 <style>
+  * {{ box-sizing: border-box; }}
   body {{ font-family: system-ui, sans-serif; max-width: 720px; margin: 50px auto; padding: 0 20px; color: #333; line-height: 1.7; }}
-  h1 {{ margin-bottom: 0.2em; }}
+  h1 {{ margin: 0.4em 0 0.1em; font-weight: 700; font-size: 2.4em; letter-spacing: -0.02em; display: flex; align-items: center; gap: 0.35em; }}
+  h1 .owl {{ font-size: 1.4em; line-height: 1; }}
   h2 {{ color: #555; margin-top: 2em; border-bottom: 1px solid #eee; padding-bottom: 0.2em; }}
   h3 {{ color: #666; margin-top: 1.5em; }}
   a {{ color: #4a7c59; }}
@@ -756,7 +758,7 @@ GUIDE_HTML = f"""<!DOCTYPE html>
     <a href="guide">Modeling guide</a> &middot;
     <a href="docs">API docs</a>
   </p>
-  <h1>&#x1F989; How to Model a Good Ontology</h1>
+  <h1><span class="owl" aria-hidden="true">&#x1F989;</span> How to Model a Good Ontology</h1>
   <p>A practical checklist for building OWL ontologies that are
   interoperable, resolvable, and maintainable. These are the things
   <a href="./">askwol</a> checks, and why they matter.</p>
