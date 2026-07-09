@@ -33,7 +33,6 @@ from askwol.term_validator import validate_terms
 # ASKWOL_ROOT_PATH is the reverse-proxy sub-path prefix (e.g. /askwol); empty
 # for a root deployment.
 ROOT_PATH = os.environ.get("ASKWOL_ROOT_PATH", "").rstrip("/")
-BASE_HREF = f"{ROOT_PATH}/" if ROOT_PATH else "/"
 
 app = FastAPI(
     title="askwol",
@@ -55,16 +54,24 @@ app = FastAPI(
 _global_cache = OntologyCache()
 
 
-def _with_base(html: str) -> str:
-    """Inject a <base> tag so relative links resolve under the proxy prefix."""
-    if BASE_HREF == "/" or "<base " in html:
+def _apply_prefix(html: str) -> str:
+    """Prefix app-internal nav links with the sub-path so they resolve behind a
+    reverse proxy. Root-absolute URLs are used (not a <base> tag) so same-page
+    fragment links keep working. A no-op at a root deployment."""
+    if not ROOT_PATH:
         return html
-    return html.replace("<head>", f'<head><base href="{BASE_HREF}">', 1)
+    return (
+        html.replace('href="./"', f'href="{ROOT_PATH}/"')
+        .replace('href="guide"', f'href="{ROOT_PATH}/guide"')
+        .replace('href="docs"', f'href="{ROOT_PATH}/docs"')
+        .replace('action="validate"', f'action="{ROOT_PATH}/validate"')
+        .replace('href="/#reasoner"', f'href="{ROOT_PATH}/#reasoner"')
+    )
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def index():
-    return HTMLResponse(_with_base(UPLOAD_HTML))
+    return HTMLResponse(_apply_prefix(UPLOAD_HTML))
 
 
 @app.get("/health", summary="Health check", tags=["system"])
@@ -88,7 +95,7 @@ async def stats_endpoint(token: str | None = None):
 
 @app.get("/guide", response_class=HTMLResponse, include_in_schema=False)
 async def guide():
-    return HTMLResponse(_with_base(GUIDE_HTML))
+    return HTMLResponse(_apply_prefix(GUIDE_HTML))
 
 @app.get("/validate", include_in_schema=False)
 async def validate_get():
@@ -200,7 +207,7 @@ async def _run_validation(tmp_path: Path, source_name: str) -> HTMLResponse:
         parsed = parse_ontology(tmp_path)
     except Exception as exc:
         report.parse_errors.append(str(exc))
-        return HTMLResponse(_with_base(render_report(report, mermaid)), status_code=422)
+        return HTMLResponse(_apply_prefix(render_report(report, mermaid)), status_code=422)
     finally:
         tmp_path.unlink(missing_ok=True)
 
@@ -256,7 +263,7 @@ async def _run_validation(tmp_path: Path, source_name: str) -> HTMLResponse:
             )
         )
 
-    return HTMLResponse(_with_base(render_report(report, mermaid)))
+    return HTMLResponse(_apply_prefix(render_report(report, mermaid)))
 
 
 @app.post(

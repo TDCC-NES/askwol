@@ -172,9 +172,9 @@ If askwol sits at the root of a domain (`https://askwol.example.com/`), nothing
 extra is needed.
 
 If you serve it under a path prefix (e.g. `https://server/askwol/`), set
-`ASKWOL_ROOT_PATH` to that prefix. askwol then injects a matching `<base>` tag
-into every page (so the nav links resolve correctly even without a trailing
-slash) and points the API docs at the right location.
+`ASKWOL_ROOT_PATH` to that prefix. askwol then rewrites its internal navigation
+links to include the prefix (so Home, the modeling guide, the form, and the API
+docs all resolve correctly, without relying on JavaScript or a trailing slash).
 
 ```yaml
 # docker-compose.override.yml, or an .env file
