@@ -15,16 +15,18 @@ from askwol.templates import GUIDE_SECTIONS
 # An assertion below enforces that the order and anchors here match the
 # check-group sections in GUIDE_SECTIONS.
 CHECKS: list[dict[str, str]] = [
-    {"report_anchor": "ontology-metadata", "title": "Ontology metadata",         "guide_anchor": "metadata"},
-    {"report_anchor": "imports",           "title": "Imports",                   "guide_anchor": "imports"},
-    {"report_anchor": "iri-strategy",      "title": "IRI strategy",              "guide_anchor": "iri-strategy"},
-    {"report_anchor": "iri-scheme",        "title": "IRI scheme (http vs https)","guide_anchor": "https-http"},
-    {"report_anchor": "namespaces",        "title": "Namespaces",                "guide_anchor": "resolvable"},
-    {"report_anchor": "terms",             "title": "Terms",                     "guide_anchor": "reuse"},
-    {"report_anchor": "definition-docs",   "title": "Definition documentation",  "guide_anchor": "definition-docs"},
-    {"report_anchor": "language-tags",     "title": "Language tag consistency",  "guide_anchor": "lang-tags"},
-    {"report_anchor": "reasoner",          "title": "Reasoner checks",           "guide_anchor": "reasoner"},
-    {"report_anchor": "unused-prefixes",   "title": "Unused prefixes",           "guide_anchor": "prefixes"},
+    {"report_anchor": "ontology-metadata", "title": "Ontology metadata",          "guide_anchor": "metadata"},
+    {"report_anchor": "imports",           "title": "Imports",                    "guide_anchor": "imports"},
+    {"report_anchor": "iri-strategy",      "title": "IRI strategy",               "guide_anchor": "iri-strategy"},
+    {"report_anchor": "iri-scheme",        "title": "IRI scheme (http vs https)", "guide_anchor": "https-http"},
+    {"report_anchor": "namespaces",        "title": "Namespaces",                 "guide_anchor": "resolvable"},
+    {"report_anchor": "external-terms",    "title": "External term definitions",  "guide_anchor": "external-terms"},
+    {"report_anchor": "internal-terms",    "title": "Internal term definitions",  "guide_anchor": "internal-terms"},
+    {"report_anchor": "labels",            "title": "Labels",                     "guide_anchor": "labels"},
+    {"report_anchor": "comments",          "title": "Comments",                   "guide_anchor": "comments"},
+    {"report_anchor": "language-tags",     "title": "Language tag consistency",   "guide_anchor": "lang-tags"},
+    {"report_anchor": "reasoner",          "title": "Reasoner checks",            "guide_anchor": "reasoner"},
+    {"report_anchor": "unused-prefixes",   "title": "Unused prefixes",            "guide_anchor": "prefixes"},
 ]
 
 # Enforce alignment between CHECKS and GUIDE_SECTIONS at import time. If they
@@ -179,7 +181,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             ns_mark = _ok if ok_ns == total_ns else _fail
             return [_row('namespaces', ns_mark, 'Namespaces',
                          f'{ok_ns}/{total_ns} resolved')]
-        if report_anchor == 'terms':
+        if report_anchor == 'external-terms':
             term_mark = _ok if fail_terms == 0 else _fail
             skipped = total_terms - ok_terms - fail_terms
             term_bits = [f'{ok_terms} confirmed']
@@ -187,7 +189,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 term_bits.append(f'{fail_terms} failed')
             if skipped:
                 term_bits.append(f'{skipped} skipped')
-            return [_row('terms', term_mark, 'Terms', ', '.join(term_bits))]
+            return [_row('external-terms', term_mark, 'External term definitions', ', '.join(term_bits))]
         if report_anchor == 'ontology-metadata':
             if not (meta and meta.total_checks):
                 return []
@@ -202,15 +204,38 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             else:
                 detail = f'{meta.total_checks}/{meta.total_checks} OK'
             return [_row('ontology-metadata', mark, 'Ontology metadata', detail)]
-        if report_anchor == 'definition-docs':
+        if report_anchor == 'internal-terms':
+            it = report.internal_terms
+            if not it:
+                return []
+            if it.status == Status.SKIP:
+                return [_row('internal-terms', _info, 'Internal term definitions',
+                             it.message or 'skipped')]
+            if it.undefined:
+                return [_row('internal-terms', _fail, 'Internal term definitions',
+                             f'{len(it.undefined)} referenced but never defined')]
+            return [_row('internal-terms', _ok, 'Internal term definitions',
+                         f'{it.defined}/{it.total_referenced} defined')]
+        if report_anchor == 'labels':
             if not (docs and docs.total_definitions):
                 return []
-            mark = _ok if not docs.issues else _fail
-            if docs.issues:
-                detail = f'{docs.documented_definitions}/{docs.total_definitions} complete, {len(docs.issues)} missing label/comment'
+            missing = docs.missing_label
+            mark = _ok if not missing else _fail
+            if missing:
+                detail = f'{docs.with_label}/{docs.total_definitions} have a label, {len(missing)} missing'
             else:
-                detail = f'{docs.total_definitions}/{docs.total_definitions} complete'
-            return [_row('definition-docs', mark, 'Definition documentation', detail)]
+                detail = f'{docs.total_definitions}/{docs.total_definitions} have a label'
+            return [_row('labels', mark, 'Labels', detail)]
+        if report_anchor == 'comments':
+            if not (docs and docs.total_definitions):
+                return []
+            missing = docs.missing_comment
+            mark = _ok if not missing else _fail
+            if missing:
+                detail = f'{docs.with_comment}/{docs.total_definitions} have a comment, {len(missing)} missing'
+            else:
+                detail = f'{docs.total_definitions}/{docs.total_definitions} have a comment'
+            return [_row('comments', mark, 'Comments', detail)]
         if report_anchor == 'imports':
             imp = report.imports
             if not imp:
@@ -341,8 +366,8 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         if res.error:
             parts.append(f"<p style='color:#c00'>{escape(res.error)}</p>")
 
-        # Term counts only - per-term details are shown in the Terms section
-        # below to avoid duplicating the same information twice.
+        # Term counts only - per-term details are shown in the External terms
+        # definition section below to avoid duplicating the same information.
         if ns.terms:
             t_ok = sum(1 for t in ns.terms if t.status == Status.OK)
             t_fail = sum(1 for t in ns.terms if t.status == Status.FAIL)
@@ -357,7 +382,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             parts.append(f'<p style="font-size:0.9em;color:#666;">'
                          f'{len(ns.terms)} term{"s" if len(ns.terms) != 1 else ""} used '
                          f'({" &middot; ".join(summary_parts)}), '
-                         f'see <a href="#terms">Terms</a> section</p>')
+                         f'see <a href="#external-terms">External term definitions</a> section</p>')
         else:
             parts.append("<p><em>No terms used from this namespace.</em></p>")
 
@@ -614,7 +639,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append("</details>")
     parts.append('</section>')
 
-    # --- Terms section: per-term verification against the remote vocabulary ---
+    # --- External term definitions: per-term verification against the remote vocabulary ---
     term_only_status = 'ok' if fail_terms == 0 else 'fail'
     skipped = total_terms - ok_terms - fail_terms
     if fail_terms:
@@ -624,9 +649,9 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     else:
         term_label = 'all verified'
     parts.append('<section class="section">')
-    parts.append(_section_heading('terms', 'Terms', term_only_status, term_label))
-    parts.append(_guide_link('terms'))
-    parts.append('<p class="subtitle">Each term used from a remote vocabulary is looked up in the resolved namespace. Terms that are missing remotely are likely typos or made-up reuse of an established prefix.</p>')
+    parts.append(_section_heading('external-terms', 'External term definitions', term_only_status, term_label))
+    parts.append(_guide_link('external-terms'))
+    parts.append('<p class="subtitle">Every term you reuse from an external vocabulary must actually be defined in that vocabulary. askwol looks each one up in the resolved namespace; a term that is missing there is usually a typo or made-up reuse of an established prefix.</p>')
     term_summary_bits = [f'<strong>{ok_terms}</strong> confirmed']
     if fail_terms:
         term_summary_bits.append(f'<strong>{fail_terms}</strong> not found')
@@ -665,29 +690,60 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('</table></details>')
     parts.append('</section>')
 
-    # Internal definition documentation summary
+    # Internal term definitions: referenced own-namespace terms must be defined
+    it = report.internal_terms
+    if it and it.status != Status.SKIP:
+        i_status = 'ok' if not it.undefined else 'fail'
+        i_label = 'all defined' if i_status == 'ok' else f'{len(it.undefined)} undefined'
+        parts.append('<section class="section">')
+        parts.append(_section_heading('internal-terms', 'Internal term definitions', i_status, i_label))
+        parts.append(_guide_link('internal-terms'))
+        parts.append('<p class="subtitle">Every term you use from your own namespace must also be defined there: it has to appear as the subject of at least one triple, not only as a predicate or object. A term that is referenced but never defined is usually a typo or a forgotten declaration.</p>')
+        parts.append(_status_subtitle(i_status, f'{it.defined}/{it.total_referenced} referenced terms defined &middot; {len(it.undefined)} undefined'))
+        if it.undefined:
+            parts.append(f'<details open><summary style="cursor:pointer;font-weight:600;">Referenced but never defined ({len(it.undefined)})</summary>')
+            parts.append('<table><tr><th>Term</th><th>Full IRI</th></tr>')
+            for issue in it.undefined:
+                t_iri = escape(issue.term)
+                parts.append(
+                    f'<tr><td><code>{escape(issue.display_name)}</code></td>'
+                    f'<td><a href="{t_iri}" target="_blank" rel="noopener"><code>{t_iri}</code></a></td></tr>'
+                )
+            parts.append('</table></details>')
+        parts.append('</section>')
+
+    # Labels and Comments: two sibling checks driven from the definition-docs data
     docs = report.definition_docs
     if docs and docs.total_definitions:
-        incomplete = docs.total_definitions - docs.documented_definitions
-        d_status = 'ok' if not docs.issues else 'fail'
-        d_label = 'all good' if d_status == 'ok' else f'{incomplete} incomplete'
-        parts.append('<section class="section">')
-        parts.append(_section_heading('definition-docs', 'Definition documentation', d_status, d_label))
-        parts.append(_guide_link('definition-docs'))
-        parts.append('<p class="subtitle">Internally defined classes and properties must each carry an <code>rdfs:label</code> and an <code>rdfs:comment</code>. Reused external vocabulary terms are ignored. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes for term documentation</a>.</p>')
-        parts.append(_status_subtitle(d_status, f'{docs.documented_definitions} complete &middot; {incomplete} incomplete'))
-        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show documentation checks ({docs.total_definitions})</summary>')
-        parts.append('<table><tr><th>Term</th><th>Type</th><th>Label</th><th>Comment</th></tr>')
-        for check in sorted(docs.checks, key=lambda c: (c.status == Status.OK, c.display_name.lower())):
-            term = escape(check.display_name)
-            term_uri = escape(check.term)
-            label_status = '<span style="color:#2e7d32;font-size:1.3em;line-height:1">&#x2713;</span>' if check.has_label else '<span style="color:#c62828;font-size:1.3em;line-height:1">&#x2717;</span>'
-            comment_status = '<span style="color:#2e7d32;font-size:1.3em;line-height:1">&#x2713;</span>' if check.has_comment else '<span style="color:#c62828;font-size:1.3em;line-height:1">&#x2717;</span>'
-            parts.append(
-                f'<tr><td><a href="{term_uri}" target="_blank" rel="noopener"><code>{term}</code></a></td><td>{escape(check.term_type)}</td><td>{label_status}</td><td>{comment_status}</td></tr>'
-            )
-        parts.append('</table></details>')
-        parts.append('</section>')
+        def _mark_cell(present: bool) -> str:
+            if present:
+                return '<span style="color:#2e7d32;font-size:1.3em;line-height:1">&#x2713;</span>'
+            return '<span style="color:#c62828;font-size:1.3em;line-height:1">&#x2717;</span>'
+
+        def _doc_section(anchor: str, title: str, prop: str,
+                         present_count: int, missing: list) -> None:
+            status = 'ok' if not missing else 'fail'
+            label = 'all present' if status == 'ok' else f'{len(missing)} missing'
+            parts.append('<section class="section">')
+            parts.append(_section_heading(anchor, title, status, label))
+            parts.append(_guide_link(anchor))
+            parts.append(f'<p class="subtitle">Every internally defined class and property should carry an <code>{prop}</code>. Reused external vocabulary terms are ignored. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes for term documentation</a>.</p>')
+            parts.append(_status_subtitle(status, f'{present_count}/{docs.total_definitions} have an <code>{prop}</code> &middot; {len(missing)} missing'))
+            parts.append(f'<details{" open" if missing else ""}><summary style="cursor:pointer;font-weight:600;">Show {title.lower()} ({docs.total_definitions})</summary>')
+            parts.append(f'<table><tr><th>Term</th><th>Type</th><th>{title.rstrip("s")}</th></tr>')
+            for check in sorted(docs.checks, key=lambda c: (getattr(c, "has_label" if anchor == "labels" else "has_comment"), c.display_name.lower())):
+                term = escape(check.display_name)
+                term_uri = escape(check.term)
+                present = check.has_label if anchor == 'labels' else check.has_comment
+                parts.append(
+                    f'<tr><td><a href="{term_uri}" target="_blank" rel="noopener"><code>{term}</code></a></td>'
+                    f'<td>{escape(check.term_type)}</td><td>{_mark_cell(present)}</td></tr>'
+                )
+            parts.append('</table></details>')
+            parts.append('</section>')
+
+        _doc_section('labels', 'Labels', 'rdfs:label', docs.with_label, docs.missing_label)
+        _doc_section('comments', 'Comments', 'rdfs:comment', docs.with_comment, docs.missing_comment)
 
     # Language tag consistency - same section/subtitle/details pattern as
     # the other checks so the layout is fully uniform.

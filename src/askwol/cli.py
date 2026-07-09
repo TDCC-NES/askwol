@@ -11,6 +11,7 @@ from rich.console import Console
 
 from askwol.cache import OntologyCache
 from askwol.definition_docs import check_definition_documentation
+from askwol.internal_terms import check_internal_terms
 from askwol.lang_tags import check_lang_tags
 from askwol.metadata_validator import validate_ontology_metadata
 from askwol.reasoner_checks import run_reasoner_checks
@@ -59,8 +60,11 @@ async def _run_check(
     # Ontology-level metadata
     report.ontology_metadata = validate_ontology_metadata(parsed.graph)
 
-    # Internal definition documentation
+    # Label and comment documentation
     report.definition_docs = check_definition_documentation(parsed.graph)
+
+    # Internal terms referenced in the ontology's own namespace must be defined
+    report.internal_terms = check_internal_terms(parsed.graph)
 
     # Reasoner checks (current ontology only; imports are not followed)
     report.reasoner = run_reasoner_checks(parsed.graph)

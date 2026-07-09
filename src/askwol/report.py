@@ -59,9 +59,13 @@ def report_as_markdown(report: ValidationReport) -> str:
             w(f"| Recommended metadata missing | {meta.warning_checks} |")
     docs = report.definition_docs
     if docs and docs.total_definitions:
-        w(f"| Internal definitions documented | {docs.documented_definitions}/{docs.total_definitions} |")
-        if docs.issues:
-            w(f"| Definitions missing label/comment | {len(docs.issues)} |")
+        w(f"| Definitions with a label | {docs.with_label}/{docs.total_definitions} |")
+        w(f"| Definitions with a comment | {docs.with_comment}/{docs.total_definitions} |")
+    it = report.internal_terms
+    if it and it.status != Status.SKIP:
+        w(f"| Internal terms defined | {it.defined}/{it.total_referenced} |")
+        if it.undefined:
+            w(f"| **Internal terms referenced but not defined** | **{len(it.undefined)}** |")
     reasoner = report.reasoner
     if reasoner:
         w(f"| Ontology consistency | {'ok' if reasoner.consistent else 'problem found'} |")
@@ -194,25 +198,56 @@ def report_as_markdown(report: ValidationReport) -> str:
         w("</details>")
         w("")
 
-    # Definition documentation
+    # Internal term definitions
+    it = report.internal_terms
+    if it and it.status != Status.SKIP and it.undefined:
+        w("## Internal term definitions")
+        w("")
+        w("Terms in the ontology's own namespace that are referenced but never "
+          "defined (they never appear as the subject of a triple). Usually a typo "
+          "or a forgotten declaration.")
+        w("")
+        w(f"> {it.defined}/{it.total_referenced} referenced terms defined, {len(it.undefined)} undefined")
+        w("")
+        w("| Term | Full IRI |")
+        w("|------|----------|")
+        for issue in it.undefined:
+            w(f"| `{issue.display_name}` | {issue.term} |")
+        w("")
+
+    # Labels and comments
     docs = report.definition_docs
     if docs and docs.total_definitions:
-        incomplete = docs.total_definitions - docs.documented_definitions
-        w("## Definition documentation")
+        w("## Labels")
         w("")
         w("Internal classes and properties only. Reused external vocabulary terms are ignored.")
         w("")
-        w(f"> {docs.documented_definitions} complete, {incomplete} incomplete")
+        w(f"> {docs.with_label}/{docs.total_definitions} have an rdfs:label")
         w("")
         w("<details>")
-        w(f"<summary>Show documentation checks ({docs.total_definitions})</summary>")
+        w(f"<summary>Show labels ({docs.total_definitions})</summary>")
         w("")
-        w("| Term | Type | Label | Comment |")
-        w("|------|------|-------|---------|")
-        for check in sorted(docs.checks, key=lambda c: (c.status == Status.OK, c.display_name.lower())):
-            label_status = "ok" if check.has_label else "missing"
-            comment_status = "ok" if check.has_comment else "missing"
-            w(f"| `{check.display_name}` | {check.term_type} | {label_status} | {comment_status} |")
+        w("| Term | Type | Label |")
+        w("|------|------|-------|")
+        for check in sorted(docs.checks, key=lambda c: (c.has_label, c.display_name.lower())):
+            w(f"| `{check.display_name}` | {check.term_type} | {'ok' if check.has_label else 'missing'} |")
+        w("")
+        w("</details>")
+        w("")
+
+        w("## Comments")
+        w("")
+        w("Internal classes and properties only. Reused external vocabulary terms are ignored.")
+        w("")
+        w(f"> {docs.with_comment}/{docs.total_definitions} have an rdfs:comment")
+        w("")
+        w("<details>")
+        w(f"<summary>Show comments ({docs.total_definitions})</summary>")
+        w("")
+        w("| Term | Type | Comment |")
+        w("|------|------|---------|")
+        for check in sorted(docs.checks, key=lambda c: (c.has_comment, c.display_name.lower())):
+            w(f"| `{check.display_name}` | {check.term_type} | {'ok' if check.has_comment else 'missing'} |")
         w("")
         w("</details>")
         w("")

@@ -17,6 +17,7 @@ from askwol import usage
 from askwol.cache import OntologyCache
 from askwol.definition_docs import check_definition_documentation
 from askwol.imports_check import check_imports
+from askwol.internal_terms import check_internal_terms
 from askwol.iri_scheme import check_iri_scheme
 from askwol.iri_strategy import check_iri_strategy
 from askwol.lang_tags import check_lang_tags
@@ -37,12 +38,13 @@ ROOT_PATH = os.environ.get("ASKWOL_ROOT_PATH", "").rstrip("/")
 app = FastAPI(
     title="askwol",
     description=(
-        "Validate OWL ontologies: namespace resolution, term existence in "
-        "remote vocabularies, internal definition documentation (SHACL), "
-        "ontology metadata (SHACL), language-tag consistency, unused "
-        "prefix declarations, owl:imports completeness, IRI strategy "
-        "consistency (hash vs slash), IRI scheme consistency (http vs "
-        "https), and lightweight OWL RL reasoner checks (ontology "
+        "Validate OWL ontologies: namespace resolution, external term "
+        "definitions (existence in remote vocabularies), internal term "
+        "definitions (own-namespace terms are defined), label and comment "
+        "documentation (SHACL), ontology metadata (SHACL), language-tag "
+        "consistency, unused prefix declarations, owl:imports completeness, "
+        "IRI strategy consistency (hash vs slash), IRI scheme consistency "
+        "(http vs https), and lightweight OWL RL reasoner checks (ontology "
         "consistency, inconsistent individuals, and unsatisfiable "
         "classes)."
     ),
@@ -228,6 +230,9 @@ async def _run_validation(tmp_path: Path, source_name: str) -> HTMLResponse:
     # Internal definition documentation
     report.definition_docs = check_definition_documentation(parsed.graph)
 
+    # Internal terms referenced in the ontology's own namespace must be defined
+    report.internal_terms = check_internal_terms(parsed.graph)
+
     # Explicit owl:imports for external vocabularies actually used
     report.imports = check_imports(
         parsed.graph, parsed.namespaces, parsed.terms_by_namespace,
@@ -283,8 +288,10 @@ async def validate_api(
     The report includes:
 
     - **Namespaces** - each declared prefix is fetched over HTTP and parsed as RDF where possible.
-    - **Terms** - every term used from a remote vocabulary is looked up in the resolved namespace.
-    - **Definition documentation** - SHACL check that internally defined classes and properties carry `rdfs:label` and `rdfs:comment`. Reused external terms are ignored.
+    - **External term definitions** - every term reused from an external vocabulary is looked up in the resolved namespace to confirm it is defined there.
+    - **Internal term definitions** - terms in the ontology's own namespace that are referenced but never defined are flagged.
+    - **Labels** - SHACL check that internally defined classes and properties carry an `rdfs:label`. Reused external terms are ignored.
+    - **Comments** - SHACL check that internally defined classes and properties carry an `rdfs:comment`. Reused external terms are ignored.
     - **Unused prefixes** - prefixes declared with `@prefix` but never used in a triple.
     - **Language-tag consistency** - labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) should use the same language tags across subjects.
     - **Ontology metadata** - SHACL check on the ontology header (title, creator, license, version, ...).
@@ -340,6 +347,7 @@ async def validate_api(
     report.lang_tags = check_lang_tags(parsed.graph, parsed.namespaces)
     report.ontology_metadata = validate_ontology_metadata(parsed.graph)
     report.definition_docs = check_definition_documentation(parsed.graph)
+    report.internal_terms = check_internal_terms(parsed.graph)
     report.imports = check_imports(
         parsed.graph, parsed.namespaces, parsed.terms_by_namespace,
     )
