@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 import time
 from html import escape
@@ -10,7 +11,7 @@ from urllib.parse import urlparse
 
 import httpx
 from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from askwol import usage
 from askwol.cache import OntologyCache
@@ -29,6 +30,11 @@ from askwol.resolver import resolve_all_namespaces
 from askwol.templates import GUIDE_HTML, UPLOAD_HTML
 from askwol.term_validator import validate_terms
 
+# ASKWOL_ROOT_PATH is the reverse-proxy sub-path prefix (e.g. /askwol); empty
+# for a root deployment.
+ROOT_PATH = os.environ.get("ASKWOL_ROOT_PATH", "").rstrip("/")
+BASE_HREF = f"{ROOT_PATH}/" if ROOT_PATH else "/"
+
 app = FastAPI(
     title="askwol",
     description=(
@@ -42,15 +48,23 @@ app = FastAPI(
         "classes)."
     ),
     version="0.1.0",
+    root_path=ROOT_PATH,
 )
 
 # Global cache  -  persists across requests so repeated uploads don't re-fetch
 _global_cache = OntologyCache()
 
 
+def _with_base(html: str) -> str:
+    """Inject a <base> tag so relative links resolve under the proxy prefix."""
+    if BASE_HREF == "/" or "<base " in html:
+        return html
+    return html.replace("<head>", f'<head><base href="{BASE_HREF}">', 1)
+
+
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def index():
-    return UPLOAD_HTML
+    return HTMLResponse(_with_base(UPLOAD_HTML))
 
 
 @app.get("/health", summary="Health check", tags=["system"])
@@ -74,7 +88,13 @@ async def stats_endpoint(token: str | None = None):
 
 @app.get("/guide", response_class=HTMLResponse, include_in_schema=False)
 async def guide():
-    return GUIDE_HTML
+    return HTMLResponse(_with_base(GUIDE_HTML))
+
+@app.get("/validate", include_in_schema=False)
+async def validate_get():
+    """Redirect browser GETs to the home form instead of a 405 error."""
+    return RedirectResponse(url="./", status_code=303)
+
 
 @app.post("/validate", include_in_schema=False)
 async def validate(
@@ -180,7 +200,7 @@ async def _run_validation(tmp_path: Path, source_name: str) -> HTMLResponse:
         parsed = parse_ontology(tmp_path)
     except Exception as exc:
         report.parse_errors.append(str(exc))
-        return HTMLResponse(render_report(report, mermaid), status_code=422)
+        return HTMLResponse(_with_base(render_report(report, mermaid)), status_code=422)
     finally:
         tmp_path.unlink(missing_ok=True)
 
@@ -236,7 +256,7 @@ async def _run_validation(tmp_path: Path, source_name: str) -> HTMLResponse:
             )
         )
 
-    return HTMLResponse(render_report(report, mermaid))
+    return HTMLResponse(_with_base(render_report(report, mermaid)))
 
 
 @app.post(
