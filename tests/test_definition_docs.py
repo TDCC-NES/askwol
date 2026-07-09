@@ -35,7 +35,7 @@ def test_external_reused_terms_are_ignored():
     assert report.issues == []
 
 
-def test_markdown_report_includes_definition_documentation_section():
+def test_markdown_report_includes_labels_and_comments_sections():
     g = Graph()
     g.add((EX["ontology"], RDF.type, OWL.Ontology))
     g.add((EX["Person"], RDF.type, OWL.Class))
@@ -45,6 +45,9 @@ def test_markdown_report_includes_definition_documentation_section():
     full.definition_docs = check_definition_documentation(g)
 
     md = report_as_markdown(full)
-    assert "## Definition documentation" in md
-    assert "| Term | Type | Label | Comment |" in md
-    assert "| `Person` | Class | ok | missing |" in md
+    assert "## Labels" in md
+    assert "## Comments" in md
+    assert "| Term | Type | Label |" in md
+    assert "| Term | Type | Comment |" in md
+    assert "| `Person` | Class | ok |" in md
+    assert "| `Person` | Class | missing |" in md

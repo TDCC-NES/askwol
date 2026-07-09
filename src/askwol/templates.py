@@ -113,7 +113,6 @@ UPLOAD_HTML = """<!DOCTYPE html>
       <div class="examples-label">Or try a well-known ontology</div>
       <div class="chips">
         <button type="button" class="chip" data-url="http://xmlns.com/foaf/spec/index.rdf">FOAF</button>
-        <button type="button" class="chip" data-url="http://purl.org/dc/terms/">Dublin Core</button>
         <button type="button" class="chip" data-url="https://www.w3.org/ns/prov.ttl">PROV-O</button>
         <button type="button" class="chip" data-url="https://www.w3.org/2006/time">Time</button>
         <button type="button" class="chip" data-url="https://opengeospatial.github.io/ogc-geosparql/geosparql11/geo.ttl">GeoSPARQL</button>
@@ -176,13 +175,18 @@ UPLOAD_HTML = """<!DOCTYPE html>
     URI, checks HTTP status, and tries to parse as RDF (Turtle, RDF/XML,
     JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF
     links.</li>
-    <li><strong>Terms</strong>: verifies that terms your ontology
-    references from a remote vocabulary actually exist there. Only terms
-    that appear as <em>subjects</em> are checked. Catches typos like
-    <code>owl:MadeUpClass</code>.</li>
-    <li><strong>Definition documentation</strong>: a SHACL check that
-    every internally defined class and property carries both an
-    <code>rdfs:label</code> and an <code>rdfs:comment</code>. Reused
+    <li><strong>External term definitions</strong>: verifies that terms
+    your ontology reuses from an external vocabulary are actually defined
+    there. Catches typos like <code>owl:MadeUpClass</code> and made-up
+    reuse of established prefixes.</li>
+    <li><strong>Internal term definitions</strong>: flags terms in your own
+    namespace that are referenced but never defined - usually a typo or a
+    forgotten declaration.</li>
+    <li><strong>Labels</strong>: a SHACL check that every internally
+    defined class and property carries an <code>rdfs:label</code>. Reused
+    external terms are ignored.</li>
+    <li><strong>Comments</strong>: a SHACL check that every internally
+    defined class and property carries an <code>rdfs:comment</code>. Reused
     external terms are ignored.</li>
     <li><strong>Language tag consistency</strong>: language-tagged
     properties like <code>rdfs:label</code>, <code>rdfs:comment</code>,
@@ -483,9 +487,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     },
     {
         "group": "check",
-        "anchor": "reuse",
-        "title": "Reuse standard vocabularies",
-        "toc_label": "Terms",
+        "anchor": "external-terms",
+        "title": "External term definitions",
+        "toc_label": "External term definitions",
         "body": """\
   <p>Don&rsquo;t reinvent the wheel. Before defining a new term, check if
   an established vocabulary already covers it:</p>
@@ -499,53 +503,73 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <div class="warn">When reusing a term, use the <em>exact</em>
   IRI from the source vocabulary. A typo like <code>foaf:nme</code> instead
   of <code>foaf:name</code> silently breaks interoperability.</div>
-  <div class="tip">askwol looks up every reused term in its remote vocabulary
-  and reports the ones that do not exist there. This catches typos like
-  <code>foaf:nme</code> and made-up reuse of established prefixes.</div>
+  <div class="tip">askwol looks up every term you reuse from an external
+  vocabulary and reports the ones that are not actually defined there. This
+  catches typos like <code>foaf:nme</code> and made-up reuse of established
+  prefixes. Terms from your own namespace are checked separately (see
+  <a href="#internal-terms">Internal term definitions</a>).</div>
 """,
     },
     {
         "group": "check",
-        "anchor": "definition-docs",
-        "title": "Definition documentation",
-        "toc_label": "Definition documentation",
+        "anchor": "internal-terms",
+        "title": "Internal term definitions",
+        "toc_label": "Internal term definitions",
         "body": """\
-  <p>Every class, property, and individual in your ontology should have an
-  explicit declaration <em>and</em> human-readable documentation. askwol
-  combines both checks under a single report section.</p>
-
-  <h3>Define each term</h3>
-  <p>Don&rsquo;t just <em>use</em> a term; <em>define</em> it.</p>
+  <p>Every term you use from your <em>own</em> namespace should also be
+  defined there. Don&rsquo;t just <em>use</em> a term; <em>define</em> it.</p>
   <pre>&lt;#Person&gt; a owl:Class ;
     rdfs:label "Person"@en ;
     rdfs:comment "A human being."@en .</pre>
   <div class="warn">If you reference <code>ex:Persom</code> but
   never define it, that&rsquo;s probably a typo. askwol catches these.</div>
-  <div class="tip">askwol only validates terms that appear as
-  <strong>subjects</strong> in your triples; these are the concepts
-  your ontology <em>defines</em>. Terms used only as predicates or objects
-  (like <code>rdfs:label</code> or <code>owl:Class</code>) are assumed to
-  be well-known vocabulary and are not checked.</div>
-
-  <h3>Give concepts human-readable labels</h3>
-  <p>Every class and property should have at least:</p>
-  <ul>
-    <li><code>rdfs:label</code>: a short human-readable name</li>
-    <li><code>rdfs:comment</code>: a brief description</li>
-  </ul>
+  <div class="tip">askwol treats a term as <strong>defined</strong> when it
+  appears as the <strong>subject</strong> of at least one triple, and as
+  <strong>referenced</strong> when it appears as a predicate or object. A term
+  in your own namespace that is referenced but never defined is flagged.
+  External vocabulary terms are covered by the
+  <a href="#external-terms">External term definitions</a> check instead.</div>
+""",
+    },
+    {
+        "group": "check",
+        "anchor": "labels",
+        "title": "Labels",
+        "toc_label": "Labels",
+        "body": """\
+  <p>Every class and property you define should carry a human-readable
+  <code>rdfs:label</code>: a short name a person can read.</p>
   <pre>&lt;#hasMother&gt; a owl:ObjectProperty ;
     rdfs:label "has mother"@en ;
-    rdfs:comment "Relates a person to their biological mother."@en ;
     rdfs:domain &lt;#Person&gt; ;
     rdfs:range &lt;#Person&gt; .</pre>
   <div class="tip">Use language tags (<code>@en</code>, <code>@de</code>)
   to support multilingual ontologies. Consider
   <code>skos:prefLabel</code> and <code>skos:altLabel</code> for richer
   labeling.</div>
-  <div class="tip">askwol uses <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes</a> to check whether each
-  <em>internally defined</em> class and property has both an
-  <code>rdfs:label</code> and an <code>rdfs:comment</code>. Reused external
-  vocabulary terms are ignored.</div>
+  <div class="tip">askwol uses <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes</a> to check that each
+  <em>internally defined</em> class and property has an
+  <code>rdfs:label</code>. Reused external vocabulary terms are ignored.</div>
+""",
+    },
+    {
+        "group": "check",
+        "anchor": "comments",
+        "title": "Comments",
+        "toc_label": "Comments",
+        "body": """\
+  <p>Every class and property you define should also carry an
+  <code>rdfs:comment</code>: a brief description of what it means.</p>
+  <pre>&lt;#hasMother&gt; a owl:ObjectProperty ;
+    rdfs:label "has mother"@en ;
+    rdfs:comment "Relates a person to their biological mother."@en ;
+    rdfs:domain &lt;#Person&gt; ;
+    rdfs:range &lt;#Person&gt; .</pre>
+  <div class="tip">A good comment states the intended meaning and, where
+  helpful, how the term should (and should not) be used.</div>
+  <div class="tip">askwol uses <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes</a> to check that each
+  <em>internally defined</em> class and property has an
+  <code>rdfs:comment</code>. Reused external vocabulary terms are ignored.</div>
 """,
     },
     {
@@ -705,7 +729,7 @@ GUIDE_HTML = f"""<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ask Wol: OWL modeling guide</title>
-<meta name="description" content="A practical guide to modeling OWL ontologies: IRI strategy, http vs https, resolvable namespaces, vocabulary reuse, definition documentation, language tags, reasoner checks, and prefix hygiene.">
+<meta name="description" content="A practical guide to modeling OWL ontologies: IRI strategy, http vs https, resolvable namespaces, external and internal term definitions, labels and comments, language tags, reasoner checks, and prefix hygiene.">
 <meta name="keywords" content="OWL, ontology, RDF, Semantic Web, modeling guide, IRI strategy, SHACL, namespaces, language tags, OWL reasoner, best practices">
 <meta name="author" content="TDCC-NES Ontology Engineers">
 <meta name="robots" content="index, follow">
@@ -723,7 +747,7 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "headline": "OWL ontology modeling guide",
-  "description": "A practical guide to modeling OWL ontologies: IRI strategy, http vs https, resolvable namespaces, vocabulary reuse, definition documentation, language tags, reasoner checks, and prefix hygiene.",
+  "description": "A practical guide to modeling OWL ontologies: IRI strategy, http vs https, resolvable namespaces, external and internal term definitions, labels and comments, language tags, reasoner checks, and prefix hygiene.",
   "author": {{"@type": "Organization", "name": "TDCC-NES Ontology Engineers", "url": "https://tdcc.nl/nes-ontology-engineers/"}},
   "publisher": {{"@type": "Organization", "name": "TDCC-NES Ontology Engineers"}},
   "isPartOf": {{"@type": "WebApplication", "name": "askwol"}}

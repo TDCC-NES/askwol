@@ -35,14 +35,16 @@ A single HTML report (or JSON via the API) with one section per automated check.
 4. **IRI strategy** - the ontology's own defined terms should consistently use either hash (`#Term`) or slash (`/Term`), not both.
 5. **IRI scheme** - each host should be referenced under a single URI scheme. `http://example.org/X` and `https://example.org/X` are different IRIs.
 6. **Namespace resolution** - fetches each declared namespace URI, checks HTTP status, tries to parse as RDF (Turtle, RDF/XML, JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF links.
-7. **Term validation** - verifies that terms referenced from a remote vocabulary actually exist there. Catches typos like `owl:MadeUpClass`.
-8. **Definition documentation** - SHACL check that every internally defined class and property carries both an `rdfs:label` and an `rdfs:comment`. Reused external terms are ignored.
-9. **Language tag consistency** - labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) should use the same language tags across subjects.
-10. **OWL RL reasoner checks** - lightweight reasoning on the current ontology (imports are not followed), with three distinct facets:
+7. **External term definitions** - verifies that terms reused from an external vocabulary are actually defined there. Catches typos like `owl:MadeUpClass` and made-up reuse of established prefixes.
+8. **Internal term definitions** - flags terms in the ontology's own namespace that are referenced (as a predicate or object) but never defined (never appear as a subject). Usually a typo or a forgotten declaration.
+9. **Labels** - SHACL check that every internally defined class and property carries an `rdfs:label`. Reused external terms are ignored.
+10. **Comments** - SHACL check that every internally defined class and property carries an `rdfs:comment`. Reused external terms are ignored.
+11. **Language tag consistency** - labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) should use the same language tags across subjects.
+12. **OWL RL reasoner checks** - lightweight reasoning on the current ontology (imports are not followed), with three distinct facets:
     - **Ontology consistency** - the ontology as a whole has a model.
     - **Inconsistent individuals** - specific named individuals that violate a class restriction (e.g. typed in two `owl:disjointWith` classes).
     - **Unsatisfiable classes** - named classes whose definition forces them to be empty (equivalent to `owl:Nothing`).
-11. **Unused prefixes** - flags `@prefix` declarations that are never used in any triple.
+13. **Unused prefixes** - flags `@prefix` declarations that are never used in any triple.
 
 ## Quick start
 

@@ -158,6 +158,45 @@ class DefinitionDocumentationReport(BaseModel):
     checks: list[DefinitionDocumentationCheck] = Field(default_factory=list)
     issues: list[DefinitionDocumentationIssue] = Field(default_factory=list)
 
+    @property
+    def with_label(self) -> int:
+        return sum(1 for c in self.checks if c.has_label)
+
+    @property
+    def with_comment(self) -> int:
+        return sum(1 for c in self.checks if c.has_comment)
+
+    @property
+    def missing_label(self) -> list[DefinitionDocumentationCheck]:
+        return [c for c in self.checks if not c.has_label]
+
+    @property
+    def missing_comment(self) -> list[DefinitionDocumentationCheck]:
+        return [c for c in self.checks if not c.has_comment]
+
+
+class InternalTermIssue(BaseModel):
+    """One term in the ontology's own namespace that is referenced but never defined."""
+
+    term: str
+    display_name: str
+
+
+class InternalTermsReport(BaseModel):
+    """Whether terms in the ontology's own namespace are actually defined.
+
+    A term is considered *defined* when it appears as the subject of at least
+    one triple, and *referenced* when it appears as a predicate or object.
+    Referenced-but-never-defined terms are usually typos or forgotten
+    declarations.
+    """
+
+    total_referenced: int = 0
+    defined: int = 0
+    undefined: list[InternalTermIssue] = Field(default_factory=list)
+    status: Status = Status.SKIP
+    message: str | None = None
+
 
 class ImportsCheck(BaseModel):
     """One namespace used by the ontology, and whether it is imported."""
@@ -248,6 +287,7 @@ class ValidationReport(BaseModel):
     lang_tags: LangTagReport | None = None
     ontology_metadata: MetadataReport | None = None
     definition_docs: DefinitionDocumentationReport | None = None
+    internal_terms: InternalTermsReport | None = None
     imports: ImportsReport | None = None
     iri_strategy: IRIStrategyReport | None = None
     iri_scheme: IRISchemeReport | None = None
@@ -275,6 +315,8 @@ class ValidationReport(BaseModel):
         if self.ontology_metadata and any(c.status != Status.OK for c in self.ontology_metadata.checks):
             return True
         if self.definition_docs and self.definition_docs.issues:
+            return True
+        if self.internal_terms and self.internal_terms.undefined:
             return True
         if self.imports and self.imports.missing:
             return True
