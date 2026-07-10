@@ -1,7 +1,7 @@
-"""HTML templates for askwol: home page and modeling guide.
+"""HTML templates for askwol: home page and publishing guide.
 
 Single source of truth for the static UI markup. The `GUIDE_SECTIONS` list
-drives both the table of contents and the body of the modeling guide so the
+drives both the table of contents and the body of the publishing guide so the
 two cannot drift apart. The `report_html` module imports `GUIDE_SECTIONS`
 and enforces (via assert) that its `CHECKS` registry uses the same anchors
 in the same order.
@@ -93,7 +93,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
   <p class="topnav">
     <strong>Navigation:</strong>
     <a href="./">Home</a> &middot;
-    <a href="guide">Modeling guide</a> &middot;
+    <a href="guide">Publishing guide</a> &middot;
     <a href="docs">API docs</a>
   </p>
   <h1><span class="owl" aria-hidden="true">&#x1F989;</span> Ask Wol</h1>
@@ -154,7 +154,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
 
   <h2>What do you get?</h2>
   <p>One HTML report (or JSON via the API) with a section per check, each
-  linked to the matching entry in the <a href="guide">modeling guide</a>:</p>
+  linked to the matching entry in the <a href="guide">publishing guide</a>:</p>
   <ol>
     <li><strong>Ontology diagram</strong>: an interactive class diagram
     showing your classes, properties, and inheritance hierarchy. Zoom,
@@ -175,6 +175,9 @@ UPLOAD_HTML = """<!DOCTYPE html>
     URI, checks HTTP status, and tries to parse as RDF (Turtle, RDF/XML,
     JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF
     links.</li>
+    <li><strong>Unused prefixes</strong>: flags <code>@prefix</code>
+    declarations that are never used in any triple. Keeps your ontology
+    tidy.</li>
     <li><strong>External term definitions</strong>: verifies that terms
     your ontology reuses from an external vocabulary are actually defined
     there. Catches typos like <code>owl:MadeUpClass</code> and made-up
@@ -197,9 +200,6 @@ UPLOAD_HTML = """<!DOCTYPE html>
     on the current ontology (imports are not followed), reported as three
     facets: <em>ontology consistency</em>, <em>inconsistent
     individuals</em>, and <em>unsatisfiable classes</em>.</li>
-    <li><strong>Unused prefixes</strong>: flags <code>@prefix</code>
-    declarations that are never used in any triple. Keeps your ontology
-    tidy.</li>
   </ol>
 
   <p><strong>What you don&rsquo;t get:</strong> askwol checks syntax and
@@ -249,7 +249,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-# Single source of truth for the modeling guide. The order of this list IS
+# Single source of truth for the publishing guide. The order of this list IS
 # the order of both the table of contents and the page body, so the two
 # cannot drift apart. Sections in group="check" are linked from the
 # validation report; their order and anchors must match CHECKS below.
@@ -472,6 +472,12 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Make namespaces resolvable",
         "toc_label": "Namespaces",
         "body": """\
+  <p>A <strong>namespace</strong> is the URI that a prefix expands to. In
+  <code>@prefix foaf: &lt;http://xmlns.com/foaf/0.1/&gt;</code> the prefix is
+  <code>foaf</code> and the namespace is
+  <code>http://xmlns.com/foaf/0.1/</code>. This check looks at those namespace
+  URIs; the short prefix aliases themselves are covered by
+  <a href="#prefixes">Unused prefixes</a> below.</p>
   <p>Every namespace URI should return something useful when fetched with HTTP.
   Ideally it returns RDF (content-negotiated), so tools can discover term
   definitions automatically.</p>
@@ -483,6 +489,23 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p>If you host your own ontology, configure your server to support
   <a href="https://www.w3.org/TR/swbp-vocab-pub/">content negotiation</a>,
   serving RDF to machines and HTML to browsers.</p>
+""",
+    },
+    {
+        "group": "check",
+        "anchor": "prefixes",
+        "title": "Keep your prefixes clean",
+        "toc_label": "Unused prefixes",
+        "body": """\
+  <p>Each <code>@prefix</code> line binds a short prefix to a
+  <a href="#resolvable">namespace</a> URI. This check is about the prefix
+  side: only declare prefixes you actually use. Leftover
+  <code>@prefix</code> declarations clutter the file and confuse
+  readers; they suggest a dependency that doesn&rsquo;t exist.</p>
+  <pre>@prefix dct: &lt;http://purl.org/dc/terms/&gt; .   # used below
+@prefix geo: &lt;http://www.opengis.net/ont/geosparql#&gt; .  # unused, remove it</pre>
+  <div class="tip">askwol flags every prefix that is declared
+  but never appears in a triple, so you can clean them up.</div>
 """,
     },
     {
@@ -641,21 +664,6 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
 """,
     },
     {
-        "group": "check",
-        "anchor": "prefixes",
-        "title": "Keep your prefixes clean",
-        "toc_label": "Unused prefixes",
-        "body": """\
-  <p>Only declare prefixes you actually use. Leftover
-  <code>@prefix</code> declarations clutter the file and confuse
-  readers; they suggest a dependency that doesn&rsquo;t exist.</p>
-  <pre>@prefix dct: &lt;http://purl.org/dc/terms/&gt; .   # used below
-@prefix geo: &lt;http://www.opengis.net/ont/geosparql#&gt; .  # unused, remove it</pre>
-  <div class="tip">askwol flags every prefix that is declared
-  but never appears in a triple, so you can clean them up.</div>
-""",
-    },
-    {
         "group": "practice",
         "anchor": "validate",
         "title": "Validate early and often",
@@ -686,20 +694,26 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
 ]
 
 
+# Continuous section numbers (1..N) in GUIDE_SECTIONS order. The TOC and the
+# body headings both use these, so the two always match.
+_GUIDE_NUMBERS = {s["anchor"]: i for i, s in enumerate(GUIDE_SECTIONS, 1)}
+
+
 def _render_guide_toc() -> str:
-    """Render the modeling-guide TOC from GUIDE_SECTIONS.
+    """Render the publishing-guide TOC from GUIDE_SECTIONS.
 
     The TOC has two groups: automated checks (linked from the report) and
-    additional best practices. Order inside each group is the order of
-    GUIDE_SECTIONS, so the TOC cannot drift from the body.
+    additional best practices. Each entry is numbered and uses the exact same
+    text as the matching body heading, so the TOC cannot drift from the body.
     """
     def _items(group: str) -> str:
         lines = []
         for s in GUIDE_SECTIONS:
             if s["group"] != group:
                 continue
+            n = _GUIDE_NUMBERS[s["anchor"]]
             lines.append(
-                f'      <li><a href="#{s["anchor"]}">{s["toc_label"]}</a></li>'
+                f'      <li><a href="#{s["anchor"]}">{n}. {s["toc_label"]}</a></li>'
             )
         return "\n".join(lines)
 
@@ -716,11 +730,20 @@ def _render_guide_toc() -> str:
 
 
 def _render_guide_body() -> str:
-    """Render the modeling-guide H2 sections from GUIDE_SECTIONS, in order."""
-    return "\n".join(
-        f'  <h2 id="{s["anchor"]}">{s["title"]}</h2>\n{s["body"]}'
-        for s in GUIDE_SECTIONS
-    )
+    """Render the publishing-guide H2 sections from GUIDE_SECTIONS, in order.
+
+    The heading text matches the TOC entry exactly (number + label). Where a
+    section has a distinct one-line takeaway, it is shown as a subtitle under
+    the heading.
+    """
+    blocks = []
+    for s in GUIDE_SECTIONS:
+        n = _GUIDE_NUMBERS[s["anchor"]]
+        heading = f'  <h2 id="{s["anchor"]}">{n}. {s["toc_label"]}</h2>'
+        if s["title"] and s["title"] != s["toc_label"]:
+            heading += f'\n  <p class="section-lead">{s["title"]}</p>'
+        blocks.append(f'{heading}\n{s["body"]}')
+    return "\n".join(blocks)
 
 
 GUIDE_HTML = f"""<!DOCTYPE html>
@@ -728,26 +751,26 @@ GUIDE_HTML = f"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ask Wol: OWL modeling guide</title>
-<meta name="description" content="A practical guide to modeling OWL ontologies: IRI strategy, http vs https, resolvable namespaces, external and internal term definitions, labels and comments, language tags, reasoner checks, and prefix hygiene.">
-<meta name="keywords" content="OWL, ontology, RDF, Semantic Web, modeling guide, IRI strategy, SHACL, namespaces, language tags, OWL reasoner, best practices">
+<title>Ask Wol: OWL publishing guide</title>
+<meta name="description" content="A practical guide to publishing OWL ontologies: IRI strategy, http vs https, resolvable namespaces, external and internal term definitions, labels and comments, language tags, reasoner checks, and prefix hygiene.">
+<meta name="keywords" content="OWL, ontology, RDF, Semantic Web, publishing guide, IRI strategy, SHACL, namespaces, language tags, OWL reasoner, best practices">
 <meta name="author" content="TDCC-NES Ontology Engineers">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#4a7c59">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="askwol">
-<meta property="og:title" content="Ask Wol: OWL modeling guide">
-<meta property="og:description" content="A practical guide to modeling OWL ontologies: IRI strategy, resolvable namespaces, vocabulary reuse, documentation, language tags, and reasoner checks.">
+<meta property="og:title" content="Ask Wol: OWL publishing guide">
+<meta property="og:description" content="A practical guide to publishing OWL ontologies: IRI strategy, resolvable namespaces, vocabulary reuse, documentation, language tags, and reasoner checks.">
 <meta property="og:image" content="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Winnie-the-Pooh_67.png/250px-Winnie-the-Pooh_67.png">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Ask Wol: OWL modeling guide">
-<meta name="twitter:description" content="A practical guide to modeling OWL ontologies: IRI strategy, resolvable namespaces, vocabulary reuse, documentation, language tags, and reasoner checks.">
+<meta name="twitter:title" content="Ask Wol: OWL publishing guide">
+<meta name="twitter:description" content="A practical guide to publishing OWL ontologies: IRI strategy, resolvable namespaces, vocabulary reuse, documentation, language tags, and reasoner checks.">
 <script type="application/ld+json">
 {{
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "OWL ontology modeling guide",
-  "description": "A practical guide to modeling OWL ontologies: IRI strategy, http vs https, resolvable namespaces, external and internal term definitions, labels and comments, language tags, reasoner checks, and prefix hygiene.",
+  "headline": "OWL ontology publishing guide",
+  "description": "A practical guide to publishing OWL ontologies: IRI strategy, http vs https, resolvable namespaces, external and internal term definitions, labels and comments, language tags, reasoner checks, and prefix hygiene.",
   "author": {{"@type": "Organization", "name": "TDCC-NES Ontology Engineers", "url": "https://tdcc.nl/nes-ontology-engineers/"}},
   "publisher": {{"@type": "Organization", "name": "TDCC-NES Ontology Engineers"}},
   "isPartOf": {{"@type": "WebApplication", "name": "askwol"}}
@@ -761,6 +784,7 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   h1 .owl {{ font-size: 1.4em; line-height: 1; }}
   h2 {{ color: #555; margin-top: 2em; border-bottom: 1px solid #eee; padding-bottom: 0.2em; }}
   h3 {{ color: #666; margin-top: 1.5em; }}
+  .section-lead {{ color: #555; font-size: 1.05em; margin: 0.4em 0 1.1em; }}
   a {{ color: #4a7c59; }}
   code {{ background: #f0f0f0; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; }}
   pre {{ background: #f7f7f7; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; line-height: 1.5; }}
@@ -769,7 +793,7 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   .footer {{ margin-top: 2.5em; font-size: 0.85em; color: #aaa; text-align: center; }}
   .topnav {{ margin-bottom: 1em; font-size: 0.95em; color: #555; background: #f7f7f7; border: 1px solid #eee; border-radius: 8px; padding: 0.6em 0.9em; }}
   .toc {{ background: #f9f9f9; padding: 1em 1.5em; border-radius: 8px; margin: 1.5em 0; }}
-  .toc ul {{ margin: 0.3em 0 0 0; padding-left: 1.5em; }}
+  .toc ul {{ list-style: none; margin: 0.3em 0 0 0; padding-left: 0; }}
   .toc li {{ margin: 0.2em 0; }}
   .toc .group-label {{ display: block; margin-top: 0.8em; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; font-weight: 600; }}
   .toc .group-label:first-child {{ margin-top: 0; }}
@@ -779,10 +803,10 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   <p class="topnav">
     <strong>Navigation:</strong>
     <a href="./">Home</a> &middot;
-    <a href="guide">Modeling guide</a> &middot;
+    <a href="guide">Publishing guide</a> &middot;
     <a href="docs">API docs</a>
   </p>
-  <h1><span class="owl" aria-hidden="true">&#x1F989;</span> How to Model a Good Ontology</h1>
+  <h1><span class="owl" aria-hidden="true">&#x1F989;</span> How to Publish an Ontology</h1>
   <p>A practical checklist for building OWL ontologies that are
   interoperable, resolvable, and maintainable. These are the things
   <a href="./">askwol</a> checks, and why they matter.</p>

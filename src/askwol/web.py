@@ -277,7 +277,7 @@ def _render_stats_page(data: dict[str, object]) -> str:
         <div class="topnav">
             <span class="brand"><span class="brand-mark" aria-hidden="true">🦉</span> Ask Wol usage</span>
             <a href="./">Home</a>
-            <a href="guide">Modeling guide</a>
+            <a href="guide">Publishing guide</a>
             <a href="docs">API docs</a>
         </div>
         <div class="hero">
