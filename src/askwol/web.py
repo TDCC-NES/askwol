@@ -7,7 +7,7 @@ import tempfile
 import time
 from html import escape
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 from fastapi import FastAPI, File, Form, Request, UploadFile
@@ -71,6 +71,269 @@ def _apply_prefix(html: str) -> str:
     )
 
 
+def _format_int(value: int | None) -> str:
+        return "0" if value is None else f"{value:,}"
+
+
+def _format_duration(value: int | None) -> str:
+        if value is None:
+                return "n/a"
+        if value < 1000:
+                return f"{value:,} ms"
+        return f"{value / 1000:.1f} s"
+
+
+def _stats_bar(value: int, maximum: int) -> str:
+        if maximum <= 0:
+                return "0%"
+        return f"{max(4, round((value / maximum) * 100))}%"
+
+
+_STATUS_NOTES = {
+        "200": "OK, validation succeeded",
+        "400": "bad request, missing or unusable input",
+        "401": "unauthorized stats access",
+        "415": "URL returned HTML instead of RDF",
+        "422": "ontology could not be parsed or fetched",
+        "503": "usage tracking or stats disabled",
+}
+
+
+def _status_note(status: object) -> str:
+        return _STATUS_NOTES.get(str(status) if status is not None else "", "")
+
+
+def _format_ts(ts: object) -> str:
+        """Shorten an ISO timestamp to `YYYY-MM-DD HH:MM`."""
+        text = str(ts) if ts is not None else ""
+        text = text.replace("T", " ")
+        if len(text) >= 16:
+                return text[:16]
+        return text
+
+
+def _is_local_request(request: Request) -> bool:
+    host = (request.url.hostname or "").lower()
+    client_host = (request.client.host if request.client else "").lower()
+    return host in {"localhost", "127.0.0.1", "::1"} or client_host in {"localhost", "127.0.0.1", "::1"}
+
+
+def _render_stats_page(data: dict[str, object]) -> str:
+        total_events = int(data.get("total_events") or 0)
+        unique_visitors = int(data.get("unique_visitors") or 0)
+        avg_duration = data.get("avg_duration_ms")
+        days = int(data.get("days") or 30)
+
+        by_day = list(data.get("by_day") or [])
+        by_status = list(data.get("by_status") or [])
+        top_sources = list(data.get("top_sources") or [])
+        all_events = list(data.get("all_events") or [])
+        page = int(data.get("page") or 1)
+        page_size = int(data.get("page_size") or 50)
+        total_entries = int(data.get("total_entries") or 0)
+        token = data.get("token") or None
+        total_pages = max(1, (total_entries + page_size - 1) // page_size)
+        first_index = (page - 1) * page_size + 1 if all_events else 0
+        last_index = (page - 1) * page_size + len(all_events)
+
+        max_day = max((int(row["n"]) for row in by_day), default=0)
+        max_status = max((int(row["n"]) for row in by_status), default=0)
+        max_source = max((int(row["n"]) for row in top_sources), default=0)
+
+        day_rows = []
+        for row in by_day:
+                count = int(row["n"])
+                day_rows.append(
+                        "<div class=\"bar-row\">"
+                        f"<div class=\"bar-label\">{escape(str(row['day']))}</div>"
+                        f"<div class=\"bar-track\"><span style=\"width:{_stats_bar(count, max_day)}\"></span></div>"
+                        f"<div class=\"bar-value\">{_format_int(count)}</div>"
+                        "</div>"
+                )
+        day_html = "".join(day_rows) or '<p class="empty">No events recorded in this period.</p>'
+
+        status_rows = []
+        for row in by_status:
+                count = int(row["n"])
+                status_rows.append(
+                        "<tr>"
+                        f"<td>{escape(str(row['status']))}</td>"
+                        f"<td class=\"hint\">{escape(_status_note(row['status']))}</td>"
+                        f"<td class=\"num\">{_format_int(count)}</td>"
+                        f"<td><span class=\"mini-bar\"><span style=\"width:{_stats_bar(count, max_status)}\"></span></span></td>"
+                        "</tr>"
+                )
+        status_html = "".join(status_rows) or '<tr><td colspan="4" class="empty-cell">No events recorded in this period.</td></tr>'
+
+        source_rows = []
+        for row in top_sources:
+                count = int(row["n"])
+                source_rows.append(
+                        "<tr>"
+                        f"<td class=\"source\">{escape(str(row['source']))}</td>"
+                        f"<td class=\"num\">{_format_int(count)}</td>"
+                        f"<td><span class=\"mini-bar\"><span style=\"width:{_stats_bar(count, max_source)}\"></span></span></td>"
+                        "</tr>"
+                )
+        source_html = "".join(source_rows) or '<tr><td colspan="3" class="empty-cell">No sources yet.</td></tr>'
+
+        all_rows = []
+        for row in all_events:
+                status = str(row['status']) if row['status'] is not None else ''
+                note = _status_note(row['status'])
+                status_cell = (
+                        f"<span title=\"{escape(note)}\">{escape(status)}</span>"
+                        if note else escape(status)
+                )
+                visitor = str(row['ip_hash']) if row.get('ip_hash') else ''
+                visitor_cell = (
+                        f"<code title=\"Salted hash of the visitor IP (raw IP is never stored)\">{escape(visitor)}</code>"
+                        if visitor else '<span class="hint">unknown</span>'
+                )
+                all_rows.append(
+                        "<tr>"
+                        f"<td>{escape(_format_ts(row['ts']))}</td>"
+                        f"<td>{visitor_cell}</td>"
+                        f"<td>{escape(str(row['kind']))}</td>"
+                        f"<td>{status_cell}</td>"
+                        f"<td class=\"source\">{escape(str(row['source']) if row['source'] is not None else '')}</td>"
+                        "</tr>"
+                )
+        all_html = "".join(all_rows) or '<tr><td colspan="5" class="empty-cell">No database entries yet.</td></tr>'
+
+        def _page_href(target: int) -> str:
+                query = f"?page={target}"
+                if token:
+                        query += f"&token={quote(str(token))}"
+                return query
+
+        prev_link = (
+                f'<a class="page-btn" href="{_page_href(page - 1)}">&larr; Newer</a>'
+                if page > 1 else '<span class="page-btn disabled">&larr; Newer</span>'
+        )
+        next_link = (
+                f'<a class="page-btn" href="{_page_href(page + 1)}">Older &rarr;</a>'
+                if page < total_pages else '<span class="page-btn disabled">Older &rarr;</span>'
+        )
+        pagination_html = (
+                f'<div class="pagination">{prev_link}'
+                f'<span class="page-info">Showing {_format_int(first_index)}&ndash;{_format_int(last_index)} '
+                f'of {_format_int(total_entries)} &middot; page {_format_int(page)} of {_format_int(total_pages)}</span>'
+                f'{next_link}</div>'
+        )
+
+        return _apply_prefix(f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ask Wol: usage dashboard</title>
+<meta name="color-scheme" content="light">
+<style>
+    :root {{ --accent: #285c4d; --accent-soft: #dcebe6; --accent-strong: #12362f; --border: #d7e2de; --muted: #5d6b66; --bg: #f4f7f5; --card: #ffffff; }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: #18312b; background: radial-gradient(circle at top left, #edf5f1, transparent 35%), linear-gradient(180deg, #f8fbf9, var(--bg)); }}
+    .shell {{ max-width: 1160px; margin: 0 auto; padding: 32px 20px 56px; }}
+    .topnav {{ display: flex; gap: 12px; flex-wrap: wrap; align-items: center; color: var(--muted); font-size: 0.95rem; margin-bottom: 22px; }}
+    .topnav a {{ color: var(--accent); text-decoration: none; font-weight: 600; }}
+    .brand {{ display: inline-flex; align-items: center; gap: 12px; width: fit-content; padding: 8px 14px; border-radius: 999px; background: rgba(220, 235, 230, 0.9); color: var(--accent-strong); font-weight: 800; letter-spacing: 0.02em; }}
+    .brand-mark {{ display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(180deg, #335f53, var(--accent)); color: #fff; font-size: 1rem; }}
+    .hero {{ display: grid; gap: 10px; margin-bottom: 22px; margin-top: 14px; }}
+    .kicker {{ display: inline-flex; width: fit-content; padding: 5px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-strong); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }}
+    h1 {{ margin: 0; font-size: clamp(2rem, 4vw, 3.3rem); line-height: 1.03; letter-spacing: -0.04em; }}
+    .lede {{ margin: 0; max-width: 72ch; color: var(--muted); font-size: 1.05rem; line-height: 1.6; }}
+    .grid {{ display: grid; gap: 18px; grid-template-columns: repeat(12, minmax(0, 1fr)); }}
+    .card {{ grid-column: span 12; background: var(--card); border: 1px solid var(--border); border-radius: 18px; box-shadow: 0 10px 30px rgba(24, 49, 43, 0.06); overflow: hidden; }}
+    .summary {{ display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 18px; }}
+    .metric {{ padding: 18px; border-radius: 14px; background: linear-gradient(180deg, #fff, #f9fbfa); border: 1px solid #e4ece8; }}
+    .metric .label {{ color: var(--muted); font-size: 0.84rem; text-transform: uppercase; letter-spacing: 0.04em; }}
+    .metric .value {{ margin-top: 8px; font-size: 2rem; font-weight: 800; color: var(--accent-strong); }}
+    .metric .sub {{ margin-top: 6px; color: var(--muted); font-size: 0.95rem; }}
+    .panel {{ padding: 18px; }}
+    .panel h2 {{ margin: 0 0 12px; font-size: 1.1rem; }}
+    .bar-row {{ display: grid; gap: 10px; grid-template-columns: 110px 1fr 72px; align-items: center; padding: 6px 0; }}
+    .bar-label, .source {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    .bar-track {{ height: 14px; background: #edf2ef; border-radius: 999px; overflow: hidden; }}
+    .bar-track span {{ display: block; height: 100%; min-width: 4px; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #4f907d); }}
+    .bar-value, .num {{ text-align: right; font-variant-numeric: tabular-nums; }}
+    table {{ width: 100%; border-collapse: collapse; }}
+    th, td {{ padding: 10px 8px; border-top: 1px solid var(--border); text-align: left; vertical-align: top; }}
+    th {{ color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }}
+    .mini-bar {{ display: block; height: 10px; background: #edf2ef; border-radius: 999px; overflow: hidden; margin-top: 3px; }}
+    .mini-bar span {{ display: block; height: 100%; min-width: 4px; background: linear-gradient(90deg, #7cae9e, var(--accent)); border-radius: 999px; }}
+    .empty, .empty-cell {{ color: var(--muted); padding: 12px 0; }}
+    .source {{ max-width: 520px; word-break: break-word; }}
+    .table-wrap {{ overflow-x: auto; }}
+    .hint {{ color: var(--muted); font-size: 0.9em; }}
+    .pagination {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-top: 14px; }}
+    .page-btn {{ padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-soft, #f9fbfa); color: var(--accent); text-decoration: none; font-weight: 600; font-size: 0.9rem; }}
+    .page-btn.disabled {{ color: #b3c1bc; border-color: #eaf0ed; cursor: default; }}
+    .page-info {{ color: var(--muted); font-size: 0.9rem; }}
+    @media (max-width: 900px) {{ .summary {{ grid-template-columns: 1fr; }} .bar-row {{ grid-template-columns: 1fr; }} .bar-value {{ text-align: left; }} }}
+</style>
+</head>
+<body>
+    <div class="shell">
+        <div class="topnav">
+            <span class="brand"><span class="brand-mark" aria-hidden="true">🦉</span> Ask Wol usage</span>
+            <a href="./">Home</a>
+            <a href="guide">Modeling guide</a>
+            <a href="docs">API docs</a>
+        </div>
+        <div class="hero">
+            <span class="kicker">Internal dashboard</span>
+            <h1>Ask Wol usage dashboard</h1>
+            <p class="lede">A read-only view of validation activity in the local usage database. The page shows overall volume, recent traffic, and the most common response codes and sources for the last {days} days.</p>
+        </div>
+        <div class="grid">
+            <section class="card summary" aria-label="Usage summary">
+                <div class="metric"><div class="label">Events</div><div class="value">{_format_int(total_events)}</div><div class="sub">Validation requests tracked in the window.</div></div>
+                <div class="metric"><div class="label">Unique visitors</div><div class="value">{_format_int(unique_visitors)}</div><div class="sub">Distinct hashed IPs seen in the window.</div></div>
+                <div class="metric"><div class="label">Average duration</div><div class="value">{escape(_format_duration(int(avg_duration) if avg_duration is not None else None))}</div><div class="sub">Average handler time across recorded events.</div></div>
+            </section>
+
+            <section class="card panel" style="grid-column: span 12;">
+                <h2>Events by day</h2>
+                {day_html}
+            </section>
+
+            <section class="card panel" style="grid-column: span 6;">
+                <h2>By status</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Status</th><th>Meaning</th><th class="num">Events</th><th>Share</th></tr></thead>
+                        <tbody>{status_html}</tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="card panel" style="grid-column: span 6;">
+                <h2>Top sources</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Source</th><th class="num">Events</th><th>Share</th></tr></thead>
+                        <tbody>{source_html}</tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="card panel" style="grid-column: span 12;">
+                <h2>All events</h2>
+                <p class="lede">The complete history stored in the usage database, newest first. Hover a status code to see what it means. The visitor column is a salted hash of the IP address; the raw IP is never stored.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Timestamp</th><th>Visitor</th><th>Kind</th><th>Status</th><th>Source</th></tr></thead>
+                        <tbody>{all_html}</tbody>
+                    </table>
+                </div>
+                {pagination_html}
+            </section>
+        </div>
+    </div>
+</body>
+</html>""")
+
+
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def index():
     return HTMLResponse(_apply_prefix(UPLOAD_HTML))
@@ -81,18 +344,48 @@ async def health():
     return {"status": "ok"}
 
 
-@app.get("/stats", include_in_schema=False)
-async def stats_endpoint(token: str | None = None):
+@app.get("/stats", response_class=HTMLResponse, include_in_schema=False)
+async def stats_page(request: Request, token: str | None = None, page: int = 1):
     """Internal usage dashboard. Requires ASKWOL_STATS_TOKEN env var to match `?token=`."""
+    expected = usage.stats_token()
+    if not expected:
+        return HTMLResponse(
+            "<p>stats disabled - set ASKWOL_STATS_TOKEN to enable the usage dashboard.</p>",
+            status_code=503,
+        )
+    if token != expected and not _is_local_request(request):
+        return HTMLResponse("<p>unauthorized</p>", status_code=401)
+
+    page_size = 50
+    page = max(1, page)
+    data = usage.stats(days=30)
+    data["total_entries"] = usage.events_count()
+    data["all_events"] = usage.all_events(limit=page_size, offset=(page - 1) * page_size)
+    data["page"] = page
+    data["page_size"] = page_size
+    data["token"] = token
+    return HTMLResponse(_render_stats_page(data))
+
+
+@app.get("/api/stats", include_in_schema=False)
+async def stats_endpoint(request: Request, token: str | None = None, page: int = 1):
+    """Internal usage data. Requires ASKWOL_STATS_TOKEN env var to match `?token=`."""
     expected = usage.stats_token()
     if not expected:
         return JSONResponse(
             {"error": "stats disabled - set ASKWOL_STATS_TOKEN to enable"},
             status_code=503,
         )
-    if token != expected:
+    if token != expected and not _is_local_request(request):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    return JSONResponse(usage.stats(days=30))
+    page_size = 50
+    page = max(1, page)
+    payload = usage.stats(days=30)
+    payload["total_entries"] = usage.events_count()
+    payload["page"] = page
+    payload["page_size"] = page_size
+    payload["all_events"] = usage.all_events(limit=page_size, offset=(page - 1) * page_size)
+    return JSONResponse(payload)
 
 
 @app.get("/guide", response_class=HTMLResponse, include_in_schema=False)
@@ -125,7 +418,12 @@ async def validate(
         kind = "validate_upload"
         response = await _validate_upload(file)
     else:
-        response = HTMLResponse("<p>Please provide a file or URL.</p>", status_code=400)
+        source = "(no input)"
+        response = HTMLResponse(
+            '<p>Please provide an ontology URL or upload a file. '
+            '<a href="./">Back to the form</a>.</p>',
+            status_code=400,
+        )
 
     usage.record(
         kind,
