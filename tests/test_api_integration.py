@@ -78,6 +78,7 @@ def test_api_validate_returns_all_check_sections(client):
         "iri_strategy",
         "iri_scheme",
         "reasoner",
+        "skos_concepts",
     ]:
         assert field in data, f"missing field: {field}"
 

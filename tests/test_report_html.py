@@ -23,6 +23,7 @@ from askwol.models import (
     NamespaceReport,
     ReasonerCheck,
     ReasonerReport,
+    SkosConceptsReport,
     Status,
     TermCheck,
     UnusedPrefix,
@@ -71,6 +72,7 @@ def test_render_minimal_report_contains_all_section_anchors():
         undefined=[InternalTermIssue(term="https://example.org/ont#Persom", display_name="Persom")],
     )
     report.lang_tags = LangTagReport()
+    report.skos_concepts = SkosConceptsReport(status=Status.OK)
     report.reasoner = ReasonerReport(
         consistent=True,
         checks=[ReasonerCheck(key="consistency", label="Consistency", status=Status.OK)],

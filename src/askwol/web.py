@@ -28,6 +28,7 @@ from askwol.parser import parse_ontology
 from askwol.reasoner_checks import run_reasoner_checks
 from askwol.report_html import render_report
 from askwol.resolver import resolve_all_namespaces
+from askwol.skos_concepts import check_skos_concepts
 from askwol.templates import GUIDE_HTML, UPLOAD_HTML
 from askwol.term_validator import validate_terms
 
@@ -545,6 +546,9 @@ async def _run_validation(tmp_path: Path, source_name: str) -> HTMLResponse:
     # Reasoner checks (current ontology only; imports are not followed)
     report.reasoner = run_reasoner_checks(parsed.graph)
 
+    # SKOS concepts should live in a separate scheme, not in the ontology
+    report.skos_concepts = check_skos_concepts(parsed.graph)
+
     # Only resolve and report namespaces that have subject-position terms
     active_ns = {pfx: uri for pfx, uri in parsed.namespaces.items()
                  if parsed.terms_by_namespace.get(pfx)}
@@ -652,6 +656,7 @@ async def validate_api(
     report.iri_strategy = check_iri_strategy(parsed.graph)
     report.iri_scheme = check_iri_scheme(parsed.graph, parsed.namespaces)
     report.reasoner = run_reasoner_checks(parsed.graph)
+    report.skos_concepts = check_skos_concepts(parsed.graph)
 
     return report.model_dump(mode="json")
 

@@ -18,6 +18,7 @@ from askwol.metadata_validator import validate_ontology_metadata
 from askwol.models import Status
 from askwol.parser import parse_ontology
 from askwol.reasoner_checks import run_reasoner_checks
+from askwol.skos_concepts import check_skos_concepts
 
 BROKEN = Path(__file__).resolve().parent.parent / "examples" / "broken.ttl"
 
@@ -74,3 +75,9 @@ def test_reasoner_detects_inconsistency(parsed):
     r = run_reasoner_checks(parsed.graph)
     assert r.consistent is False
     assert r.inconsistent_individuals, "expected Alice to be flagged"
+
+
+def test_skos_concepts_warns(parsed):
+    sk = check_skos_concepts(parsed.graph)
+    assert sk.status == Status.WARN
+    assert any(c.display_name == "Biology" for c in sk.internal_concepts)

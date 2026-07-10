@@ -291,6 +291,23 @@ def report_as_markdown(report: ValidationReport) -> str:
             w(f"| `{issue.subject}` | `{issue.property}` | {issue.detail} | {has} | {expected} |")
         w("")
 
+    # SKOS concepts
+    sk = report.skos_concepts
+    if sk and sk.status != Status.SKIP and sk.internal_concepts:
+        w("## SKOS concepts")
+        w("")
+        w("An OWL ontology defines classes and properties. Individual "
+          "`skos:Concept` instances belong in a separate SKOS concept scheme, "
+          "not in the ontology itself.")
+        w("")
+        w(f"> {len(sk.internal_concepts)} skos:Concept defined in the ontology's own namespace")
+        w("")
+        w("| Concept | Full IRI |")
+        w("|---------|----------|")
+        for issue in sk.internal_concepts:
+            w(f"| `{issue.display_name}` | {issue.term} |")
+        w("")
+
     return "\n".join(lines)
 
 
