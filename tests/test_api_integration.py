@@ -129,3 +129,35 @@ def test_html_validate_renders_report(client):
 def test_html_validate_requires_file_or_url(client):
     r = client.post("/validate")
     assert r.status_code == 400
+
+
+def test_usage_dashboard_requires_token(monkeypatch, client):
+    monkeypatch.setenv("ASKWOL_STATS_TOKEN", "secret-token")
+
+    unauthorized = client.get("/stats")
+    assert unauthorized.status_code == 401
+
+    response = client.get("/stats", params={"token": "secret-token"})
+    assert response.status_code == 200
+    assert "Usage" in response.text
+    assert "All events" in response.text
+
+
+def test_usage_dashboard_allows_localhost_without_token(monkeypatch, client):
+    monkeypatch.setenv("ASKWOL_STATS_TOKEN", "secret-token")
+    monkeypatch.setattr(web, "_is_local_request", lambda request: True)
+
+    response = client.get("/stats")
+    assert response.status_code == 200
+    assert "Usage" in response.text
+
+
+def test_usage_api_returns_json(monkeypatch, client):
+    monkeypatch.setenv("ASKWOL_STATS_TOKEN", "secret-token")
+
+    response = client.get("/api/stats", params={"token": "secret-token"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert "total_events" in payload
+    assert "all_events" in payload
+    assert "page" in payload

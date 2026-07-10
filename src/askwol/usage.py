@@ -167,5 +167,29 @@ def stats(days: int = 30) -> dict[str, Any]:
     }
 
 
+def events_count() -> int:
+    """Return the total number of usage events stored in the database."""
+    if _DISABLED:
+        return 0
+    _init()
+    with _connect() as conn:
+        row = conn.execute("SELECT COUNT(*) AS n FROM events").fetchone()
+    return int(row["n"]) if row else 0
+
+
+def all_events(limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+    """Return a page of usage events, newest first."""
+    if _DISABLED:
+        return []
+    _init()
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT ts, kind, source, status, duration_ms, ip_hash "
+            "FROM events ORDER BY ts DESC LIMIT ? OFFSET ?",
+            (int(limit), int(offset)),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def stats_token() -> str | None:
     return os.environ.get("ASKWOL_STATS_TOKEN") or None
