@@ -20,13 +20,13 @@ CHECKS: list[dict[str, str]] = [
     {"report_anchor": "iri-strategy",      "title": "IRI strategy",               "guide_anchor": "iri-strategy"},
     {"report_anchor": "iri-scheme",        "title": "IRI scheme (http vs https)", "guide_anchor": "https-http"},
     {"report_anchor": "namespaces",        "title": "Namespaces",                 "guide_anchor": "resolvable"},
+    {"report_anchor": "unused-prefixes",   "title": "Unused prefixes",            "guide_anchor": "prefixes"},
     {"report_anchor": "external-terms",    "title": "External term definitions",  "guide_anchor": "external-terms"},
     {"report_anchor": "internal-terms",    "title": "Internal term definitions",  "guide_anchor": "internal-terms"},
     {"report_anchor": "labels",            "title": "Labels",                     "guide_anchor": "labels"},
     {"report_anchor": "comments",          "title": "Comments",                   "guide_anchor": "comments"},
     {"report_anchor": "language-tags",     "title": "Language tag consistency",   "guide_anchor": "lang-tags"},
     {"report_anchor": "reasoner",          "title": "Reasoner checks",            "guide_anchor": "reasoner"},
-    {"report_anchor": "unused-prefixes",   "title": "Unused prefixes",            "guide_anchor": "prefixes"},
 ]
 
 # Enforce alignment between CHECKS and GUIDE_SECTIONS at import time. If they
@@ -43,7 +43,7 @@ assert _CHECK_GUIDE_ANCHORS == _GUIDE_CHECK_ANCHORS, (
 
 # Convenience lookups derived from CHECKS
 _CHECK_BY_REPORT: dict[str, dict] = {c["report_anchor"]: c for c in CHECKS}
-# guide anchor -> report anchor (for back-links shown in the modeling guide)
+# guide anchor -> report anchor (for back-links shown in the publishing guide)
 _REPORT_BY_GUIDE: dict[str, str] = {c["guide_anchor"]: c["report_anchor"] for c in CHECKS}
 
 
@@ -54,7 +54,7 @@ def _guide_link(report_anchor: str) -> str:
         return ""
     href = f"guide#{check['guide_anchor']}"
     return (f'<p style="font-size:0.85em;color:#666;margin:0.4em 0 0;">'
-            f'&rarr; Learn more in the <a href="{href}">modeling guide</a>.</p>')
+            f'&rarr; Learn more in the <a href="{href}">publishing guide</a>.</p>')
 
 
 def render_report(report: ValidationReport, mermaid: str = "") -> str:
@@ -109,7 +109,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         "  .footer { margin-top: 2em; font-size: 0.85em; color: #aaa; text-align: center; }",
         "</style>",
         "</head><body>",
-        '<p class="topnav"><strong>Navigation:</strong> <a href="./">Home</a> &middot; <a href="guide">Modeling guide</a> &middot; <a href="docs">API docs</a></p>',
+        '<p class="topnav"><strong>Navigation:</strong> <a href="./">Home</a> &middot; <a href="guide">Publishing guide</a> &middot; <a href="docs">API docs</a></p>',
         f'<h1>Results for {source_html}</h1>',
     ]
 
@@ -314,8 +314,8 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.extend(_summary_for(check['report_anchor']))
     parts.append("</table></div>")
 
-    # Tip: link to the modeling guide
-    parts.append('<p style="font-size:0.9em;color:#666;margin:0.5em 0 1em;">Not sure what a check means? See the <a href="guide">modeling guide</a> for explanations and best practices.</p>')
+    # Tip: link to the publishing guide
+    parts.append('<p style="font-size:0.9em;color:#666;margin:0.5em 0 1em;">Not sure what a check means? See the <a href="guide">publishing guide</a> for explanations and best practices.</p>')
 
     # Per-namespace details  -  split into "interesting" and "standard OK"
     STANDARD_NS = {
@@ -594,7 +594,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     parts.append('<section class="section">')
     parts.append(_section_heading('namespaces', 'Namespaces', ns_only_status, ns_label))
     parts.append(_guide_link('namespaces'))
-    parts.append('<p class="subtitle">Each prefix declared in the ontology is fetched over HTTP and parsed as RDF where possible. A namespace that does not resolve makes its terms uncheckable downstream.</p>')
+    parts.append('<p class="subtitle">Each namespace URI declared in the ontology (the target of a <code>@prefix</code>) is fetched over HTTP and parsed as RDF where possible. A namespace that does not resolve makes its terms uncheckable downstream.</p>')
     parts.append(f'<p class="subtitle"><strong>{ok_ns}/{total_ns}</strong> namespaces resolved.</p>')
 
     if prominent:
@@ -637,6 +637,28 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         for ns in standard_ok:
             _render_ns_card(ns)
         parts.append("</details>")
+    parts.append('</section>')
+
+    # Unused prefixes - styled identically to the other check sections.
+    parts.append('<section class="section">')
+    if report.unused_prefixes:
+        parts.append(_section_heading('unused-prefixes', 'Unused prefixes', 'warn',
+                                      f'{len(report.unused_prefixes)} to clean up'))
+        parts.append(_guide_link('unused-prefixes'))
+        parts.append('<p class="subtitle">Prefixes that are declared in the file but never appear in any triple. Removing them keeps the ontology clean and avoids suggesting dependencies that do not exist.</p>')
+        parts.append(_status_subtitle('warn', f'{len(report.unused_prefixes)} declared but never used'))
+        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show unused prefixes ({len(report.unused_prefixes)})</summary>')
+        parts.append('<table><tr><th>Prefix</th><th>Namespace IRI</th></tr>')
+        for up in report.unused_prefixes:
+            pfx = escape(up.prefix) or '<em>(default)</em>'
+            uri = escape(up.uri)
+            parts.append(f'<tr><td><code>{pfx}:</code></td><td><code>&lt;{uri}&gt;</code></td></tr>')
+        parts.append('</table></details>')
+    else:
+        parts.append(_section_heading('unused-prefixes', 'Unused prefixes', 'ok', 'all good'))
+        parts.append(_guide_link('unused-prefixes'))
+        parts.append('<p class="subtitle">Prefixes that are declared in the file but never appear in any triple. Removing them keeps the ontology clean and avoids suggesting dependencies that do not exist.</p>')
+        parts.append(_status_subtitle('ok', 'Every declared prefix is used in at least one triple.'))
     parts.append('</section>')
 
     # --- External term definitions: per-term verification against the remote vocabulary ---
@@ -874,28 +896,6 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             parts.append(f'<tr><td>{escape(check.label)}</td><td>{mark} {status_label}</td><td>{escape(check.message or "")}</td></tr>')
         parts.append('</table></details>')
         parts.append('</section>')
-
-    # Unused prefixes - styled identically to the other check sections.
-    parts.append('<section class="section">')
-    if report.unused_prefixes:
-        parts.append(_section_heading('unused-prefixes', 'Unused prefixes', 'warn',
-                                      f'{len(report.unused_prefixes)} to clean up'))
-        parts.append(_guide_link('unused-prefixes'))
-        parts.append('<p class="subtitle">Prefixes that are declared in the file but never appear in any triple. Removing them keeps the ontology clean and avoids suggesting dependencies that do not exist.</p>')
-        parts.append(_status_subtitle('warn', f'{len(report.unused_prefixes)} declared but never used'))
-        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show unused prefixes ({len(report.unused_prefixes)})</summary>')
-        parts.append('<table><tr><th>Prefix</th><th>Namespace IRI</th></tr>')
-        for up in report.unused_prefixes:
-            pfx = escape(up.prefix) or '<em>(default)</em>'
-            uri = escape(up.uri)
-            parts.append(f'<tr><td><code>{pfx}:</code></td><td><code>&lt;{uri}&gt;</code></td></tr>')
-        parts.append('</table></details>')
-    else:
-        parts.append(_section_heading('unused-prefixes', 'Unused prefixes', 'ok', 'all good'))
-        parts.append(_guide_link('unused-prefixes'))
-        parts.append('<p class="subtitle">Prefixes that are declared in the file but never appear in any triple. Removing them keeps the ontology clean and avoids suggesting dependencies that do not exist.</p>')
-        parts.append(_status_subtitle('ok', 'Every declared prefix is used in at least one triple.'))
-    parts.append('</section>')
 
     parts.append('<p class="footer"><strong>External links:</strong> <a href="https://tdcc.nl/nes-ontology-engineers/" target="_blank" rel="noopener">TDCC-NES ontology engineers</a> &middot; <a href="https://www.w3.org/OWL/" target="_blank" rel="noopener">W3C OWL</a> &middot; <a href="https://www.w3.org/TR/owl2-primer/" target="_blank" rel="noopener">OWL 2 Primer</a></p>')
     if mermaid:

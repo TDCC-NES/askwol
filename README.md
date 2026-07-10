@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-82%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-89%20passing-brightgreen.svg)](#tests)
 [![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 
 <!-- Once deployed, add a live link here:
@@ -17,7 +17,9 @@
 
 ## Why askwol?
 
-The W3C originally planned to call their Web Ontology Language **WOL**. Tim Finin [proposed rearranging it to **OWL**](http://lists.w3.org/Archives/Public/www-webont-wg/2001Dec/0169.html) because *"owls are associated with wisdom."* Scrambling three letters is, of course, exactly what [Owl](https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)) from Milne's *Winnie-the-Pooh* is famous for - he spells his own name **"Wol"**: *"wise though he was in many ways, able to read and write and spell his own name WOL, yet somehow went all to pieces over delicate words like MEASLES and BUTTEREDTOAST"* (Ch. 4, 1926).
+The W3C originally planned to call their Web Ontology Language **WOL**. Tim Finin [proposed rearranging it to **OWL**](http://lists.w3.org/Archives/Public/www-webont-wg/2001Dec/0169.html) because *"owls are associated with wisdom."* Scrambling three letters is, of course, exactly what [Owl](https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)) from Milne's *Winnie-the-Pooh* is famous for. As Dave de Roure [first pointed out to the working group](https://lists.w3.org/Archives/Public/www-webont-wg/2002Sep/0301.html), Owl spells his own name **"Wol"**: *"wise though he was in many ways, able to read and write and spell his own name WOL, yet somehow went all to pieces over delicate words like MEASLES and BUTTEREDTOAST"* (Ch. 4, 1926).
+
+So the name went WOL → OWL → and, for a tool that *asks* Owl for a wise second opinion on your ontology, back to **askwol**.
 
 <p align="center">
   <a href="https://commons.wikimedia.org/wiki/File:Winnie-the-Pooh_67.png">
@@ -27,7 +29,7 @@ The W3C originally planned to call their Web Ontology Language **WOL**. Tim Fini
 
 ## What do you get?
 
-A single HTML report (or JSON via the API) with one section per automated check. Every section links to a matching entry in the built-in **modeling guide** at `/guide`, so a failing check always tells you *why* the convention exists.
+A single HTML report (or JSON via the API) with one section per automated check. Every section links to a matching entry in the built-in **publishing guide** at `/guide`, so a failing check always tells you *why* the convention exists.
 
 1. **Ontology diagram** - an interactive class diagram showing classes, properties, and inheritance hierarchy (web UI). Zoom, pan, and explore.
 2. **Ontology metadata** - SHACL check on the ontology header: title, description, creator, license IRI, version are required; created/modified dates and publisher are recommended.
@@ -99,7 +101,7 @@ Exit codes: `0` all pass, `1` issues found.
 PYTHONPATH=src .venv/bin/uvicorn askwol.web:app --reload --port 8000
 ```
 
-Endpoints: `GET /` (upload form), `POST /validate` (HTML report), `POST /api/validate` (JSON), `GET /guide` (modeling guide), `GET /health`, `GET /docs` (Swagger / OpenAPI).
+Endpoints: `GET /` (upload form), `POST /validate` (HTML report), `POST /api/validate` (JSON), `GET /guide` (publishing guide), `GET /health`, `GET /docs` (Swagger / OpenAPI).
 
 ## Deployment (Docker)
 
@@ -175,7 +177,7 @@ extra is needed.
 
 If you serve it under a path prefix (e.g. `https://server/askwol/`), set
 `ASKWOL_ROOT_PATH` to that prefix. askwol then rewrites its internal navigation
-links to include the prefix (so Home, the modeling guide, the form, and the API
+links to include the prefix (so Home, the publishing guide, the form, and the API
 docs all resolve correctly, without relying on JavaScript or a trailing slash).
 
 ```yaml
@@ -266,7 +268,7 @@ src/askwol/
 ├── models.py             # Pydantic models
 ├── report.py             # CLI / markdown output
 ├── report_html.py        # HTML report rendering (CHECKS registry)
-├── templates.py          # modeling guide content (GUIDE_SECTIONS)
+├── templates.py          # publishing guide content (GUIDE_SECTIONS)
 ├── usage.py              # privacy-friendly request tracking (SQLite)
 └── shapes/               # SHACL shapes (metadata + documentation)
 
@@ -278,7 +280,7 @@ examples/
 └── broken.ttl            # deliberately broken - every check fires
 ```
 
-The HTML report sections and the modeling guide are kept in lockstep by an
+The HTML report sections and the publishing guide are kept in lockstep by an
 import-time `assert` in `report_html.py`: the `CHECKS` registry and the
 `group="check"` entries in `GUIDE_SECTIONS` must list the same anchors in the
 same order, otherwise the module fails to load (and the test suite catches it).
