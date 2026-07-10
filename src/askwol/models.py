@@ -182,6 +182,28 @@ class InternalTermIssue(BaseModel):
     display_name: str
 
 
+class SkosConceptIssue(BaseModel):
+    """One skos:Concept defined in the ontology's own namespace."""
+
+    term: str
+    display_name: str
+
+
+class SkosConceptsReport(BaseModel):
+    """Whether the ontology defines skos:Concept instances in its own namespace.
+
+    Concepts belong in a separate SKOS concept scheme, not mixed into the OWL
+    ontology that defines classes and properties. Only concepts in the
+    ontology's own namespace are flagged; external concepts referenced as
+    objects are fine.
+    """
+
+    total_concepts: int = 0
+    internal_concepts: list[SkosConceptIssue] = Field(default_factory=list)
+    status: Status = Status.SKIP
+    message: str | None = None
+
+
 class InternalTermsReport(BaseModel):
     """Whether terms in the ontology's own namespace are actually defined.
 
@@ -285,6 +307,7 @@ class ValidationReport(BaseModel):
     parse_errors: list[str] = Field(default_factory=list)
     unused_prefixes: list[UnusedPrefix] = Field(default_factory=list)
     lang_tags: LangTagReport | None = None
+    skos_concepts: SkosConceptsReport | None = None
     ontology_metadata: MetadataReport | None = None
     definition_docs: DefinitionDocumentationReport | None = None
     internal_terms: InternalTermsReport | None = None
@@ -325,5 +348,7 @@ class ValidationReport(BaseModel):
         if self.iri_scheme and self.iri_scheme.status == Status.WARN:
             return True
         if self.reasoner and (not self.reasoner.consistent or self.reasoner.unsatisfiable_classes):
+            return True
+        if self.skos_concepts and self.skos_concepts.internal_concepts:
             return True
         return len(self.parse_errors) > 0

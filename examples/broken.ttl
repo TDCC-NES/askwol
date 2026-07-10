@@ -33,6 +33,9 @@
 #                              are owl:disjointWith)
 #   9. Unused prefixes       - WARN (neverused is declared but not used in any
 #                              triple)
+#  10. SKOS concepts         - WARN (:Biology is a skos:Concept defined in the
+#                              ontology's own namespace; concepts belong in a
+#                              separate SKOS concept scheme)
 # -----------------------------------------------------------------------------
 
 # (1) Ontology declaration with NO metadata at all - missing title, creator,
@@ -91,3 +94,9 @@
 <http://nonexistent.invalid/vocab#Widget> a owl:Class ;
     rdfs:label "Widget"@en ;
     rdfs:comment "From a vocabulary that does not resolve."@en .
+
+# (10) SKOS concept defined inside the ontology itself. Subject-matter concepts
+# belong in a separate SKOS concept scheme, not in the OWL ontology - the SKOS
+# concepts check should warn about this one.
+:Biology a skos:Concept ;
+    skos:prefLabel "Biology"@en .

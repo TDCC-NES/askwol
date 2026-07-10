@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-89%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-94%20passing-brightgreen.svg)](#tests)
 [![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 
 <!-- Once deployed, add a live link here:
@@ -42,11 +42,12 @@ A single HTML report (or JSON via the API) with one section per automated check.
 9. **Labels** - SHACL check that every internally defined class and property carries an `rdfs:label`. Reused external terms are ignored.
 10. **Comments** - SHACL check that every internally defined class and property carries an `rdfs:comment`. Reused external terms are ignored.
 11. **Language tag consistency** - labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) should use the same language tags across subjects.
-12. **OWL RL reasoner checks** - lightweight reasoning on the current ontology (imports are not followed), with three distinct facets:
+12. **SKOS concepts** - an OWL ontology defines classes and properties, not individual concepts. Flags any `skos:Concept` defined in the ontology's own namespace; those belong in a separate SKOS concept scheme.
+13. **OWL RL reasoner checks** - lightweight reasoning on the current ontology (imports are not followed), with three distinct facets:
     - **Ontology consistency** - the ontology as a whole has a model.
     - **Inconsistent individuals** - specific named individuals that violate a class restriction (e.g. typed in two `owl:disjointWith` classes).
     - **Unsatisfiable classes** - named classes whose definition forces them to be empty (equivalent to `owl:Nothing`).
-13. **Unused prefixes** - flags `@prefix` declarations that are never used in any triple.
+14. **Unused prefixes** - flags `@prefix` declarations that are never used in any triple.
 
 ## Quick start
 

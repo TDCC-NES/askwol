@@ -196,6 +196,10 @@ UPLOAD_HTML = """<!DOCTYPE html>
     <code>skos:prefLabel</code>, and <code>skos:definition</code> should
     use the same set of languages across subjects. Catches missing
     translations and bare strings.</li>
+    <li><strong>SKOS concepts</strong>: an OWL ontology defines classes
+    and properties, not individual concepts. Flags any
+    <code>skos:Concept</code> defined in your own namespace; those belong
+    in a separate SKOS concept scheme.</li>
     <li><strong>Reasoner checks</strong>: lightweight OWL RL reasoning
     on the current ontology (imports are not followed), reported as three
     facets: <em>ontology consistency</em>, <em>inconsistent
@@ -628,6 +632,25 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <code>rdfs:label</code>, <code>rdfs:comment</code>,
   <code>skos:prefLabel</code>, <code>skos:definition</code>, and other
   standard annotation properties for tag consistency.</div>
+""",
+    },
+    {
+        "group": "check",
+        "anchor": "skos-concepts",
+        "title": "Define SKOS concepts in a scheme, not in the ontology",
+        "toc_label": "SKOS concepts",
+        "body": """\
+  <p>An OWL ontology is the <em>schema</em>: it defines classes and
+  properties. Individual subject-matter <strong>concepts</strong> (the members
+  of a controlled vocabulary or thesaurus) belong in a separate
+  <a href="https://www.w3.org/TR/skos-primer/">SKOS</a> concept scheme, not
+  inside the ontology itself.</p>
+  <pre>&lt;#Dataset&gt; a owl:Class .            # schema  -  belongs here
+&lt;#biology&gt; a skos:Concept .         # concept  -  belongs in a SKOS scheme</pre>
+  <div class="tip">askwol flags every <code>skos:Concept</code> that is defined
+  in your ontology&rsquo;s own namespace. Concepts referenced from an external
+  scheme (as objects) are fine; keeping the vocabulary and the ontology apart
+  lets each evolve, and be reused, independently.</div>
 """,
     },
     {

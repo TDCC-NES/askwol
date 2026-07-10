@@ -26,6 +26,7 @@ CHECKS: list[dict[str, str]] = [
     {"report_anchor": "labels",            "title": "Labels",                     "guide_anchor": "labels"},
     {"report_anchor": "comments",          "title": "Comments",                   "guide_anchor": "comments"},
     {"report_anchor": "language-tags",     "title": "Language tag consistency",   "guide_anchor": "lang-tags"},
+    {"report_anchor": "skos-concepts",     "title": "SKOS concepts",              "guide_anchor": "skos-concepts"},
     {"report_anchor": "reasoner",          "title": "Reasoner checks",            "guide_anchor": "reasoner"},
 ]
 
@@ -301,6 +302,14 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 return [_row('language-tags', _ok, 'Language tag consistency', f'{lang_str} &middot; consistent')]
             return [_row('language-tags', _info, 'Language tag consistency',
                          'no language tags used in labels/definitions')]
+        if report_anchor == 'skos-concepts':
+            sk = report.skos_concepts
+            if not sk or sk.status == Status.SKIP:
+                return []
+            if sk.internal_concepts:
+                return [_row('skos-concepts', _warn, 'SKOS concepts',
+                             f'{len(sk.internal_concepts)} defined in the ontology')]
+            return [_row('skos-concepts', _ok, 'SKOS concepts', 'none defined internally')]
         return []
 
     # The data the summary needs (already computed earlier in the function).
@@ -870,6 +879,30 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) should use language tags consistently across all subjects.</p>')
         parts.append(_status_subtitle('info', 'No labels or definitions in this ontology carry language tags (e.g. <code>"Person"@en</code>). This is not an error, but adding language tags makes labels easier to localise.'))
     parts.append('</section>')
+
+    # SKOS concepts: the ontology should not define skos:Concept instances itself
+    sk = report.skos_concepts
+    if sk and sk.status != Status.SKIP:
+        sk_status = 'ok' if not sk.internal_concepts else 'warn'
+        sk_label = 'none defined internally' if sk_status == 'ok' else f'{len(sk.internal_concepts)} to move out'
+        parts.append('<section class="section">')
+        parts.append(_section_heading('skos-concepts', 'SKOS concepts', sk_status, sk_label))
+        parts.append(_guide_link('skos-concepts'))
+        parts.append('<p class="subtitle">An OWL ontology defines classes and properties. Individual <code>skos:Concept</code> instances belong in a separate SKOS concept scheme, not in the ontology itself. Only concepts in the ontology&rsquo;s own namespace are flagged; concepts referenced from an external scheme are fine.</p>')
+        if sk.internal_concepts:
+            parts.append(_status_subtitle('warn', f'{len(sk.internal_concepts)} <code>skos:Concept</code> defined in the ontology&rsquo;s own namespace'))
+            parts.append(f'<details open><summary style="cursor:pointer;font-weight:600;">Concepts to move into a SKOS scheme ({len(sk.internal_concepts)})</summary>')
+            parts.append('<table><tr><th>Concept</th><th>Full IRI</th></tr>')
+            for issue in sk.internal_concepts:
+                t_iri = escape(issue.term)
+                parts.append(
+                    f'<tr><td><code>{escape(issue.display_name)}</code></td>'
+                    f'<td><a href="{t_iri}" target="_blank" rel="noopener"><code>{t_iri}</code></a></td></tr>'
+                )
+            parts.append('</table></details>')
+        else:
+            parts.append(_status_subtitle('ok', 'No <code>skos:Concept</code> instances are defined in the ontology&rsquo;s own namespace.'))
+        parts.append('</section>')
 
     # Reasoner checks
     reasoner = report.reasoner
