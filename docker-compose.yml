@@ -22,7 +22,9 @@ services:
       - ASKWOL_ROOT_PATH=${ASKWOL_ROOT_PATH:-}
     volumes:
       # Persist usage.db across container restarts/rebuilds.
-      - ./data:/data
+      # The :z suffix relabels the bind mount for SELinux (Redhat/Fedora),
+      # allowing the non-root container user to read/write the volume.
+      - ./data:/data:z
     # Use the production-style command by default (2 workers, no reload).
     # For development, copy docker-compose.override.yml.example to
     # docker-compose.override.yml to enable hot-reload + bind-mounted source.

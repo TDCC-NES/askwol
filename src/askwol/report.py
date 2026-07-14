@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.table import Table
 
 from askwol.models import Status, ValidationReport
+from askwol.report_html import CATEGORIES, CHECKS, _CHECK_NUMBERS, _CLUSTER_NUMBERS
 
 
 def report_as_json(report: ValidationReport) -> str:
@@ -215,6 +216,72 @@ def report_as_markdown(report: ValidationReport) -> str:
             w(f"| `{issue.display_name}` | {issue.term} |")
         w("")
 
+    # Term inventory and naming conventions
+    inv = report.term_inventory
+    if inv and inv.status != Status.SKIP and inv.entries:
+        w("## Term inventory and naming")
+        w("")
+        w("Every term defined in the ontology's own namespace, by category. "
+          "Classes should start with an uppercase letter, properties with a lowercase letter.")
+        w("")
+        counts = ", ".join(f"{n} {cat}" for cat, n in inv.category_counts.items())
+        w(f"> {inv.total_terms} internal terms ({counts})")
+        w("")
+        if inv.naming_issues:
+            w(f"> {len(inv.naming_issues)} naming convention issue(s)")
+            w("")
+            w("| Term | Category | Issue |")
+            w("|------|----------|-------|")
+            for e in inv.naming_issues:
+                w(f"| `{e.display_name}` | {e.category} | {e.naming_message} |")
+            w("")
+        w("<details>")
+        w(f"<summary>Show all terms ({inv.total_terms})</summary>")
+        w("")
+        w("| Term | Category | Naming |")
+        w("|------|----------|--------|")
+        for e in sorted(inv.entries, key=lambda x: (x.category, x.display_name.lower())):
+            w(f"| `{e.display_name}` | {e.category} | {'ok' if e.naming_ok else 'check'} |")
+        w("")
+        w("</details>")
+        w("")
+
+    # Domains and ranges
+    dr = report.domains_ranges
+    if dr and dr.status != Status.SKIP and dr.checks:
+        w("## Domains and ranges")
+        w("")
+        w("Object and datatype properties should declare a domain and a range. "
+          "Object properties range over classes; datatype properties range over datatypes.")
+        w("")
+        w(f"> {dr.with_domain}/{dr.total_properties} have a domain, "
+          f"{dr.with_range}/{dr.total_properties} have a range, {len(dr.issues)} issue(s)")
+        w("")
+        if dr.issues:
+            w("| Property | Category | Issue |")
+            w("|----------|----------|-------|")
+            for c in dr.issues:
+                msg = (c.message or "").replace("<code>", "`").replace("</code>", "`")
+                w(f"| `{c.display_name}` | {c.category} | {msg} |")
+            w("")
+
+    # Datatypes
+    dt = report.datatypes
+    if dt and dt.status != Status.SKIP and dt.usages:
+        w("## Datatypes")
+        w("")
+        w("Datatypes used as property ranges and literal datatypes. "
+          "Unrecognized datatypes are usually typos.")
+        w("")
+        w(f"> {dt.recognized}/{dt.total_datatypes} recognized, {len(dt.unrecognized)} unrecognized")
+        w("")
+        if dt.unrecognized:
+            w("| Datatype | Uses |")
+            w("|----------|------|")
+            for u in dt.unrecognized:
+                w(f"| `{u.display_name}` | {u.count} |")
+            w("")
+
     # Labels and comments
     docs = report.definition_docs
     if docs and docs.total_definitions:
@@ -291,24 +358,239 @@ def report_as_markdown(report: ValidationReport) -> str:
             w(f"| `{issue.subject}` | `{issue.property}` | {issue.detail} | {has} | {expected} |")
         w("")
 
-    # SKOS concepts
-    sk = report.skos_concepts
-    if sk and sk.status != Status.SKIP and sk.internal_concepts:
-        w("## SKOS concepts")
+    # Non-ontology terms
+    sk = report.non_ontology_terms
+    if sk and sk.status != Status.SKIP and sk.terms:
+        w("## Non-ontology terms")
         w("")
-        w("An OWL ontology defines classes and properties. Individual "
-          "`skos:Concept` instances belong in a separate SKOS concept scheme, "
-          "not in the ontology itself.")
+        w("An OWL ontology should define schema: classes, properties, and "
+          "datatypes. Individuals, SKOS concepts, and other instance data "
+          "belong in a separate resource.")
         w("")
-        w(f"> {len(sk.internal_concepts)} skos:Concept defined in the ontology's own namespace")
+        w(f"> {len(sk.terms)} non-schema term(s) defined in the ontology's own namespace")
         w("")
-        w("| Concept | Full IRI |")
-        w("|---------|----------|")
-        for issue in sk.internal_concepts:
-            w(f"| `{issue.display_name}` | {issue.term} |")
+        w("| Term | What it is | Full IRI |")
+        w("|------|------------|----------|")
+        for issue in sk.terms:
+            w(f"| `{issue.display_name}` | {issue.type_label} | {issue.term} |")
         w("")
 
     return "\n".join(lines)
+
+
+def _kind_badge(kind: str) -> str:
+    return {
+        "ok": "[green]OK[/green]",
+        "fail": "[red]FAIL[/red]",
+        "warn": "[yellow]WARN[/yellow]",
+        "info": "[dim]-[/dim]",
+        "skip": "[dim]SKIP[/dim]",
+    }[kind]
+
+
+def _overview_line(report: ValidationReport, anchor: str) -> tuple[str, str] | None:
+    """Return (kind, detail) for one check anchor, mirroring the HTML overview.
+
+    Returns None when the check did not run (so it is omitted from the table),
+    matching the behaviour of the web report's summary.
+    """
+    S = Status
+    if anchor == "ontology-metadata":
+        meta = report.ontology_metadata
+        if not (meta and meta.checks):
+            return None
+        if meta.failed_checks:
+            kind = "fail"
+        elif meta.warning_checks:
+            kind = "warn"
+        else:
+            kind = "ok"
+        bits = [f"{meta.passed_checks}/{meta.total_checks} present"]
+        if meta.failed_checks:
+            bits.append(f"{meta.failed_checks} required missing")
+        if meta.warning_checks:
+            bits.append(f"{meta.warning_checks} recommended missing")
+        return kind, ", ".join(bits)
+    if anchor == "imports":
+        imp = report.imports
+        if not imp:
+            return None
+        if imp.status == S.SKIP:
+            return "info", "skipped (no owl:Ontology)"
+        if imp.missing:
+            return "warn", f"{len(imp.missing)} used but not imported"
+        if not imp.checks:
+            return "ok", "no external vocabularies used"
+        return "ok", f"{len(imp.checks)} declared"
+    if anchor == "iri-strategy":
+        iri = report.iri_strategy
+        if not iri:
+            return None
+        if iri.status == S.SKIP:
+            return "info", "skipped"
+        if iri.status == S.WARN:
+            return "warn", f"mixed: {iri.hash_count} hash + {iri.slash_count} slash"
+        count = iri.hash_count if iri.strategy == "hash" else iri.slash_count
+        return "ok", f"{iri.strategy} style, {count} term(s)"
+    if anchor == "iri-scheme":
+        sch = report.iri_scheme
+        if not sch:
+            return None
+        if sch.status == S.SKIP:
+            return "info", "skipped"
+        if sch.status == S.WARN:
+            return "warn", f"{len(sch.conflicts)} host(s) on both http and https"
+        return "ok", f"{sch.total_hosts} host(s), single scheme each"
+    if anchor == "namespaces":
+        total = len(report.namespaces)
+        if total == 0:
+            return None
+        if all(ns.resolution.status == S.SKIP for ns in report.namespaces):
+            return "info", "resolution skipped"
+        ok = sum(1 for ns in report.namespaces if ns.resolution.status == S.OK)
+        return ("ok" if ok == total else "fail"), f"{ok}/{total} resolved"
+    if anchor == "unused-prefixes":
+        if report.unused_prefixes:
+            return "warn", f"{len(report.unused_prefixes)} declared but unused"
+        return "ok", "none"
+    if anchor == "external-terms":
+        total = sum(len(ns.terms) for ns in report.namespaces)
+        if total == 0:
+            return None
+        ok = sum(1 for ns in report.namespaces for t in ns.terms if t.status == S.OK)
+        fail = sum(1 for ns in report.namespaces for t in ns.terms if t.status == S.FAIL)
+        skipped = total - ok - fail
+        bits = [f"{ok} confirmed"]
+        if fail:
+            bits.append(f"{fail} not found")
+        if skipped:
+            bits.append(f"{skipped} skipped")
+        return ("fail" if fail else "ok"), ", ".join(bits)
+    if anchor == "internal-terms":
+        it = report.internal_terms
+        if not it:
+            return None
+        if it.status == S.SKIP:
+            return "info", "not applicable"
+        if it.undefined:
+            return "fail", f"{len(it.undefined)} referenced but never defined"
+        return "ok", f"{it.defined}/{it.total_referenced} defined"
+    if anchor == "term-inventory":
+        inv = report.term_inventory
+        if not inv:
+            return None
+        if inv.status == S.SKIP:
+            return "info", "no terms in the ontology's own namespace"
+        if inv.naming_issues:
+            return "fail", f"{inv.total_terms} terms, {len(inv.naming_issues)} naming issue(s)"
+        return "ok", f"{inv.total_terms} terms, naming consistent"
+    if anchor == "domains-ranges":
+        dr = report.domains_ranges
+        if not dr:
+            return None
+        if dr.status == S.SKIP:
+            return "info", "no object or datatype properties"
+        if dr.status == S.FAIL:
+            fails = sum(1 for c in dr.issues if c.status == S.FAIL)
+            return "fail", f"{fails} property(ies) with a domain/range problem"
+        if dr.status == S.WARN:
+            return "warn", f"{len(dr.issues)} missing a domain or range"
+        return "ok", f"{dr.total_properties} property(ies), all sound"
+    if anchor == "datatypes":
+        dt = report.datatypes
+        if not dt:
+            return None
+        if dt.status == S.SKIP:
+            return "info", "no datatypes used"
+        if dt.unrecognized:
+            return "fail", f"{len(dt.unrecognized)} unrecognized of {dt.total_datatypes}"
+        return "ok", f"{dt.total_datatypes} used, all recognized"
+    if anchor == "non-ontology-terms":
+        sk = report.non_ontology_terms
+        if not sk:
+            return None
+        if sk.status == S.SKIP:
+            return "info", "not applicable"
+        if sk.terms:
+            return "warn", f"{len(sk.terms)} that belong in a separate resource"
+        return "ok", "only schema terms defined"
+    if anchor == "labels":
+        docs = report.definition_docs
+        if not docs:
+            return None
+        if not docs.total_definitions:
+            return "info", "no internal definitions to document"
+        missing = docs.missing_label
+        if missing:
+            return "fail", f"{docs.with_label}/{docs.total_definitions} labelled, {len(missing)} missing"
+        return "ok", f"{docs.total_definitions}/{docs.total_definitions} have a label"
+    if anchor == "comments":
+        docs = report.definition_docs
+        if not docs:
+            return None
+        if not docs.total_definitions:
+            return "info", "no internal definitions to document"
+        missing = docs.missing_comment
+        if missing:
+            return "fail", f"{docs.with_comment}/{docs.total_definitions} commented, {len(missing)} missing"
+        return "ok", f"{docs.total_definitions}/{docs.total_definitions} have a comment"
+    if anchor == "language-tags":
+        lt = report.lang_tags
+        if lt and lt.languages_used:
+            langs = ", ".join(lt.languages_used)
+            if lt.issues:
+                return "warn", f"{langs}, {len(lt.issues)} issue(s)"
+            return "ok", f"{langs}, consistent"
+        return "info", "no language tags used"
+    if anchor == "reasoner":
+        reasoner = report.reasoner
+        if not reasoner or not reasoner.checks:
+            return None
+        ok = reasoner.consistent and not reasoner.unsatisfiable_classes
+        if ok:
+            return "ok", "consistent"
+        return "fail", (
+            f"{len(reasoner.inconsistent_individuals)} inconsistency issue(s), "
+            f"{len(reasoner.unsatisfiable_classes)} unsatisfiable class(es)"
+        )
+    return None
+
+
+def _print_overview(report: ValidationReport, console: Console) -> None:
+    """Render the clustered checks overview, mirroring the web report."""
+    overview = Table(title="Checks overview", show_header=True, header_style="bold")
+    overview.add_column("Check")
+    overview.add_column("Status", justify="center")
+    overview.add_column("Detail", overflow="fold")
+
+    first = True
+    for cat in CATEGORIES:
+        rows = []
+        for check in CHECKS:
+            if check["category"] != cat["key"]:
+                continue
+            line = _overview_line(report, check["report_anchor"])
+            if line is None:
+                continue
+            kind, detail = line
+            title = check["title"].replace("&amp;", "&")
+            num = _CHECK_NUMBERS.get(check["report_anchor"], "")
+            label = f"  {num} {title}" if num else f"  {title}"
+            rows.append((label, _kind_badge(kind), detail))
+        if not rows:
+            continue
+        if not first:
+            overview.add_section()
+        first = False
+        label = cat["label"].replace("&amp;", "&")
+        overview.add_row(f"[bold cyan]{_CLUSTER_NUMBERS[cat['key']]}. {label}[/bold cyan]", "", "")
+        for title, badge, detail in rows:
+            overview.add_row(title, badge, detail)
+
+    if overview.row_count == 0:
+        return
+    console.print(overview)
+    console.print()
 
 
 def print_report(report: ValidationReport, console: Console | None = None) -> None:
@@ -325,6 +607,9 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
         for err in report.parse_errors:
             console.print(f"  {err}")
         console.print()
+
+    # Clustered checks overview, mirroring the web report and markdown output.
+    _print_overview(report, console)
 
     # Namespace resolution table
     ns_table = Table(title="Namespace Resolution", show_lines=True)
@@ -392,6 +677,47 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
                     continue
                 meta_table.add_row(check.property, check.severity, check.status.value.upper(), check.message or "")
             console.print(meta_table)
+
+    # Term inventory naming issues
+    inv = report.term_inventory
+    if inv and inv.naming_issues:
+        console.print()
+        console.print(f"[red]\u2717 Naming conventions  -  {len(inv.naming_issues)} issue{'s' if len(inv.naming_issues) != 1 else ''}[/red]")
+        inv_table = Table(title="Term naming issues", show_lines=True)
+        inv_table.add_column("Term", style="red bold")
+        inv_table.add_column("Category")
+        inv_table.add_column("Issue")
+        for e in inv.naming_issues:
+            inv_table.add_row(e.display_name, e.category, e.naming_message or "")
+        console.print(inv_table)
+
+    # Domain and range problems
+    dr = report.domains_ranges
+    if dr and dr.issues:
+        console.print()
+        console.print(f"[yellow]\u26A0 Domains and ranges  -  {len(dr.issues)} to review[/yellow]")
+        dr_table = Table(title="Domain and range issues", show_lines=True)
+        dr_table.add_column("Property")
+        dr_table.add_column("Category")
+        dr_table.add_column("Status", justify="center")
+        dr_table.add_column("Issue")
+        for c in dr.issues:
+            msg = (c.message or "").replace("<code>", "").replace("</code>", "")
+            dr_table.add_row(c.display_name, c.category, _status_badge(c.status), msg)
+        console.print(dr_table)
+
+    # Unrecognized datatypes
+    dt = report.datatypes
+    if dt and dt.unrecognized:
+        console.print()
+        console.print(f"[red]\u2717 Datatypes  -  {len(dt.unrecognized)} unrecognized[/red]")
+        dt_table = Table(title="Unrecognized datatypes", show_lines=True)
+        dt_table.add_column("Datatype", style="red bold")
+        dt_table.add_column("Uses", justify="center")
+        dt_table.add_column("Full IRI")
+        for u in dt.unrecognized:
+            dt_table.add_row(u.display_name, str(u.count), u.datatype)
+        console.print(dt_table)
 
     # Language tag consistency
     lt = report.lang_tags

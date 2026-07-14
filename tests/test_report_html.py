@@ -8,9 +8,14 @@ import-time assert in `report_html.py` will fail loudly otherwise.
 """
 
 from askwol.models import (
+    DatatypeReport,
+    DatatypeUsage,
     DefinitionDocumentationCheck,
     DefinitionDocumentationReport,
+    DomainRangeCheck,
+    DomainRangeReport,
     ImportsReport,
+    InternalTermEntry,
     InternalTermIssue,
     InternalTermsReport,
     IRISchemeConflict,
@@ -21,11 +26,12 @@ from askwol.models import (
     MetadataReport,
     NamespaceCheck,
     NamespaceReport,
+    NonOntologyTermsReport,
     ReasonerCheck,
     ReasonerReport,
-    SkosConceptsReport,
     Status,
     TermCheck,
+    TermInventoryReport,
     UnusedPrefix,
     ValidationReport,
 )
@@ -71,8 +77,43 @@ def test_render_minimal_report_contains_all_section_anchors():
         defined=1,
         undefined=[InternalTermIssue(term="https://example.org/ont#Persom", display_name="Persom")],
     )
+    report.term_inventory = TermInventoryReport(
+        status=Status.OK,
+        total_terms=1,
+        category_counts={"Class": 1},
+        entries=[InternalTermEntry(
+            term="https://example.org/ont#Person",
+            display_name="Person",
+            category="Class",
+            naming_ok=True,
+        )],
+    )
+    report.domains_ranges = DomainRangeReport(
+        status=Status.OK,
+        total_properties=1,
+        object_properties=1,
+        checks=[DomainRangeCheck(
+            term="https://example.org/ont#hasParent",
+            display_name="hasParent",
+            category="Object property",
+            has_domain=True,
+            has_range=True,
+            status=Status.OK,
+        )],
+    )
+    report.datatypes = DatatypeReport(
+        status=Status.OK,
+        total_datatypes=1,
+        usages=[DatatypeUsage(
+            datatype="http://www.w3.org/2001/XMLSchema#integer",
+            display_name="integer",
+            count=1,
+            sources=["literal"],
+            recognized=True,
+        )],
+    )
     report.lang_tags = LangTagReport()
-    report.skos_concepts = SkosConceptsReport(status=Status.OK)
+    report.non_ontology_terms = NonOntologyTermsReport(status=Status.OK)
     report.reasoner = ReasonerReport(
         consistent=True,
         checks=[ReasonerCheck(key="consistency", label="Consistency", status=Status.OK)],

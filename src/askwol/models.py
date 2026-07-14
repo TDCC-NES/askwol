@@ -182,24 +182,30 @@ class InternalTermIssue(BaseModel):
     display_name: str
 
 
-class SkosConceptIssue(BaseModel):
-    """One skos:Concept defined in the ontology's own namespace."""
+class NonOntologyTermIssue(BaseModel):
+    """One term in the ontology's own namespace that is not part of the schema.
+
+    ``type_label`` describes what it is (for example "SKOS concept" or
+    "instance of Person").
+    """
 
     term: str
     display_name: str
+    type_label: str
 
 
-class SkosConceptsReport(BaseModel):
-    """Whether the ontology defines skos:Concept instances in its own namespace.
+class NonOntologyTermsReport(BaseModel):
+    """Terms defined in the ontology's own namespace that are not OWL schema.
 
-    Concepts belong in a separate SKOS concept scheme, not mixed into the OWL
-    ontology that defines classes and properties. Only concepts in the
-    ontology's own namespace are flagged; external concepts referenced as
-    objects are fine.
+    An OWL ontology should define schema: classes, properties, and datatypes.
+    Individuals, SKOS concepts, and other instance data belong in a separate
+    resource. This check works from a whitelist of schema constructs; anything
+    in the ontology's own namespace that carries a type but no schema type is
+    flagged. External terms and the ontology header itself are ignored.
     """
 
-    total_concepts: int = 0
-    internal_concepts: list[SkosConceptIssue] = Field(default_factory=list)
+    total_flagged: int = 0
+    terms: list[NonOntologyTermIssue] = Field(default_factory=list)
     status: Status = Status.SKIP
     message: str | None = None
 
@@ -218,6 +224,101 @@ class InternalTermsReport(BaseModel):
     undefined: list[InternalTermIssue] = Field(default_factory=list)
     status: Status = Status.SKIP
     message: str | None = None
+
+
+class InternalTermEntry(BaseModel):
+    """One term defined in the ontology's own namespace, with its category.
+
+    ``category`` is one of: Class, Object property, Datatype property,
+    Annotation property, Property (a generically typed property), Datatype,
+    Named individual, Untyped. ``naming_ok`` reflects the capitalization
+    convention (classes start uppercase, properties start lowercase); it is
+    always True for categories the convention does not apply to.
+    """
+
+    term: str
+    display_name: str
+    category: str
+    naming_ok: bool = True
+    naming_message: str | None = None
+
+
+class TermInventoryReport(BaseModel):
+    """Categorization of the ontology's own terms plus naming conventions."""
+
+    total_terms: int = 0
+    category_counts: dict[str, int] = Field(default_factory=dict)
+    entries: list[InternalTermEntry] = Field(default_factory=list)
+    status: Status = Status.SKIP
+    message: str | None = None
+
+    @property
+    def naming_issues(self) -> list[InternalTermEntry]:
+        return [e for e in self.entries if not e.naming_ok]
+
+
+class DomainRangeCheck(BaseModel):
+    """Domain/range completeness and correctness for one property."""
+
+    term: str
+    display_name: str
+    category: str  # "Object property" or "Datatype property"
+    has_domain: bool = False
+    has_range: bool = False
+    status: Status = Status.OK
+    message: str | None = None
+
+
+class DomainRangeReport(BaseModel):
+    """Whether object and datatype properties declare sound domains and ranges."""
+
+    total_properties: int = 0
+    object_properties: int = 0
+    datatype_properties: int = 0
+    checks: list[DomainRangeCheck] = Field(default_factory=list)
+    status: Status = Status.SKIP
+    message: str | None = None
+
+    @property
+    def issues(self) -> list[DomainRangeCheck]:
+        return [c for c in self.checks if c.status != Status.OK]
+
+    @property
+    def with_domain(self) -> int:
+        return sum(1 for c in self.checks if c.has_domain)
+
+    @property
+    def with_range(self) -> int:
+        return sum(1 for c in self.checks if c.has_range)
+
+
+class DatatypeUsage(BaseModel):
+    """One datatype used by the ontology, and whether it is recognized."""
+
+    datatype: str
+    display_name: str
+    count: int = 0
+    sources: list[str] = Field(default_factory=list)  # "range", "literal", "declared"
+    recognized: bool = True
+    status: Status = Status.OK
+    message: str | None = None
+
+
+class DatatypeReport(BaseModel):
+    """Inventory of datatypes used, flagging any that are not recognized."""
+
+    total_datatypes: int = 0
+    usages: list[DatatypeUsage] = Field(default_factory=list)
+    status: Status = Status.SKIP
+    message: str | None = None
+
+    @property
+    def recognized(self) -> int:
+        return sum(1 for u in self.usages if u.recognized)
+
+    @property
+    def unrecognized(self) -> list[DatatypeUsage]:
+        return [u for u in self.usages if not u.recognized]
 
 
 class ImportsCheck(BaseModel):
@@ -307,10 +408,13 @@ class ValidationReport(BaseModel):
     parse_errors: list[str] = Field(default_factory=list)
     unused_prefixes: list[UnusedPrefix] = Field(default_factory=list)
     lang_tags: LangTagReport | None = None
-    skos_concepts: SkosConceptsReport | None = None
+    non_ontology_terms: NonOntologyTermsReport | None = None
     ontology_metadata: MetadataReport | None = None
     definition_docs: DefinitionDocumentationReport | None = None
     internal_terms: InternalTermsReport | None = None
+    term_inventory: TermInventoryReport | None = None
+    domains_ranges: DomainRangeReport | None = None
+    datatypes: DatatypeReport | None = None
     imports: ImportsReport | None = None
     iri_strategy: IRIStrategyReport | None = None
     iri_scheme: IRISchemeReport | None = None
@@ -341,6 +445,12 @@ class ValidationReport(BaseModel):
             return True
         if self.internal_terms and self.internal_terms.undefined:
             return True
+        if self.term_inventory and self.term_inventory.naming_issues:
+            return True
+        if self.domains_ranges and self.domains_ranges.status in (Status.FAIL, Status.WARN):
+            return True
+        if self.datatypes and self.datatypes.unrecognized:
+            return True
         if self.imports and self.imports.missing:
             return True
         if self.iri_strategy and self.iri_strategy.status == Status.WARN:
@@ -349,6 +459,6 @@ class ValidationReport(BaseModel):
             return True
         if self.reasoner and (not self.reasoner.consistent or self.reasoner.unsatisfiable_classes):
             return True
-        if self.skos_concepts and self.skos_concepts.internal_concepts:
+        if self.non_ontology_terms and self.non_ontology_terms.terms:
             return True
         return len(self.parse_errors) > 0

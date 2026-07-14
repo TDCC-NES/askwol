@@ -78,7 +78,7 @@ def test_api_validate_returns_all_check_sections(client):
         "iri_strategy",
         "iri_scheme",
         "reasoner",
-        "skos_concepts",
+        "non_ontology_terms",
     ]:
         assert field in data, f"missing field: {field}"
 
@@ -118,6 +118,9 @@ def test_html_validate_renders_report(client):
         "namespaces",
         "external-terms",
         "internal-terms",
+        "term-inventory",
+        "domains-ranges",
+        "datatypes",
         "labels",
         "comments",
         "language-tags",

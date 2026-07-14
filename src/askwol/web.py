@@ -28,8 +28,9 @@ from askwol.parser import parse_ontology
 from askwol.reasoner_checks import run_reasoner_checks
 from askwol.report_html import render_report
 from askwol.resolver import resolve_all_namespaces
-from askwol.skos_concepts import check_skos_concepts
+from askwol.non_ontology_terms import check_non_ontology_terms
 from askwol.templates import GUIDE_HTML, UPLOAD_HTML
+from askwol.term_inventory import check_datatypes, check_domains_ranges, check_term_inventory
 from askwol.term_validator import validate_terms
 
 # ASKWOL_ROOT_PATH is the reverse-proxy sub-path prefix (e.g. /askwol); empty
@@ -532,6 +533,15 @@ async def _run_validation(tmp_path: Path, source_name: str) -> HTMLResponse:
     # Internal terms referenced in the ontology's own namespace must be defined
     report.internal_terms = check_internal_terms(parsed.graph)
 
+    # Categorize the ontology's own terms and check naming conventions
+    report.term_inventory = check_term_inventory(parsed.graph)
+
+    # Domains and ranges of object and datatype properties
+    report.domains_ranges = check_domains_ranges(parsed.graph)
+
+    # Datatypes used across the ontology
+    report.datatypes = check_datatypes(parsed.graph)
+
     # Explicit owl:imports for external vocabularies actually used
     report.imports = check_imports(
         parsed.graph, parsed.namespaces, parsed.terms_by_namespace,
@@ -546,8 +556,8 @@ async def _run_validation(tmp_path: Path, source_name: str) -> HTMLResponse:
     # Reasoner checks (current ontology only; imports are not followed)
     report.reasoner = run_reasoner_checks(parsed.graph)
 
-    # SKOS concepts should live in a separate scheme, not in the ontology
-    report.skos_concepts = check_skos_concepts(parsed.graph)
+    # Terms in the ontology's own namespace that are not OWL schema
+    report.non_ontology_terms = check_non_ontology_terms(parsed.graph)
 
     # Only resolve and report namespaces that have subject-position terms
     active_ns = {pfx: uri for pfx, uri in parsed.namespaces.items()
@@ -650,13 +660,16 @@ async def validate_api(
     report.ontology_metadata = validate_ontology_metadata(parsed.graph)
     report.definition_docs = check_definition_documentation(parsed.graph)
     report.internal_terms = check_internal_terms(parsed.graph)
+    report.term_inventory = check_term_inventory(parsed.graph)
+    report.domains_ranges = check_domains_ranges(parsed.graph)
+    report.datatypes = check_datatypes(parsed.graph)
     report.imports = check_imports(
         parsed.graph, parsed.namespaces, parsed.terms_by_namespace,
     )
     report.iri_strategy = check_iri_strategy(parsed.graph)
     report.iri_scheme = check_iri_scheme(parsed.graph, parsed.namespaces)
     report.reasoner = run_reasoner_checks(parsed.graph)
-    report.skos_concepts = check_skos_concepts(parsed.graph)
+    report.non_ontology_terms = check_non_ontology_terms(parsed.graph)
 
     return report.model_dump(mode="json")
 
