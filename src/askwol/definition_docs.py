@@ -92,9 +92,14 @@ def check_definition_documentation(graph: Graph) -> DefinitionDocumentationRepor
 
     for subject, term_type in sorted(candidates.items(), key=lambda item: str(item[0])):
         uri = str(subject)
-        if _is_external(uri):
-            continue
-        if ontology_namespaces and not any(uri.startswith(ns) for ns in ontology_namespaces):
+        if ontology_namespaces:
+            # The ontology's own namespace wins, even when it is a well-known
+            # vocabulary (e.g. validating FOAF itself). Only terms outside the
+            # own namespace are treated as reused/external.
+            if not any(uri.startswith(ns) for ns in ontology_namespaces):
+                continue
+        elif _is_external(uri):
+            # No owl:Ontology declaration: fall back to excluding well-known vocabularies.
             continue
 
         total += 1

@@ -51,6 +51,10 @@ UPLOAD_HTML = """<!DOCTYPE html>
   h1 { margin: 0.4em 0 0.1em; font-weight: 700; font-size: 2.4em; letter-spacing: -0.02em; display: flex; align-items: center; gap: 0.35em; }
   h1 .owl { font-size: 1.4em; line-height: 1; }
   h2 { color: #374151; margin-top: 1.8em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; font-weight: 600; }
+  .cluster-h { color: var(--accent-dark); font-size: 1.15em; font-weight: 700; margin: 1.5em 0 0.3em; }
+  .checks-list { margin: 0.2em 0 0.8em; padding-left: 1.4em; }
+  .checks-list li { margin: 0.4em 0; }
+  .checks-list .num { color: var(--accent-dark); font-weight: 700; }
   code { background: #f3f4f6; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; }
   a { color: var(--accent); }
   .topnav { margin-bottom: 1.2em; font-size: 0.95em; color: #4b5563; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 8px; padding: 0.6em 0.9em; }
@@ -153,58 +157,88 @@ UPLOAD_HTML = """<!DOCTYPE html>
   </script>
 
   <h2>What do you get?</h2>
-  <p>One HTML report (or JSON via the API) with a section per check, each
-  linked to the matching entry in the <a href="guide">publishing guide</a>:</p>
-  <ol>
-    <li><strong>Ontology diagram</strong>: an interactive class diagram
-    showing your classes, properties, and inheritance hierarchy. Zoom,
-    pan, and explore.</li>
-    <li><strong>Ontology metadata</strong>: a SHACL check on the ontology
-    header. Title, description, creator, license IRI, and version are
-    required; created/modified dates and publisher are recommended.</li>
-    <li><strong>Imports</strong>: external vocabularies actually used
-    in your ontology must be declared with <code>owl:imports</code>. Core
-    W3C vocabularies (RDF, RDFS, OWL, XSD) are excluded.</li>
-    <li><strong>IRI strategy</strong>: your ontology&rsquo;s own
-    defined terms should consistently use either hash
+  <p>An interactive <strong>class diagram</strong> of your ontology, plus one
+  HTML report (or JSON via the API) with a section per check. The checks are
+  grouped into five areas, and each links to the matching entry in the
+  <a href="guide">publishing guide</a>:</p>
+
+  <h3 class="cluster-h">1. Ontology basics</h3>
+  <ul class="checks-list">
+    <li><span class="num">1.1</span> <strong>Ontology metadata</strong>: a
+    SHACL check on the ontology header. Title, description, creator, license
+    IRI, and version are required; created/modified dates and publisher are
+    recommended.</li>
+    <li><span class="num">1.2</span> <strong>Imports</strong>: external
+    vocabularies actually used in your ontology must be declared with
+    <code>owl:imports</code>. Core W3C vocabularies (RDF, RDFS, OWL, XSD) are
+    excluded.</li>
+    <li><span class="num">1.3</span> <strong>IRI strategy</strong>: your
+    ontology&rsquo;s own defined terms should consistently use either hash
     (<code>#Term</code>) or slash (<code>/Term</code>), not both.</li>
-    <li><strong>IRI scheme</strong>: each host should be referenced
-    under a single URI scheme. <code>http://example.org/X</code> and
-    <code>https://example.org/X</code> are different IRIs.</li>
-    <li><strong>Namespaces</strong>: fetches each declared namespace
-    URI, checks HTTP status, and tries to parse as RDF (Turtle, RDF/XML,
-    JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF
-    links.</li>
-    <li><strong>Unused prefixes</strong>: flags <code>@prefix</code>
-    declarations that are never used in any triple. Keeps your ontology
-    tidy.</li>
-    <li><strong>External term definitions</strong>: verifies that terms
-    your ontology reuses from an external vocabulary are actually defined
-    there. Catches typos like <code>owl:MadeUpClass</code> and made-up
-    reuse of established prefixes.</li>
-    <li><strong>Internal term definitions</strong>: flags terms in your own
-    namespace that are referenced but never defined - usually a typo or a
-    forgotten declaration.</li>
-    <li><strong>Labels</strong>: a SHACL check that every internally
-    defined class and property carries an <code>rdfs:label</code>. Reused
-    external terms are ignored.</li>
-    <li><strong>Comments</strong>: a SHACL check that every internally
-    defined class and property carries an <code>rdfs:comment</code>. Reused
-    external terms are ignored.</li>
-    <li><strong>Language tag consistency</strong>: language-tagged
-    properties like <code>rdfs:label</code>, <code>rdfs:comment</code>,
-    <code>skos:prefLabel</code>, and <code>skos:definition</code> should
-    use the same set of languages across subjects. Catches missing
-    translations and bare strings.</li>
-    <li><strong>SKOS concepts</strong>: an OWL ontology defines classes
-    and properties, not individual concepts. Flags any
-    <code>skos:Concept</code> defined in your own namespace; those belong
-    in a separate SKOS concept scheme.</li>
-    <li><strong>Reasoner checks</strong>: lightweight OWL RL reasoning
-    on the current ontology (imports are not followed), reported as three
-    facets: <em>ontology consistency</em>, <em>inconsistent
-    individuals</em>, and <em>unsatisfiable classes</em>.</li>
-  </ol>
+    <li><span class="num">1.4</span> <strong>IRI scheme</strong>: each host
+    should be referenced under a single URI scheme.
+    <code>http://example.org/X</code> and <code>https://example.org/X</code>
+    are different IRIs.</li>
+  </ul>
+
+  <h3 class="cluster-h">2. Namespaces &amp; reuse</h3>
+  <ul class="checks-list">
+    <li><span class="num">2.1</span> <strong>Namespaces</strong>: fetches each
+    declared namespace URI, checks HTTP status, and tries to parse it as RDF
+    (Turtle, RDF/XML, JSON-LD, N-Triples). Falls back to scanning HTML pages
+    for RDF links.</li>
+    <li><span class="num">2.2</span> <strong>Unused prefixes</strong>: flags
+    <code>@prefix</code> declarations that are never used in any triple.</li>
+    <li><span class="num">2.3</span> <strong>External term definitions</strong>:
+    verifies that terms your ontology reuses from an external vocabulary are
+    actually defined there. Catches typos like <code>owl:MadeUpClass</code> and
+    made-up reuse of established prefixes.</li>
+  </ul>
+
+  <h3 class="cluster-h">3. Term structure</h3>
+  <ul class="checks-list">
+    <li><span class="num">3.1</span> <strong>Internal term definitions</strong>:
+    flags terms in your own namespace that are referenced but never defined,
+    usually a typo or a forgotten declaration.</li>
+    <li><span class="num">3.2</span> <strong>Term inventory &amp; naming</strong>:
+    categorizes every term you define (class, object or datatype property,
+    datatype, individual) and checks capitalization: classes start uppercase,
+    properties start lowercase.</li>
+    <li><span class="num">3.3</span> <strong>Domains &amp; ranges</strong>:
+    object and datatype properties should declare a domain and a range. Object
+    properties range over classes; datatype properties over datatypes.</li>
+    <li><span class="num">3.4</span> <strong>Datatypes</strong>: datatypes used
+    as ranges or literal types should be recognized (XSD built-ins,
+    <code>rdfs:Literal</code>, <code>rdf:langString</code>, or a datatype you
+    declare with <code>rdfs:Datatype</code>).</li>
+    <li><span class="num">3.5</span> <strong>Non-ontology terms</strong>: an OWL
+    ontology defines schema. Individuals, <code>skos:Concept</code> instances,
+    and other instance data belong in a separate data resource or concept
+    scheme.</li>
+  </ul>
+
+  <h3 class="cluster-h">4. Term documentation</h3>
+  <ul class="checks-list">
+    <li><span class="num">4.1</span> <strong>Labels</strong>: a SHACL check that
+    every internally defined class and property carries an
+    <code>rdfs:label</code>. Reused external terms are ignored.</li>
+    <li><span class="num">4.2</span> <strong>Comments</strong>: a SHACL check
+    that every internally defined class and property carries an
+    <code>rdfs:comment</code>. Reused external terms are ignored.</li>
+    <li><span class="num">4.3</span> <strong>Language tag consistency</strong>:
+    language-tagged properties like <code>rdfs:label</code>,
+    <code>rdfs:comment</code>, <code>skos:prefLabel</code>, and
+    <code>skos:definition</code> should use the same set of languages across
+    subjects. Catches missing translations and bare strings.</li>
+  </ul>
+
+  <h3 class="cluster-h">5. Logic</h3>
+  <ul class="checks-list">
+    <li><span class="num">5.1</span> <strong>Reasoner checks</strong>:
+    lightweight OWL RL reasoning on the current ontology (imports are not
+    followed), reported as three facets: <em>ontology consistency</em>,
+    <em>inconsistent individuals</em>, and <em>unsatisfiable classes</em>.</li>
+  </ul>
 
   <p><strong>What you don&rsquo;t get:</strong> askwol checks syntax and
   structure, but not content or meaning, which is what ontologies are all
@@ -259,9 +293,22 @@ UPLOAD_HTML = """<!DOCTYPE html>
 # validation report; their order and anchors must match CHECKS below.
 # Sections in group="practice" are additional best practices with no
 # automated check.
+#
+# Check-group sections are grouped into clusters via their "category" key.
+# CHECK_CATEGORIES gives the cluster order and display labels, and is shared
+# with report_html so the guide, the overview, and the results agree.
+CHECK_CATEGORIES: list[dict[str, str]] = [
+    {"key": "basics", "label": "Ontology basics"},
+    {"key": "reuse", "label": "Namespaces &amp; reuse"},
+    {"key": "structure", "label": "Term structure"},
+    {"key": "docs", "label": "Term documentation"},
+    {"key": "logic", "label": "Logic"},
+]
+
 GUIDE_SECTIONS: list[dict[str, str]] = [
     {
         "group": "check",
+        "category": "basics",
         "anchor": "metadata",
         "title": "Give the ontology itself good metadata",
         "toc_label": "Ontology metadata",
@@ -303,6 +350,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     },
     {
         "group": "check",
+        "category": "basics",
         "anchor": "imports",
         "title": "Declare imports for vocabularies you use",
         "toc_label": "Imports",
@@ -325,6 +373,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     },
     {
         "group": "check",
+        "category": "basics",
         "anchor": "iri-strategy",
         "title": "Pick one IRI strategy (hash or slash) and stick to it",
         "toc_label": "IRI strategy",
@@ -426,6 +475,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     },
     {
         "group": "check",
+        "category": "basics",
         "anchor": "https-http",
         "title": "Use http or https, but be consistent per host",
         "toc_label": "IRI scheme (http vs https)",
@@ -472,6 +522,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     },
     {
         "group": "check",
+        "category": "reuse",
         "anchor": "resolvable",
         "title": "Make namespaces resolvable",
         "toc_label": "Namespaces",
@@ -497,6 +548,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     },
     {
         "group": "check",
+        "category": "reuse",
         "anchor": "prefixes",
         "title": "Keep your prefixes clean",
         "toc_label": "Unused prefixes",
@@ -514,6 +566,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     },
     {
         "group": "check",
+        "category": "reuse",
         "anchor": "external-terms",
         "title": "External term definitions",
         "toc_label": "External term definitions",
@@ -539,6 +592,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     },
     {
         "group": "check",
+        "category": "structure",
         "anchor": "internal-terms",
         "title": "Internal term definitions",
         "toc_label": "Internal term definitions",
@@ -560,6 +614,123 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     },
     {
         "group": "check",
+        "category": "structure",
+        "anchor": "term-inventory",
+        "title": "Categorize your terms and name them consistently",
+        "toc_label": "Term inventory &amp; naming",
+        "body": """\
+  <p>Every term you define falls into a category: a <strong>class</strong>, an
+  <strong>object property</strong>, a <strong>datatype property</strong>, an
+  <strong>annotation property</strong>, a <strong>datatype</strong>, or a
+  <strong>named individual</strong>. askwol lists each internal term with the
+  category it detected, so you can spot a term that was never typed
+  (<code>rdf:type</code> missing) or typed as the wrong kind of thing.</p>
+  <pre>&lt;#Person&gt;   a owl:Class .
+&lt;#hasParent&gt; a owl:ObjectProperty .
+&lt;#birthDate&gt; a owl:DatatypeProperty .</pre>
+  <h3>Naming conventions</h3>
+  <ul>
+    <li><strong>Classes start with an uppercase letter</strong> and are usually
+    nouns: <code>Person</code>, <code>Dataset</code>, <code>Organization</code>.</li>
+    <li><strong>Properties start with a lowercase letter</strong>:
+    <code>hasParent</code>, <code>birthDate</code>, <code>title</code>.</li>
+  </ul>
+  <div class="tip">Object properties read best as verb phrases. A
+  <code>has</code> or <code>is</code> prefix, or an <code>of</code>/<code>by</code>
+  form, gives a single unambiguous reading: <code>hasWife</code>,
+  <code>wifeOf</code>, <code>lovedBy</code>. This is a readability convention,
+  not something askwol enforces; askwol only checks the leading upper/lower case.</div>
+  <div class="warn">Mixing conventions (a lowercase class like
+  <code>person</code>, or an uppercase property like <code>HasName</code>)
+  makes an ontology harder to read and to reuse.</div>
+""",
+    },
+    {
+        "group": "check",
+        "category": "structure",
+        "anchor": "domains-ranges",
+        "title": "Give properties a domain and a range",
+        "toc_label": "Domains &amp; ranges",
+        "body": """\
+  <p>An <code>rdfs:domain</code> says what kind of subject a property applies
+  to; an <code>rdfs:range</code> says what kind of value it takes. Declaring
+  both makes a property self-documenting and lets tools reason about it.</p>
+  <pre>&lt;#hasParent&gt; a owl:ObjectProperty ;
+    rdfs:domain &lt;#Person&gt; ;
+    rdfs:range  &lt;#Person&gt; .        # a class
+
+&lt;#birthDate&gt; a owl:DatatypeProperty ;
+    rdfs:domain &lt;#Person&gt; ;
+    rdfs:range  xsd:date .        # a datatype</pre>
+  <ul>
+    <li>An <strong>object property</strong> should range over a
+    <strong>class</strong>. A range that is a datatype means it should probably
+    be a datatype property.</li>
+    <li>A <strong>datatype property</strong> should range over a
+    <strong>datatype</strong>. A range that is a class means it should probably
+    be an object property.</li>
+    <li>A <strong>domain</strong> should be a class for either kind.</li>
+  </ul>
+  <div class="warn">In OWL, a domain or range is not a constraint that rejects
+  bad data; it <em>licenses inference</em>. Stating
+  <code>rdfs:domain :Person</code> on <code>:birthDate</code> tells a reasoner
+  that anything with a <code>:birthDate</code> is a <code>:Person</code>. Pick
+  domains and ranges that are actually true of every use.</div>
+  <div class="tip">askwol reads <code>rdfs:domain</code> and
+  <code>rdfs:range</code> directly on each property; it does not follow domains
+  or ranges inherited from a super-property.</div>
+""",
+    },
+    {
+        "group": "check",
+        "category": "structure",
+        "anchor": "datatypes",
+        "title": "Use recognized datatypes",
+        "toc_label": "Datatypes",
+        "body": """\
+  <p>Datatype property ranges and typed literals should use a datatype that
+  tools understand: an <a href="https://www.w3.org/TR/xmlschema11-2/">XSD</a>
+  built-in (<code>xsd:string</code>, <code>xsd:integer</code>,
+  <code>xsd:date</code>, <code>xsd:boolean</code>, &hellip;),
+  <code>rdfs:Literal</code>, <code>rdf:langString</code>, or a custom datatype
+  you declare with <code>rdfs:Datatype</code>.</p>
+  <pre>&lt;#age&gt; rdfs:range xsd:nonNegativeInteger .
+&lt;#born&gt; rdfs:range xsd:date .
+"42"^^xsd:integer</pre>
+  <div class="warn">A misspelled datatype (<code>xsd:stirng</code>,
+  <code>xsd:dateTiem</code>) is silently treated as a brand-new, unknown
+  datatype. Filters and validators that expect the real datatype then skip your
+  values. askwol lists every datatype it sees and flags the ones it does not
+  recognize.</div>
+""",
+    },
+    {
+        "group": "check",
+        "category": "structure",
+        "anchor": "non-ontology-terms",
+        "title": "Keep the ontology to schema, not instance data",
+        "toc_label": "Non-ontology terms",
+        "body": """\
+  <p>An OWL ontology is the <em>schema</em>: it defines classes, properties,
+  and datatypes (the terminology). Individual <strong>instances</strong> and
+  subject-matter <strong>concepts</strong> (the members of a controlled
+  vocabulary or thesaurus) are instance data; they belong in a separate data
+  resource or a <a href="https://www.w3.org/TR/skos-primer/">SKOS</a> concept
+  scheme, not inside the ontology itself.</p>
+  <pre>&lt;#Dataset&gt; a owl:Class .            # schema, belongs here
+&lt;#biology&gt; a skos:Concept .         # concept, belongs in a SKOS scheme
+&lt;#dataset-001&gt; a &lt;#Dataset&gt; .       # instance, belongs in a data file</pre>
+  <div class="tip">askwol works from a <strong>whitelist</strong>: a term in your
+  own namespace is fine when it is typed as a class, a property, or a datatype
+  (or is the ontology header). Anything else that carries a type but no schema
+  type (a <code>skos:Concept</code>, a named individual, stray instance data) is
+  flagged so you can move it out. External terms are ignored. Keeping the
+  schema and the data apart lets each evolve, and be reused, independently.</div>
+""",
+    },
+    {
+        "group": "check",
+        "category": "docs",
         "anchor": "labels",
         "title": "Labels",
         "toc_label": "Labels",
@@ -581,6 +752,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     },
     {
         "group": "check",
+        "category": "docs",
         "anchor": "comments",
         "title": "Comments",
         "toc_label": "Comments",
@@ -601,6 +773,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     },
     {
         "group": "check",
+        "category": "docs",
         "anchor": "lang-tags",
         "title": "Use language tags consistently",
         "toc_label": "Language tag consistency",
@@ -636,25 +809,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     },
     {
         "group": "check",
-        "anchor": "skos-concepts",
-        "title": "Define SKOS concepts in a scheme, not in the ontology",
-        "toc_label": "SKOS concepts",
-        "body": """\
-  <p>An OWL ontology is the <em>schema</em>: it defines classes and
-  properties. Individual subject-matter <strong>concepts</strong> (the members
-  of a controlled vocabulary or thesaurus) belong in a separate
-  <a href="https://www.w3.org/TR/skos-primer/">SKOS</a> concept scheme, not
-  inside the ontology itself.</p>
-  <pre>&lt;#Dataset&gt; a owl:Class .            # schema  -  belongs here
-&lt;#biology&gt; a skos:Concept .         # concept  -  belongs in a SKOS scheme</pre>
-  <div class="tip">askwol flags every <code>skos:Concept</code> that is defined
-  in your ontology&rsquo;s own namespace. Concepts referenced from an external
-  scheme (as objects) are fine; keeping the vocabulary and the ontology apart
-  lets each evolve, and be reused, independently.</div>
-""",
-    },
-    {
-        "group": "check",
+        "category": "logic",
         "anchor": "reasoner",
         "title": "Check logical consistency",
         "toc_label": "Reasoner checks",
@@ -717,52 +872,93 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
 ]
 
 
-# Continuous section numbers (1..N) in GUIDE_SECTIONS order. The TOC and the
-# body headings both use these, so the two always match.
-_GUIDE_NUMBERS = {s["anchor"]: i for i, s in enumerate(GUIDE_SECTIONS, 1)}
+# Hierarchical section numbers. Check sections are numbered "cluster.position"
+# (1.1, 1.2, 2.1, ...) using their category; practice sections carry no number.
+# The TOC and the body headings both use these, so the two always match.
+def _compute_guide_numbers() -> dict[str, str]:
+    cat_index = {c["key"]: i + 1 for i, c in enumerate(CHECK_CATEGORIES)}
+    counters: dict[str, int] = {}
+    labels: dict[str, str] = {}
+    for s in GUIDE_SECTIONS:
+        if s["group"] == "check":
+            cat = s["category"]
+            counters[cat] = counters.get(cat, 0) + 1
+            labels[s["anchor"]] = f"{cat_index[cat]}.{counters[cat]}"
+        else:
+            labels[s["anchor"]] = ""
+    return labels
+
+
+_GUIDE_NUMBERS = _compute_guide_numbers()
+# Cluster number (1..5) per category key, shown on the cluster band.
+_CLUSTER_NUMBERS = {c["key"]: i + 1 for i, c in enumerate(CHECK_CATEGORIES)}
 
 
 def _render_guide_toc() -> str:
     """Render the publishing-guide TOC from GUIDE_SECTIONS.
 
     The TOC has two groups: automated checks (linked from the report) and
-    additional best practices. Each entry is numbered and uses the exact same
-    text as the matching body heading, so the TOC cannot drift from the body.
+    additional best practices. Within the checks group the entries are further
+    split into the clusters defined by CHECK_CATEGORIES, each under its own
+    sub-heading. Check entries are numbered "cluster.position" and use the exact
+    same text as the matching body heading, so the TOC cannot drift from the body.
     """
-    def _items(group: str) -> str:
-        lines = []
-        for s in GUIDE_SECTIONS:
-            if s["group"] != group:
-                continue
-            n = _GUIDE_NUMBERS[s["anchor"]]
-            lines.append(
-                f'      <li><a href="#{s["anchor"]}">{n}. {s["toc_label"]}</a></li>'
-            )
-        return "\n".join(lines)
+    def _entry(s: dict) -> str:
+        n = _GUIDE_NUMBERS[s["anchor"]]
+        prefix = f"{n} " if n else ""
+        return f'      <li><a href="#{s["anchor"]}">{prefix}{s["toc_label"]}</a></li>'
 
-    return (
-        '    <span class="group-label">Checks askwol runs (same order as the report)</span>\n'
-        '    <ul>\n'
-        f'{_items("check")}\n'
-        '    </ul>\n'
-        '    <span class="group-label">Additional best practices (no automated check)</span>\n'
-        '    <ul>\n'
-        f'{_items("practice")}\n'
-        '    </ul>'
-    )
+    lines: list[str] = [
+        '    <span class="group-label">Checks askwol runs (same order as the report)</span>'
+    ]
+    for cat in CHECK_CATEGORIES:
+        cat_sections = [
+            s for s in GUIDE_SECTIONS
+            if s["group"] == "check" and s.get("category") == cat["key"]
+        ]
+        if not cat_sections:
+            continue
+        cnum = _CLUSTER_NUMBERS[cat["key"]]
+        lines.append(f'    <span class="cluster-label">{cnum}. {cat["label"]}</span>')
+        lines.append("    <ul>")
+        lines.extend(_entry(s) for s in cat_sections)
+        lines.append("    </ul>")
+
+    practice = [s for s in GUIDE_SECTIONS if s["group"] == "practice"]
+    lines.append('    <span class="group-label">Additional best practices (no automated check)</span>')
+    lines.append("    <ul>")
+    lines.extend(_entry(s) for s in practice)
+    lines.append("    </ul>")
+
+    return "\n".join(lines)
 
 
 def _render_guide_body() -> str:
     """Render the publishing-guide H2 sections from GUIDE_SECTIONS, in order.
 
-    The heading text matches the TOC entry exactly (number + label). Where a
+    The heading text matches the TOC entry exactly (number + label). A cluster
+    band is emitted before the first check section of each category. Where a
     section has a distinct one-line takeaway, it is shown as a subtitle under
     the heading.
     """
     blocks = []
+    seen_categories: set[str] = set()
+    emitted_practice_band = False
     for s in GUIDE_SECTIONS:
+        if s["group"] == "check":
+            cat = s.get("category")
+            if cat and cat not in seen_categories:
+                seen_categories.add(cat)
+                label = next((c["label"] for c in CHECK_CATEGORIES if c["key"] == cat), "")
+                if label:
+                    cnum = _CLUSTER_NUMBERS[cat]
+                    blocks.append(f'  <h2 class="cluster-band" id="cluster-{cat}">{cnum}. {label}</h2>')
+        elif s["group"] == "practice" and not emitted_practice_band:
+            emitted_practice_band = True
+            blocks.append('  <h2 class="cluster-band" id="cluster-practice">Additional best practices</h2>')
         n = _GUIDE_NUMBERS[s["anchor"]]
-        heading = f'  <h2 id="{s["anchor"]}">{n}. {s["toc_label"]}</h2>'
+        num = f"{n} " if n else ""
+        heading = f'  <h3 class="check-heading" id="{s["anchor"]}">{num}{s["toc_label"]}</h3>'
         if s["title"] and s["title"] != s["toc_label"]:
             heading += f'\n  <p class="section-lead">{s["title"]}</p>'
         blocks.append(f'{heading}\n{s["body"]}')
@@ -807,6 +1003,8 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   h1 .owl {{ font-size: 1.4em; line-height: 1; }}
   h2 {{ color: #555; margin-top: 2em; border-bottom: 1px solid #eee; padding-bottom: 0.2em; }}
   h3 {{ color: #666; margin-top: 1.5em; }}
+  .cluster-band {{ color: #4a7c59; font-size: 1.7em; font-weight: 700; margin: 2.6em 0 0.5em; padding-bottom: 0.2em; border-bottom: 2px solid #cfe0d5; letter-spacing: -0.01em; }}
+  .check-heading {{ color: #333; font-size: 1.25em; font-weight: 600; margin-top: 1.8em; border: none; padding: 0; }}
   .section-lead {{ color: #555; font-size: 1.05em; margin: 0.4em 0 1.1em; }}
   a {{ color: #4a7c59; }}
   code {{ background: #f0f0f0; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; }}
@@ -820,6 +1018,8 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   .toc li {{ margin: 0.2em 0; }}
   .toc .group-label {{ display: block; margin-top: 0.8em; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; font-weight: 600; }}
   .toc .group-label:first-child {{ margin-top: 0; }}
+  .toc .cluster-label {{ display: block; margin: 0.7em 0 0.15em 0.2em; font-size: 0.98em; color: #4a7c59; font-weight: 700; }}
+  .cluster-band {{ margin: 2.2em 0 0; font-size: 0.82em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #4a7c59; }}
 </style>
 </head>
 <body>

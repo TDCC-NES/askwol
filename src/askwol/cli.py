@@ -19,6 +19,7 @@ from askwol.models import NamespaceCheck, NamespaceReport, Status, UnusedPrefix,
 from askwol.parser import parse_ontology
 from askwol.report import print_report, report_as_json, report_as_markdown
 from askwol.resolver import resolve_all_namespaces
+from askwol.term_inventory import check_datatypes, check_domains_ranges, check_term_inventory
 from askwol.term_validator import validate_terms
 
 
@@ -65,6 +66,15 @@ async def _run_check(
 
     # Internal terms referenced in the ontology's own namespace must be defined
     report.internal_terms = check_internal_terms(parsed.graph)
+
+    # Categorize the ontology's own terms and check naming conventions
+    report.term_inventory = check_term_inventory(parsed.graph)
+
+    # Domains and ranges of object and datatype properties
+    report.domains_ranges = check_domains_ranges(parsed.graph)
+
+    # Datatypes used across the ontology
+    report.datatypes = check_datatypes(parsed.graph)
 
     # Reasoner checks (current ontology only; imports are not followed)
     report.reasoner = run_reasoner_checks(parsed.graph)

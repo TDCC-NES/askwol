@@ -33,9 +33,18 @@
 #                              are owl:disjointWith)
 #   9. Unused prefixes       - WARN (neverused is declared but not used in any
 #                              triple)
-#  10. SKOS concepts         - WARN (:Biology is a skos:Concept defined in the
-#                              ontology's own namespace; concepts belong in a
-#                              separate SKOS concept scheme)
+#  10. Non-ontology terms   - WARN (:Biology is a skos:Concept and :alice/:bob
+#                              are named individuals defined in the ontology's
+#                              own namespace; instance data and concepts belong
+#                              in a separate resource)
+#  11. Term inventory/naming - FAIL (:badFormat is a lowercase class name;
+#                              :HasOwner is an uppercase property name)
+#  12. Domains and ranges    - FAIL (:worksFor is an object property ranging
+#                              over a datatype; :hasLabelText is a datatype
+#                              property ranging over a class) + WARN (:relatedTo
+#                              declares no domain and no range)
+#  13. Datatypes             - FAIL (xsd:flaot and xsd:stirng are misspelled and
+#                              not recognized datatypes)
 # -----------------------------------------------------------------------------
 
 # (1) Ontology declaration with NO metadata at all - missing title, creator,
@@ -100,3 +109,46 @@
 # concepts check should warn about this one.
 :Biology a skos:Concept ;
     skos:prefLabel "Biology"@en .
+
+# (11) Naming conventions: a class name should start uppercase and a property
+# name should start lowercase. These two break the convention.
+:badFormat a owl:Class ;
+    rdfs:label "bad format"@en ;
+    rdfs:comment "A class whose name should start with an uppercase letter."@en .
+
+:HasOwner a owl:ObjectProperty ;
+    rdfs:label "has owner"@en ;
+    rdfs:comment "A property whose name should start with a lowercase letter."@en ;
+    rdfs:domain :Organization ;
+    rdfs:range :Person .
+
+# (12) Domains and ranges:
+#   - :worksFor is an object property but ranges over a datatype (should be a class).
+#   - :hasLabelText is a datatype property but ranges over a class (should be a datatype).
+#   - :relatedTo declares neither a domain nor a range.
+:worksFor a owl:ObjectProperty ;
+    rdfs:label "works for"@en ;
+    rdfs:comment "An object property that wrongly ranges over a datatype."@en ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+
+:hasLabelText a owl:DatatypeProperty ;
+    rdfs:label "has label text"@en ;
+    rdfs:comment "A datatype property that wrongly ranges over a class."@en ;
+    rdfs:domain :Person ;
+    rdfs:range :Person .
+
+:relatedTo a owl:ObjectProperty ;
+    rdfs:label "related to"@en ;
+    rdfs:comment "A property with no declared domain or range."@en .
+
+# (13) Datatypes: a misspelled datatype in a property range and in a typed
+# literal. Neither xsd:flaot nor xsd:stirng is a recognized datatype.
+:weight a owl:DatatypeProperty ;
+    rdfs:label "weight"@en ;
+    rdfs:comment "Its range is a misspelled datatype."@en ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:flaot .
+
+:bob :weight "70"^^xsd:stirng .
+

@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-94%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-117%20passing-brightgreen.svg)](#tests)
 [![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 
 <!-- Once deployed, add a live link here:
@@ -29,25 +29,41 @@ So the name went WOL → OWL → and, for a tool that *asks* Owl for a wise seco
 
 ## What do you get?
 
-A single HTML report (or JSON via the API) with one section per automated check. Every section links to a matching entry in the built-in **publishing guide** at `/guide`, so a failing check always tells you *why* the convention exists.
+An interactive **class diagram** of your ontology, plus a single HTML report (or JSON via the API) with one section per automated check. The checks are grouped into five areas, and every section links to a matching entry in the built-in **publishing guide** at `/guide`, so a failing check always tells you *why* the convention exists.
 
-1. **Ontology diagram** - an interactive class diagram showing classes, properties, and inheritance hierarchy (web UI). Zoom, pan, and explore.
-2. **Ontology metadata** - SHACL check on the ontology header: title, description, creator, license IRI, version are required; created/modified dates and publisher are recommended.
-3. **Imports** - external vocabularies actually used in the ontology must be declared with `owl:imports`. Core W3C vocabularies (RDF, RDFS, OWL, XSD) are excluded.
-4. **IRI strategy** - the ontology's own defined terms should consistently use either hash (`#Term`) or slash (`/Term`), not both.
-5. **IRI scheme** - each host should be referenced under a single URI scheme. `http://example.org/X` and `https://example.org/X` are different IRIs.
-6. **Namespace resolution** - fetches each declared namespace URI, checks HTTP status, tries to parse as RDF (Turtle, RDF/XML, JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF links.
-7. **External term definitions** - verifies that terms reused from an external vocabulary are actually defined there. Catches typos like `owl:MadeUpClass` and made-up reuse of established prefixes.
-8. **Internal term definitions** - flags terms in the ontology's own namespace that are referenced (as a predicate or object) but never defined (never appear as a subject). Usually a typo or a forgotten declaration.
-9. **Labels** - SHACL check that every internally defined class and property carries an `rdfs:label`. Reused external terms are ignored.
-10. **Comments** - SHACL check that every internally defined class and property carries an `rdfs:comment`. Reused external terms are ignored.
-11. **Language tag consistency** - labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) should use the same language tags across subjects.
-12. **SKOS concepts** - an OWL ontology defines classes and properties, not individual concepts. Flags any `skos:Concept` defined in the ontology's own namespace; those belong in a separate SKOS concept scheme.
-13. **OWL RL reasoner checks** - lightweight reasoning on the current ontology (imports are not followed), with three distinct facets:
+**1. Ontology basics**
+
+- **1.1 Ontology metadata** - SHACL check on the ontology header: title, description, creator, license IRI, version are required; created/modified dates and publisher are recommended.
+- **1.2 Imports** - external vocabularies actually used in the ontology must be declared with `owl:imports`. Core W3C vocabularies (RDF, RDFS, OWL, XSD) are excluded.
+- **1.3 IRI strategy** - the ontology's own defined terms should consistently use either hash (`#Term`) or slash (`/Term`), not both.
+- **1.4 IRI scheme** - each host should be referenced under a single URI scheme. `http://example.org/X` and `https://example.org/X` are different IRIs.
+
+**2. Namespaces & reuse**
+
+- **2.1 Namespaces** - fetches each declared namespace URI, checks HTTP status, tries to parse as RDF (Turtle, RDF/XML, JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF links.
+- **2.2 Unused prefixes** - flags `@prefix` declarations that are never used in any triple.
+- **2.3 External term definitions** - verifies that terms reused from an external vocabulary are actually defined there. Catches typos like `owl:MadeUpClass` and made-up reuse of established prefixes.
+
+**3. Term structure**
+
+- **3.1 Internal term definitions** - flags terms in the ontology's own namespace that are referenced but never defined (never appear as a subject). Usually a typo or a forgotten declaration.
+- **3.2 Term inventory & naming** - categorizes every internal term (class, object property, datatype property, datatype, individual) and checks capitalization: classes start uppercase, properties lowercase.
+- **3.3 Domains & ranges** - object and datatype properties should declare a domain and a range. Object properties range over classes; datatype properties over datatypes.
+- **3.4 Datatypes** - datatypes used as property ranges and literal datatypes should be recognized XSD built-ins, `rdfs:Literal`, `rdf:langString`, or a locally declared `rdfs:Datatype`. Catches typos like `xsd:stirng`.
+- **3.5 Non-ontology terms** - an OWL ontology defines schema (classes, properties, datatypes). Individuals, `skos:Concept` instances, and other instance data belong in a separate resource. Works from a whitelist of schema constructs.
+
+**4. Term documentation**
+
+- **4.1 Labels** - SHACL check that every internally defined class and property carries an `rdfs:label`. Reused external terms are ignored.
+- **4.2 Comments** - SHACL check that every internally defined class and property carries an `rdfs:comment`. Reused external terms are ignored.
+- **4.3 Language tag consistency** - labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) should use the same language tags across subjects.
+
+**5. Logic**
+
+- **5.1 OWL RL reasoner checks** - lightweight reasoning on the current ontology (imports are not followed), with three distinct facets:
     - **Ontology consistency** - the ontology as a whole has a model.
     - **Inconsistent individuals** - specific named individuals that violate a class restriction (e.g. typed in two `owl:disjointWith` classes).
     - **Unsatisfiable classes** - named classes whose definition forces them to be empty (equivalent to `owl:Nothing`).
-14. **Unused prefixes** - flags `@prefix` declarations that are never used in any triple.
 
 ## Quick start
 
@@ -262,6 +278,8 @@ src/askwol/
 ├── imports_check.py      # owl:imports completeness check
 ├── iri_strategy.py       # hash vs slash IRI consistency
 ├── iri_scheme.py         # http vs https per-host consistency
+├── term_inventory.py     # term categories, naming, domains/ranges, datatypes
+├── non_ontology_terms.py # flags instance data/concepts (whitelist of schema)
 ├── lang_tags.py          # language-tag consistency checks
 ├── reasoner_checks.py    # OWL RL reasoning sanity checks
 ├── mermaid_diagram.py    # interactive class diagram
@@ -283,8 +301,9 @@ examples/
 
 The HTML report sections and the publishing guide are kept in lockstep by an
 import-time `assert` in `report_html.py`: the `CHECKS` registry and the
-`group="check"` entries in `GUIDE_SECTIONS` must list the same anchors in the
-same order, otherwise the module fails to load (and the test suite catches it).
+`group="check"` entries in `GUIDE_SECTIONS` must list the same anchors (and the
+same cluster categories) in the same order, otherwise the module fails to load
+(and the test suite catches it).
 
 ## Tests
 
@@ -292,7 +311,7 @@ same order, otherwise the module fails to load (and the test suite catches it).
 pytest tests/ -v
 ```
 
-82 tests cover every automated check on both good and bad inputs, the HTML
+117 tests cover every automated check on both good and bad inputs, the HTML
 report rendering, the FastAPI routes via `TestClient`, and a pinned end-to-end
 smoke test on [`examples/broken.ttl`](examples/broken.ttl) that fails loudly
 if any single check ever stops detecting issues. The clean counterpart is

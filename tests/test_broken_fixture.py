@@ -18,7 +18,12 @@ from askwol.metadata_validator import validate_ontology_metadata
 from askwol.models import Status
 from askwol.parser import parse_ontology
 from askwol.reasoner_checks import run_reasoner_checks
-from askwol.skos_concepts import check_skos_concepts
+from askwol.non_ontology_terms import check_non_ontology_terms
+from askwol.term_inventory import (
+    check_datatypes,
+    check_domains_ranges,
+    check_term_inventory,
+)
 
 BROKEN = Path(__file__).resolve().parent.parent / "examples" / "broken.ttl"
 
@@ -77,7 +82,36 @@ def test_reasoner_detects_inconsistency(parsed):
     assert r.inconsistent_individuals, "expected Alice to be flagged"
 
 
-def test_skos_concepts_warns(parsed):
-    sk = check_skos_concepts(parsed.graph)
-    assert sk.status == Status.WARN
-    assert any(c.display_name == "Biology" for c in sk.internal_concepts)
+def test_non_ontology_terms_warns(parsed):
+    report = check_non_ontology_terms(parsed.graph)
+    assert report.status == Status.WARN
+    flagged = {t.display_name for t in report.terms}
+    # A SKOS concept and named individuals defined in the ontology's own namespace.
+    assert "Biology" in flagged
+    assert "alice" in flagged
+    assert "bob" in flagged
+
+
+def test_term_inventory_flags_naming(parsed):
+    inv = check_term_inventory(parsed.graph)
+    assert inv.status == Status.FAIL
+    flagged = {e.display_name for e in inv.naming_issues}
+    assert "badFormat" in flagged
+    assert "HasOwner" in flagged
+
+
+def test_domains_ranges_has_problems(parsed):
+    dr = check_domains_ranges(parsed.graph)
+    assert dr.status == Status.FAIL
+    flagged = {c.display_name for c in dr.issues}
+    assert "worksFor" in flagged
+    assert "hasLabelText" in flagged
+    assert "relatedTo" in flagged
+
+
+def test_datatypes_flags_unrecognized(parsed):
+    dt = check_datatypes(parsed.graph)
+    assert dt.status == Status.FAIL
+    flagged = {u.display_name for u in dt.unrecognized}
+    assert "flaot" in flagged
+    assert "stirng" in flagged

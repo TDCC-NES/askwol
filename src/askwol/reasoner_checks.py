@@ -54,11 +54,10 @@ def _namespace_of(uri: str) -> str:
 
 
 def _is_internal(uri: str, ontology_namespaces: set[str]) -> bool:
-    if any(uri.startswith(ns) for ns in EXTERNAL_NAMESPACES):
-        return False
     if ontology_namespaces:
+        # Own namespace wins even when it is a well-known vocabulary.
         return any(uri.startswith(ns) for ns in ontology_namespaces)
-    return True
+    return not any(uri.startswith(ns) for ns in EXTERNAL_NAMESPACES)
 
 
 def _ontology_namespaces(graph: Graph) -> set[str]:
