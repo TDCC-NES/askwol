@@ -57,6 +57,39 @@ def test_external_terms_are_not_flagged():
     assert report.status == Status.OK
 
 
+def test_version_iri_is_not_flagged():
+    # The ontology IRI is a slash IRI, so its parent path is the host root.
+    # The own namespace must instead come from where terms are declared
+    # (dataset#), so the versionIRI document under /ontologies/ is not flagged.
+    g = Graph()
+    onto = URIRef("https://lod-4tu.tudelft.nl/dataset")
+    dataset = URIRef("https://lod-4tu.tudelft.nl/dataset#Dataset")
+    g.add((onto, RDF.type, OWL.Ontology))
+    g.add((onto, OWL.versionIRI, URIRef("https://lod-4tu.tudelft.nl/ontologies/sample.ttl")))
+    g.add((dataset, RDF.type, OWL.Class))
+
+    report = check_internal_terms(g)
+
+    assert all("sample.ttl" not in i.term for i in report.undefined)
+    assert report.status == Status.OK
+
+
+def test_host_root_is_not_treated_as_own_namespace():
+    # A sibling slash IRI under the same host (but a different path) must not be
+    # flagged just because it shares the host with the ontology IRI.
+    g = Graph()
+    onto = URIRef("https://lod-4tu.tudelft.nl/dataset")
+    dataset = URIRef("https://lod-4tu.tudelft.nl/dataset#Dataset")
+    g.add((onto, RDF.type, OWL.Ontology))
+    g.add((dataset, RDF.type, OWL.Class))
+    g.add((dataset, RDFS.seeAlso, URIRef("https://lod-4tu.tudelft.nl/other/Thing")))
+
+    report = check_internal_terms(g)
+
+    assert all("other/Thing" not in i.term for i in report.undefined)
+    assert report.status == Status.OK
+
+
 def test_skips_without_ontology_declaration():
     g = Graph()
     g.add((EX["Person"], RDF.type, OWL.Class))
