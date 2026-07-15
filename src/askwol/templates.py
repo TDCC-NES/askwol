@@ -121,6 +121,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
         <button type="button" class="chip" data-url="https://www.w3.org/2006/time">Time</button>
         <button type="button" class="chip" data-url="https://opengeospatial.github.io/ogc-geosparql/geosparql11/geo.ttl">GeoSPARQL</button>
         <button type="button" class="chip" data-url="https://www.w3.org/TR/owl-guide/wine.rdf">Wine</button>
+        <button type="button" class="chip" data-url="https://lod-4tu.tudelft.nl/ontologies/sample.ttl">sample ontology</button>
       </div>
     </div>
 
@@ -869,6 +870,38 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <code>askwol check my-ontology.ttl</code></div>
 """,
     },
+    {
+        "group": "practice",
+        "anchor": "server-config",
+        "title": "Serve it right: content negotiation",
+        "toc_label": "Server configuration",
+        "body": """\
+  <p>Once published, your ontology&rsquo;s IRI should <em>resolve</em>: a client
+  that dereferences it must get the RDF back. Two server-side settings make
+  that work.</p>
+  <ul>
+    <li><strong>Correct content type.</strong> Serve Turtle as
+    <code>text/turtle</code>, RDF/XML as <code>application/rdf+xml</code>,
+    JSON-LD as <code>application/ld+json</code>. A file served as
+    <code>text/plain</code> or <code>application/octet-stream</code> will not be
+    recognised as RDF.</li>
+    <li><strong>Content negotiation.</strong> Honour the client&rsquo;s
+    <code>Accept</code> header: return RDF to tools that ask for it, and an
+    HTML documentation page to browsers. A common pattern is one term IRI
+    (<code>https://example.org/onto#Term</code>) that redirects
+    (<code>303 See Other</code>) to either the <code>.ttl</code> or an HTML view
+    depending on <code>Accept</code>.</li>
+  </ul>
+  <div class="tip">Keep the <strong>namespace IRI</strong> and the
+  <strong>document URL</strong> consistent: if terms live under
+  <code>https://example.org/onto#</code>, dereferencing
+  <code>https://example.org/onto</code> should return the ontology (directly or
+  via redirect).</div>
+  <div class="warn">Static file servers often default to <code>text/plain</code>
+  for <code>.ttl</code>. Set the MIME type explicitly in your web server or
+  reverse proxy, otherwise namespace resolution (including askwol&rsquo;s) fails.</div>
+""",
+    },
 ]
 
 
@@ -1033,6 +1066,11 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   <p>A practical checklist for building OWL ontologies that are
   interoperable, resolvable, and maintainable. These are the things
   <a href="./">askwol</a> checks, and why they matter.</p>
+
+  <div class="tip">Want a worked example? The
+  <a href="https://lod-4tu.tudelft.nl/ontologies/sample.ttl" target="_blank" rel="noopener">askwol sample ontology</a>
+  applies every convention below and passes all checks. Load it from the
+  <a href="./">home page</a> (the <strong>sample ontology</strong> button) to see a clean report.</div>
 
   <div class="toc">
     <strong>Contents</strong>
