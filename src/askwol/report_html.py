@@ -771,9 +771,10 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 _render_ns_card(ns)
 
         if ok_ns_list:
-            parts.append(f'<h3>Resolved OK ({len(ok_ns_list)})</h3>')
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Resolved OK ({len(ok_ns_list)})</summary>')
             for ns in ok_ns_list:
                 _render_ns_card(ns)
+            parts.append("</details>")
 
     if standard_ok:
         total_std_terms = sum(len(ns.terms) for ns in standard_ok)

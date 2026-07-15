@@ -3,9 +3,29 @@
 from __future__ import annotations
 
 from rdflib import Graph, URIRef
-from rdflib.namespace import OWL, RDF
+from rdflib.namespace import OWL, RDF, RDFS
 
 from askwol.models import InternalTermIssue, InternalTermsReport, Status
+
+# rdf:type values that mark a subject as a term the ontology defines itself.
+# The namespaces of such subjects make up the ontology's "own namespace(s)".
+_DEFINITIONAL_TYPES = {
+    RDFS.Class,
+    OWL.Class,
+    RDF.Property,
+    OWL.ObjectProperty,
+    OWL.DatatypeProperty,
+    OWL.AnnotationProperty,
+    OWL.FunctionalProperty,
+    OWL.InverseFunctionalProperty,
+    OWL.TransitiveProperty,
+    OWL.SymmetricProperty,
+    OWL.AsymmetricProperty,
+    OWL.ReflexiveProperty,
+    OWL.IrreflexiveProperty,
+    RDFS.Datatype,
+    OWL.NamedIndividual,
+}
 
 
 def _namespace_of(uri: str) -> str:
@@ -37,12 +57,30 @@ def check_internal_terms(graph: Graph) -> InternalTermsReport:
         for subject in graph.subjects(RDF.type, OWL.Ontology)
         if isinstance(subject, URIRef)
     }
-    ontology_namespaces = {_namespace_of(iri) for iri in ontology_iris}
+
+    if not ontology_iris:
+        return InternalTermsReport(
+            status=Status.SKIP,
+            message="no owl:Ontology declaration found",
+        )
+
+    # The ontology's own namespace(s) are inferred from where it actually
+    # declares terms (subjects carrying a definitional rdf:type), not from the
+    # ontology IRI's parent path. A slash ontology IRI like
+    # https://host/dataset would otherwise claim the entire host as its
+    # namespace and flag unrelated IRIs such as owl:versionIRI documents.
+    ontology_namespaces = {
+        _namespace_of(str(subject))
+        for subject, _, type_ in graph.triples((None, RDF.type, None))
+        if isinstance(subject, URIRef)
+        and type_ in _DEFINITIONAL_TYPES
+        and str(subject) not in ontology_iris
+    }
 
     if not ontology_namespaces:
         return InternalTermsReport(
             status=Status.SKIP,
-            message="no owl:Ontology declaration found",
+            message="no terms are defined in the ontology's own namespace",
         )
 
     def _in_own_namespace(uri: str) -> bool:
@@ -54,6 +92,14 @@ def check_internal_terms(graph: Graph) -> InternalTermsReport:
         if isinstance(subject, URIRef) and _in_own_namespace(str(subject))
     }
 
+    # owl:versionIRI targets identify the ontology document, not a term that
+    # needs its own definition, so they are excluded from the reference scan.
+    version_iris = {
+        str(obj)
+        for obj in graph.objects(predicate=OWL.versionIRI)
+        if isinstance(obj, URIRef)
+    }
+
     referenced: set[str] = set()
     for _, predicate, obj in graph:
         for term in (predicate, obj):
@@ -61,6 +107,8 @@ def check_internal_terms(graph: Graph) -> InternalTermsReport:
                 uri = str(term)
                 # The ontology IRI itself is not a defined term.
                 if uri in ontology_iris:
+                    continue
+                if uri in version_iris:
                     continue
                 if _in_own_namespace(uri):
                     referenced.add(uri)
