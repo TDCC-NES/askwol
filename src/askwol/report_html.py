@@ -650,7 +650,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 'warn',
                 f'<strong>Mixed</strong>: {iri.hash_count} hash-style and {iri.slash_count} slash-style terms in the same ontology. Pick one and migrate the others.',
             ))
-            parts.append(f'<details open><summary style="cursor:pointer;font-weight:600;">Show examples</summary>')
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show examples</summary>')
             if iri.hash_examples:
                 parts.append(f'<p style="margin:0.5em 0 0.2em;font-weight:600;">Hash style ({iri.hash_count}):</p>')
                 parts.append('<ul style="margin:0.2em 0 0.4em 1.2em;font-size:0.9em;">')
@@ -702,7 +702,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 'warn',
                 f'<strong>{len(sch.conflicts)}</strong> host(s) are referenced under both <code>http://</code> and <code>https://</code> in the same ontology.',
             ))
-            parts.append('<details open><summary style="cursor:pointer;font-weight:600;">Show conflicting hosts</summary>')
+            parts.append('<details><summary style="cursor:pointer;font-weight:600;">Show conflicting hosts</summary>')
             for c in sch.conflicts:
                 parts.append(f'<h3 style="margin:1em 0 0.3em;font-size:1em;"><code>{escape(c.host)}</code></h3>')
                 parts.append(
@@ -832,7 +832,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     failed_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.FAIL]
     skipped_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.SKIP]
     if failed_terms_flat:
-        parts.append(f'<details open><summary style="cursor:pointer;font-weight:600;">Terms not found in their vocabulary ({len(failed_terms_flat)})</summary>')
+        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Terms not found in their vocabulary ({len(failed_terms_flat)})</summary>')
         parts.append('<table><tr><th>Term</th><th>Prefix</th><th>Full IRI</th></tr>')
         for ns, t in failed_terms_flat:
             t_iri = escape(t.term_uri)
@@ -871,7 +871,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<p class="subtitle">Every term you use from your own namespace must also be defined there: it has to appear as the subject of at least one triple, not only as a predicate or object. A term that is referenced but never defined is usually a typo or a forgotten declaration.</p>')
         parts.append(_status_subtitle(i_status, f'{it.defined}/{it.total_referenced} referenced terms defined &middot; {len(it.undefined)} undefined'))
         if it.undefined:
-            parts.append(f'<details open><summary style="cursor:pointer;font-weight:600;">Referenced but never defined ({len(it.undefined)})</summary>')
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Referenced but never defined ({len(it.undefined)})</summary>')
             parts.append('<table><tr><th>Term</th><th>Full IRI</th></tr>')
             for issue in it.undefined:
                 t_iri = escape(issue.term)
@@ -900,7 +900,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         )
         parts.append(_status_subtitle(inv_status, f'{inv.total_terms} internal term{"s" if inv.total_terms != 1 else ""}: {counts_html}'))
         if inv.naming_issues:
-            parts.append(f'<details open><summary style="cursor:pointer;font-weight:600;">Naming convention issues ({len(inv.naming_issues)})</summary>')
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Naming convention issues ({len(inv.naming_issues)})</summary>')
             parts.append('<table><tr><th>Term</th><th>Category</th><th>Issue</th></tr>')
             for e in inv.naming_issues:
                 t_iri = escape(e.term)
@@ -946,7 +946,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             f'({dr.object_properties} object &middot; {dr.datatype_properties} datatype) &middot; '
             f'{dr.with_domain} with a domain &middot; {dr.with_range} with a range'))
         if dr.issues:
-            parts.append(f'<details open><summary style="cursor:pointer;font-weight:600;">Properties to review ({len(dr.issues)})</summary>')
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Properties to review ({len(dr.issues)})</summary>')
             parts.append('<table><tr><th>Property</th><th>Category</th><th>Issue</th></tr>')
             for c in dr.issues:
                 t_iri = escape(c.term)
@@ -986,7 +986,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<p class="subtitle">Datatypes used as property ranges and as literal datatypes should be recognized XSD built-ins (<code>xsd:string</code>, <code>xsd:integer</code>, &hellip;), <code>rdfs:Literal</code>, <code>rdf:langString</code>, or a datatype you declare with <code>rdfs:Datatype</code>. An unrecognized datatype is usually a typo.</p>')
         parts.append(_status_subtitle(dt_status, f'{dt.recognized}/{dt.total_datatypes} recognized &middot; {len(dt.unrecognized)} unrecognized'))
         if dt.unrecognized:
-            parts.append(f'<details open><summary style="cursor:pointer;font-weight:600;">Unrecognized datatypes ({len(dt.unrecognized)})</summary>')
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Unrecognized datatypes ({len(dt.unrecognized)})</summary>')
             parts.append('<table><tr><th>Datatype</th><th>Uses</th><th>Full IRI</th></tr>')
             for u in dt.unrecognized:
                 t_iri = escape(u.datatype)
@@ -1023,7 +1023,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<p class="subtitle">An OWL ontology should define schema: classes, properties, and datatypes. Individuals, <code>skos:Concept</code> instances, and other instance data belong in a separate data resource or concept scheme. A term in the ontology&rsquo;s own namespace that carries a type but no schema type is flagged; external terms and the ontology header are ignored.</p>')
         if sk.terms:
             parts.append(_status_subtitle('warn', f'{len(sk.terms)} non-schema term{"s" if len(sk.terms) != 1 else ""} defined in the ontology&rsquo;s own namespace'))
-            parts.append(f'<details open><summary style="cursor:pointer;font-weight:600;">Terms to move into a separate resource ({len(sk.terms)})</summary>')
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Terms to move into a separate resource ({len(sk.terms)})</summary>')
             parts.append('<table><tr><th>Term</th><th>What it is</th><th>Full IRI</th></tr>')
             for issue in sk.terms:
                 t_iri = escape(issue.term)
@@ -1058,7 +1058,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             parts.append(_guide_link(anchor))
             parts.append(f'<p class="subtitle">Every internally defined class and property should carry an <code>{prop}</code>. Reused external vocabulary terms are ignored. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes for term documentation</a>.</p>')
             parts.append(_status_subtitle(status, f'{present_count}/{docs.total_definitions} have an <code>{prop}</code> &middot; {len(missing)} missing'))
-            parts.append(f'<details{" open" if missing else ""}><summary style="cursor:pointer;font-weight:600;">Show {title.lower()} ({docs.total_definitions})</summary>')
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show {title.lower()} ({docs.total_definitions})</summary>')
             parts.append(f'<table><tr><th>Term</th><th>Type</th><th>{title.rstrip("s")}</th></tr>')
             for check in sorted(docs.checks, key=lambda c: (getattr(c, "has_label" if anchor == "labels" else "has_comment"), c.display_name.lower())):
                 term = escape(check.display_name)
@@ -1106,7 +1106,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append(_guide_link('language-tags'))
         parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) should use language tags consistently across all subjects.</p>')
         parts.append(_status_subtitle('warn', headline or f'{n_issues} consistency issue{"s" if n_issues != 1 else ""}'))
-        parts.append(f'<details open><summary style="cursor:pointer;font-weight:600;">Show details by property ({n_issues})</summary>')
+        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show details by property ({n_issues})</summary>')
 
         # Build a quick lookup from property name to its summary
         prop_summary_map = {ps.property: ps for ps in (lt.property_summaries or [])}

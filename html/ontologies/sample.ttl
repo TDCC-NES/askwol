@@ -1,4 +1,4 @@
-@prefix : <https://w3id.org/example/datasets/> .
+@prefix : <https://lod-4tu.tudelft.nl/dataset#> .
 @prefix dcat: <http://www.w3.org/ns/dcat#> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -6,8 +6,8 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-<https://w3id.org/example/datasets/> rdf:type owl:Ontology ;
-    dcterms:title "Datasets sample ontology"@en ;
+<https://lod-4tu.tudelft.nl/dataset> rdf:type owl:Ontology ;
+    dcterms:title "Dataset sample ontology"@en ;
     dcterms:description "A minimal ontology demonstrating askwol's modeling guidelines on the topic of datasets."@en ;
     dcterms:creator "Ada Lovelace" , "Charles Babbage" ;
     dcterms:publisher <https://example.org/analytical-engine-society> ;
@@ -15,6 +15,7 @@
     dcterms:created "2026-06-14"^^xsd:date ;
     dcterms:modified "2026-06-14"^^xsd:date ;
     owl:versionInfo "1.0.0" ;
+    owl:versionIRI <https://lod-4tu.tudelft.nl/ontologies/sample.ttl> ;
     owl:imports <http://www.w3.org/ns/dcat> .
 
 :Dataset rdf:type owl:Class ;
