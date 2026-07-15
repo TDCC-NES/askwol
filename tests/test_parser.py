@@ -17,10 +17,10 @@ def test_parse_sample_ttl():
 def test_extracts_terms_by_namespace():
     parsed = parse_ontology(FIXTURE_DIR / "sample.ttl")
     # The default namespace holds the ontology's own defined terms.
-    # Find the prefix that maps to https://w3id.org/example/datasets/
+    # Find the prefix that maps to the ontology's own namespace
     test_prefix = None
     for pfx, uri in parsed.namespaces.items():
-        if uri == "https://w3id.org/example/datasets/":
+        if uri == "https://lod-4tu.tudelft.nl/dataset#":
             test_prefix = pfx
             break
     assert test_prefix is not None

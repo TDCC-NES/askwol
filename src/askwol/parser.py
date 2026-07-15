@@ -6,7 +6,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from rdflib import Graph, URIRef, OWL
+from rdflib import Graph, URIRef, OWL, RDF
 
 
 @dataclass
@@ -54,6 +54,20 @@ def parse_ontology(source: str | Path) -> ParsedOntology:
     for _, _, imported in g.triples((None, OWL.imports, None)):
         result.imports.append(str(imported))
 
+    # IRIs that identify the ontology document itself - its own IRI, its
+    # version IRIs, prior versions, and import targets - are not vocabulary
+    # terms. rdflib would otherwise split a slash IRI like <http://ex.org/ont>
+    # into namespace <http://ex.org/> plus a phantom local name "ont",
+    # surfacing a bogus namespace and term in the report.
+    header_iris: set[str] = {
+        str(s) for s in g.subjects(RDF.type, OWL.Ontology) if isinstance(s, URIRef)
+    }
+    for pred in (OWL.versionIRI, OWL.priorVersion, OWL.imports,
+                 OWL.backwardCompatibleWith, OWL.incompatibleWith):
+        for obj in g.objects(None, pred):
+            if isinstance(obj, URIRef):
+                header_iris.add(str(obj))
+
     # Walk every triple and bucket each URI by its namespace.
     # Only namespaces that are actually *used* in triples get included.
     # Terms are only collected from *subject* positions  -  these are the
@@ -65,13 +79,15 @@ def parse_ontology(source: str | Path) -> ParsedOntology:
         for node in (s, p, o):
             if isinstance(node, URIRef):
                 uri = str(node)
+                if uri in header_iris:
+                    continue
                 if uri not in seen_ns:
                     seen_ns.add(uri)
                     _bucket_uri(uri, result, all_prefixes)
         # Only collect subject URIs as terms to validate
         if isinstance(s, URIRef):
             s_uri = str(s)
-            if s_uri not in seen_terms:
+            if s_uri not in header_iris and s_uri not in seen_terms:
                 seen_terms.add(s_uri)
                 _add_term(s_uri, result, all_prefixes)
 
