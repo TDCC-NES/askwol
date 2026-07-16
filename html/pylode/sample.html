@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Datasets sample ontology</title>
+    <title>Dataset sample ontology</title>
     <style>
         #pylode {
             position: fixed;
@@ -297,16 +297,16 @@
     <script id="schema.org" type="application/ld+json">
 [
   {
-    "@id": "https://w3id.org/example/datasets/Ontology",
+    "@id": "https://lod-4tu.tudelft.nl/dataset",
     "@type": [
       "https://schema.org/DefinedTermSet"
     ],
     "https://schema.org/creator": [
       {
-        "@value": "Gabriela Kuhn"
+        "@value": "Ada Lovelace"
       },
       {
-        "@value": "Kairo de Araujo"
+        "@value": "Charles Babbage"
       }
     ],
     "https://schema.org/dateCreated": [
@@ -324,7 +324,7 @@
     "https://schema.org/description": [
       {
         "@language": "en",
-        "@value": "A minimal ontology demonstrating modeling guidelines on the topic of datasets."
+        "@value": "A minimal ontology demonstrating askwol's modeling guidelines on the topic of datasets."
       }
     ],
     "https://schema.org/license": [
@@ -335,12 +335,12 @@
     "https://schema.org/name": [
       {
         "@language": "en",
-        "@value": "Datasets sample ontology"
+        "@value": "Dataset sample ontology"
       }
     ],
     "https://schema.org/publisher": [
       {
-        "@id": "https://data.4tu.nl/"
+        "@id": "https://example.org/analytical-engine-society"
       }
     ]
   }
@@ -350,7 +350,7 @@
   <body>
     <div id="content">
       <div class="section" id="metadata">
-        <h1>Datasets sample ontology</h1>
+        <h1>Dataset sample ontology</h1>
         <h2>Metadata</h2>
         <dl>
           <div>
@@ -358,20 +358,20 @@
               <strong>IRI</strong>
             </dt>
             <dd>
-              <code>https://w3id.org/example/datasets/Ontology</code>
+              <code>https://lod-4tu.tudelft.nl/dataset</code>
             </dd>
           </div>
           <div>
             <dt>
               <a class="hover_property" href="http://purl.org/dc/terms/title" title="A name given to the resource. Defined in DCMI Metadata Terms">Title</a>
             </dt>
-            <dd><p>Datasets sample ontology</p></dd>
+            <dd><p>Dataset sample ontology</p></dd>
           </div>
           <div>
             <dt>
               <a class="hover_property" href="http://purl.org/dc/terms/publisher" title="An entity responsible for making the resource available. Defined in DCMI Metadata Terms">Publisher</a>
             </dt>
-            <dd>https://data.4tu.nl/</dd>
+            <dd>https://example.org/analytical-engine-society</dd>
           </div>
           <div>
             <dt>
@@ -379,8 +379,8 @@
             </dt>
             <dd>
               <ul class="pylodelitlist">
-                <li><p>Gabriela Kuhn</p></li>
-                <li><p>Kairo de Araujo</p></li>
+                <li><p>Ada Lovelace</p></li>
+                <li><p>Charles Babbage</p></li>
               </ul>
             </dd>
           </div>
@@ -406,6 +406,14 @@
           </div>
           <div>
             <dt>
+              <a class="hover_property" href="http://www.w3.org/2002/07/owl#versionIRI" title="The property that identifies the version IRI of an ontology. Defined in The OWL 2 Schema vocabulary (OWL 2)">Version Iri</a>
+            </dt>
+            <dd>
+              <a href="https://lod-4tu.tudelft.nl/ontologies/sample.ttl">https://lod-4tu.tudelft.nl/ontologies/sample.ttl</a>
+            </dd>
+          </div>
+          <div>
+            <dt>
               <a class="hover_property" href="http://www.w3.org/2002/07/owl#versionInfo" title="The annotation property that provides version information for an ontology or another OWL construct. Defined in The OWL 2 Schema vocabulary (OWL 2)">Version Info</a>
             </dt>
             <dd><p>1.0.0</p></dd>
@@ -414,7 +422,15 @@
             <dt>
               <a class="hover_property" href="http://purl.org/dc/terms/description" title="An account of the resource. Defined in DCMI Metadata Terms">Description</a>
             </dt>
-            <dd><p>A minimal ontology demonstrating modeling guidelines on the topic of datasets.</p></dd>
+            <dd><p>A minimal ontology demonstrating askwol's modeling guidelines on the topic of datasets.</p></dd>
+          </div>
+          <div>
+            <dt>
+              <a class="hover_property" href="http://www.w3.org/2002/07/owl#imports" title="The property that is used for importing other ontologies into a given ontology. Defined in The OWL 2 Schema vocabulary (OWL 2)">Imports</a>
+            </dt>
+            <dd>
+              <a href="http://www.w3.org/ns/dcat">http://www.w3.org/ns/dcat</a>
+            </dd>
           </div>
         </dl>
       </div>
@@ -437,7 +453,7 @@
             <tr>
               <th>IRI</th>
               <td>
-                <code>https://w3id.org/example/datasets/Dataset</code>
+                <code>https://lod-4tu.tudelft.nl/dataset#Dataset</code>
               </td>
             </tr>
             <tr>
@@ -445,6 +461,14 @@
                 <a class="hover_property" href="http://purl.org/dc/terms/description" title="An account of the resource. Defined in DCMI Metadata Terms">Description</a>
               </th>
               <td><p>A collection of related data made available for use or analysis.</p></td>
+            </tr>
+            <tr>
+              <th>
+                <a class="hover_property" href="http://www.w3.org/2000/01/rdf-schema#subClassOf" title="The subject is a subclass of a class. Defined in The RDF Schema vocabulary (RDFS)">Sub Class Of</a>
+              </th>
+              <td>
+                <a href="http://www.w3.org/ns/dcat#Dataset">dcat:Dataset</a>
+              </td>
             </tr>
             <tr>
               <th>
@@ -500,7 +524,7 @@
             <tr>
               <th>IRI</th>
               <td>
-                <code>https://w3id.org/example/datasets/supersedes</code>
+                <code>https://lod-4tu.tudelft.nl/dataset#supersedes</code>
               </td>
             </tr>
             <tr>
@@ -508,6 +532,17 @@
                 <a class="hover_property" href="http://purl.org/dc/terms/description" title="An account of the resource. Defined in DCMI Metadata Terms">Description</a>
               </th>
               <td><p>Relates a dataset to an earlier dataset that it replaces.</p></td>
+            </tr>
+            <tr>
+              <th>
+                <a class="hover_property" href="http://www.w3.org/2000/01/rdf-schema#subPropertyOf" title="The subject is a subproperty of a property. Defined in The RDF Schema vocabulary (RDFS)">Sub Property Of</a>
+              </th>
+              <td>
+                <span>
+                  <a href="http://purl.org/dc/terms/replaces">Replaces</a>
+                  <sup class="sup-p" title="RDF Property">p</sup>
+                </span>
+              </td>
             </tr>
             <tr>
               <th>
@@ -544,7 +579,7 @@
             <tr>
               <th>IRI</th>
               <td>
-                <code>https://w3id.org/example/datasets/sizeInBytes</code>
+                <code>https://lod-4tu.tudelft.nl/dataset#sizeInBytes</code>
               </td>
             </tr>
             <tr>
@@ -552,6 +587,14 @@
                 <a class="hover_property" href="http://purl.org/dc/terms/description" title="An account of the resource. Defined in DCMI Metadata Terms">Description</a>
               </th>
               <td><p>The total size of the dataset, expressed in bytes.</p></td>
+            </tr>
+            <tr>
+              <th>
+                <a class="hover_property" href="http://www.w3.org/2000/01/rdf-schema#subPropertyOf" title="The subject is a subproperty of a property. Defined in The RDF Schema vocabulary (RDFS)">Sub Property Of</a>
+              </th>
+              <td>
+                <a href="http://www.w3.org/ns/dcat#byteSize">dcat:byteSize</a>
+              </td>
             </tr>
             <tr>
               <th>
@@ -569,7 +612,7 @@
                 <a class="hover_property" href="http://www.w3.org/2000/01/rdf-schema#range" title="A range of the subject property. Defined in The RDF Schema vocabulary (RDFS)">Range</a>
               </th>
               <td>
-                <a href="#nonNegativeInteger">xsd:nonNegativeInteger</a>
+                <a href="http://www.w3.org/2001/XMLSchema#nonNegativeInteger">xsd:nonNegativeInteger</a>
               </td>
             </tr>
           </table>
@@ -580,11 +623,19 @@
         <dl>
           <dt id=":">:</dt>
           <dd>
-            <code>https://w3id.org/example/datasets/</code>
+            <code>https://lod-4tu.tudelft.nl/dataset#</code>
+          </dd>
+          <dt id="dcat">dcat</dt>
+          <dd>
+            <code>http://www.w3.org/ns/dcat#</code>
           </dd>
           <dt id="dcterms">dcterms</dt>
           <dd>
             <code>http://purl.org/dc/terms/</code>
+          </dd>
+          <dt id="ns1">ns1</dt>
+          <dd>
+            <code>https://lod-4tu.tudelft.nl/</code>
           </dd>
           <dt id="owl">owl</dt>
           <dd>
@@ -635,7 +686,7 @@
           <span id="y">y</span>
           <span>LODE</span>
         </a>
-        <a href="https://github.com/rdflib/pyLODE/release/3.5.0" id="version">3.5.0</a>
+        <a href="https://github.com/rdflib/pyLODE/release/3.5.1" id="version">3.5.1</a>
         <span> with the </span>
         <a href="https://linked.data.gov.au/def/ontpub" id="profile">OntPub</a>
         <span>profile</span>
@@ -700,7 +751,13 @@
               <a href="#"></a>
             </li>
             <li>
+              <a href="#dcat">dcat</a>
+            </li>
+            <li>
               <a href="#dcterms">dcterms</a>
+            </li>
+            <li>
+              <a href="#ns1">ns1</a>
             </li>
             <li>
               <a href="#owl">owl</a>
