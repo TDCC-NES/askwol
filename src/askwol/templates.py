@@ -902,6 +902,38 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   reverse proxy, otherwise namespace resolution (including askwol&rsquo;s) fails.</div>
 """,
     },
+    {
+        "group": "practice",
+        "anchor": "documentation",
+        "title": "Generate human-readable documentation",
+        "toc_label": "Documentation",
+        "body": """\
+  <p>Good <code>rdfs:label</code> and <code>rdfs:comment</code> annotations pay
+  off when you turn them into a browsable HTML page. A documentation generator
+  reads your Turtle file and produces a page humans can read, ready to serve
+  alongside the RDF via <a href="#server-config">content negotiation</a>.</p>
+  <p><strong><a href="https://github.com/RDFLib/pyLODE" target="_blank" rel="noopener">pyLODE</a></strong>
+  is our recommended starting point: lightweight, fast and simple. It takes a
+  Turtle file and returns a single HTML page
+  (<a href="https://lod-4tu.tudelft.nl/pylode/sample.html" target="_blank" rel="noopener">example output</a>).</p>
+  <pre>python3 -m venv .venv &amp;&amp; source .venv/bin/activate
+python -m pip install pylode
+pylode my-ontology.ttl -o my-ontology.html</pre>
+  <p><strong><a href="https://github.com/dgarijo/Widoco" target="_blank" rel="noopener">WIDOCO</a></strong>
+  is a Java-based alternative for publication-style documentation, with metadata
+  extraction and an optional WebVOWL visualisation.</p>
+  <pre>java -jar widoco.jar -ontFile my-ontology.ttl -outFolder docs \\
+    -getOntologyMetadata -rewriteAll -uniteSections -webVowl -htaccess</pre>
+  <div class="tip">WIDOCO&rsquo;s WebVOWL view needs a web server to load; open the
+  page over HTTP (<code>python3 -m http.server 8080</code>) rather than from the
+  file system.</div>
+  <p>For W3C specification-style output, look at
+  <a href="https://respec.org/" target="_blank" rel="noopener">ReSpec</a> and
+  <a href="https://github.com/floresbakker/OntoReSpec" target="_blank" rel="noopener">OntoReSpec</a>,
+  which render any RDF ontology or data model as a ReSpec document
+  (<a href="https://floresbakker.github.io/htmlvoc/" target="_blank" rel="noopener">example</a>).</p>
+""",
+    },
 ]
 
 
