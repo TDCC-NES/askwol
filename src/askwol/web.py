@@ -44,7 +44,7 @@ app = FastAPI(
         "definitions (existence in remote vocabularies), internal term "
         "definitions (own-namespace terms are defined), label and comment "
         "documentation (SHACL), ontology metadata (SHACL), language-tag "
-        "consistency, unused prefix declarations, owl:imports completeness, "
+        "consistency, unused prefix declarations, owl:imports resolution, "
         "IRI strategy consistency (hash vs slash), IRI scheme consistency "
         "(http vs https), and lightweight OWL RL reasoner checks (ontology "
         "consistency, inconsistent individuals, and unsatisfiable "
@@ -198,10 +198,11 @@ def _render_stats_page(data: dict[str, object]) -> str:
                         f"<td>{visitor_cell}</td>"
                         f"<td>{escape(str(row['kind']))}</td>"
                         f"<td>{status_cell}</td>"
+                        f"<td>{escape(_format_duration(row.get('duration_ms')))}</td>"
                         f"<td class=\"source\">{escape(str(row['source']) if row['source'] is not None else '')}</td>"
                         "</tr>"
                 )
-        all_html = "".join(all_rows) or '<tr><td colspan="5" class="empty-cell">No database entries yet.</td></tr>'
+        all_html = "".join(all_rows) or '<tr><td colspan="6" class="empty-cell">No database entries yet.</td></tr>'
 
         def _page_href(target: int) -> str:
                 query = f"?page={target}"
@@ -324,7 +325,7 @@ def _render_stats_page(data: dict[str, object]) -> str:
                 <p class="lede">The complete history stored in the usage database, newest first. Hover a status code to see what it means. The visitor column is a salted hash of the IP address; the raw IP is never stored.</p>
                 <div class="table-wrap">
                     <table>
-                        <thead><tr><th>Timestamp</th><th>Visitor</th><th>Kind</th><th>Status</th><th>Source</th></tr></thead>
+                        <thead><tr><th>Timestamp</th><th>Visitor</th><th>Kind</th><th>Status</th><th>Duration</th><th>Source</th></tr></thead>
                         <tbody>{all_html}</tbody>
                     </table>
                 </div>
@@ -542,10 +543,8 @@ async def _run_validation(tmp_path: Path, source_name: str) -> HTMLResponse:
     # Datatypes used across the ontology
     report.datatypes = check_datatypes(parsed.graph)
 
-    # Explicit owl:imports for external vocabularies actually used
-    report.imports = check_imports(
-        parsed.graph, parsed.namespaces, parsed.terms_by_namespace,
-    )
+    # Declared owl:imports targets must actually resolve
+    report.imports = await check_imports(parsed.graph, cache)
 
     # IRI strategy (hash vs slash) for the ontology's own terms
     report.iri_strategy = check_iri_strategy(parsed.graph)
@@ -607,7 +606,7 @@ async def validate_api(
     - **Unused prefixes** - prefixes declared with `@prefix` but never used in a triple.
     - **Language-tag consistency** - labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) should use the same language tags across subjects.
     - **Ontology metadata** - SHACL check on the ontology header (title, creator, license, version, ...).
-    - **Imports** - external vocabularies actually used in the ontology should be declared with `owl:imports`.
+    - **Imports** - every `owl:imports` target declared in the ontology header is fetched over HTTP and parsed as RDF.
     - **IRI strategy** - the ontology's own defined terms should consistently use either hash (`#Term`) or slash (`/Term`), not mix both.
     - **IRI scheme** - each host should be referenced under a single URI scheme (either `http://` or `https://`), never both.
     - **Reasoner checks** - lightweight OWL RL reasoning on the current ontology only (`owl:imports` are not followed), with three facets:
@@ -663,9 +662,7 @@ async def validate_api(
     report.term_inventory = check_term_inventory(parsed.graph)
     report.domains_ranges = check_domains_ranges(parsed.graph)
     report.datatypes = check_datatypes(parsed.graph)
-    report.imports = check_imports(
-        parsed.graph, parsed.namespaces, parsed.terms_by_namespace,
-    )
+    report.imports = await check_imports(parsed.graph, cache)
     report.iri_strategy = check_iri_strategy(parsed.graph)
     report.iri_scheme = check_iri_scheme(parsed.graph, parsed.namespaces)
     report.reasoner = run_reasoner_checks(parsed.graph)

@@ -415,13 +415,11 @@ def _overview_line(report: ValidationReport, anchor: str) -> tuple[str, str] | N
         imp = report.imports
         if not imp:
             return None
-        if imp.status == S.SKIP:
-            return "info", "skipped (no owl:Ontology)"
-        if imp.missing:
-            return "warn", f"{len(imp.missing)} used but not imported"
+        if imp.broken:
+            return "fail", f"{len(imp.broken)} of {len(imp.checks)} do not resolve"
         if not imp.checks:
-            return "ok", "no external vocabularies used"
-        return "ok", f"{len(imp.checks)} declared"
+            return "ok", "no owl:imports declared"
+        return "ok", f"{len(imp.checks)} declared, all resolve"
     if anchor == "iri-strategy":
         iri = report.iri_strategy
         if not iri:

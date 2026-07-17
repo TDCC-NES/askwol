@@ -322,25 +322,21 @@ class DatatypeReport(BaseModel):
 
 
 class ImportsCheck(BaseModel):
-    """One namespace used by the ontology, and whether it is imported."""
+    """Resolution result for one declared owl:imports target."""
 
-    prefix: str
-    namespace: str
-    status: Status
-    message: str | None = None
+    iri: str
+    resolution: NamespaceCheck
 
 
 class ImportsReport(BaseModel):
-    """Summary of owl:imports completeness for used external vocabularies."""
+    """Whether the ontology's declared owl:imports targets actually resolve."""
 
-    ontology_iri: str | None = None
-    declared: list[str] = Field(default_factory=list)
     checks: list[ImportsCheck] = Field(default_factory=list)
     status: Status = Status.OK
 
     @property
-    def missing(self) -> list[ImportsCheck]:
-        return [c for c in self.checks if c.status == Status.WARN]
+    def broken(self) -> list[ImportsCheck]:
+        return [c for c in self.checks if c.resolution.status == Status.FAIL]
 
     @property
     def total(self) -> int:

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from askwol.parser import parse_ontology
 
-FIXTURE_DIR = Path(__file__).resolve().parent.parent / "examples"
+FIXTURE_DIR = Path(__file__).resolve().parent.parent / "html" / "ontologies"
 
 
 def test_parse_sample_ttl():

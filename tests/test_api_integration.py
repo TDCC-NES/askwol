@@ -1,7 +1,7 @@
 """End-to-end integration tests for the FastAPI app.
 
 These tests drive the app through Starlette's `TestClient` and confirm that
-every check is wired through `/api/validate` for the bundled `examples/sample.ttl`,
+every check is wired through `/api/validate` for the bundled `html/ontologies/sample.ttl`,
 and that the simple HTML routes work without network access.
 
 Namespace resolution is stubbed out by pre-populating the global ontology
@@ -17,7 +17,7 @@ from rdflib import Graph
 from askwol import web
 from askwol.cache import OntologyCache
 
-SAMPLE = Path(__file__).resolve().parent.parent / "examples" / "sample.ttl"
+SAMPLE = Path(__file__).resolve().parent.parent / "html" / "ontologies" / "sample.ttl"
 
 
 @pytest.fixture

@@ -11,6 +11,7 @@ from rich.console import Console
 
 from askwol.cache import OntologyCache
 from askwol.definition_docs import check_definition_documentation
+from askwol.imports_check import check_imports
 from askwol.internal_terms import check_internal_terms
 from askwol.lang_tags import check_lang_tags
 from askwol.metadata_validator import validate_ontology_metadata
@@ -78,6 +79,9 @@ async def _run_check(
 
     # Reasoner checks (current ontology only; imports are not followed)
     report.reasoner = run_reasoner_checks(parsed.graph)
+
+    # Declared owl:imports targets must actually resolve
+    report.imports = await check_imports(parsed.graph, cache, timeout=timeout)
 
     # Only resolve and report namespaces that have subject-position terms
     active_ns = {pfx: uri for pfx, uri in parsed.namespaces.items()
