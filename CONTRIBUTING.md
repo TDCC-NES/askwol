@@ -18,6 +18,7 @@ pytest -q
 - Add or update tests for behaviour changes - `pytest` must pass.
 - Keep public API and CLI output stable where possible; mention breaking changes in the PR description.
 - Match the existing style (no formatter enforced yet; just keep diffs minimal).
+- If you touch `report_html.py` or `templates.py`, keep the `CHECKS` registry and `GUIDE_SECTIONS` listing the same anchors, in the same order - `report_html.py` asserts this at import time and the test suite catches it.
 
 ## Bug reports
 

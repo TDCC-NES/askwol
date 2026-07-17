@@ -8,7 +8,7 @@
 [![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 
 <!-- Once deployed, add a live link here:
-👉 **Try it live:** https://askwol.example.com
+👉 **Try it live:** https://lod-4tu.tudelft.nl/askwol/
 -->
 
 <p align="center">
@@ -84,18 +84,9 @@ source .venv/bin/activate
 pip install -e ".[dev]"   # Python 3.10+
 ```
 
-### Start the web server
-
-```bash
-PYTHONPATH=src .venv/bin/uvicorn askwol.web:app --reload --port 8000
-```
-
-Then open:
-
-- http://127.0.0.1:8000/ for the upload form
-- http://127.0.0.1:8000/docs for the API docs
-
 ## Usage
+
+### CLI
 
 ```bash
 # Rich terminal output
@@ -118,7 +109,7 @@ Exit codes: `0` all pass, `1` issues found.
 PYTHONPATH=src .venv/bin/uvicorn askwol.web:app --reload --port 8000
 ```
 
-Endpoints: `GET /` (upload form), `POST /validate` (HTML report), `POST /api/validate` (JSON), `GET /guide` (publishing guide), `GET /health`, `GET /docs` (Swagger / OpenAPI).
+Open http://127.0.0.1:8000/. Endpoints: `GET /` (upload form), `POST /validate` (HTML report), `POST /api/validate` (JSON), `GET /guide` (publishing guide), `GET /health`, `GET /docs` (Swagger / OpenAPI).
 
 ## Deployment (Docker)
 
@@ -263,50 +254,6 @@ for prefix, uri in parsed.namespaces.items():
 ## Supported formats
 
 Turtle (`.ttl`), RDF/XML (`.rdf`, `.owl`), JSON-LD (`.jsonld`), N-Triples (`.nt`), N3 (`.n3`)
-
-## Project structure
-
-```
-src/askwol/
-├── cli.py                # Click CLI
-├── web.py                # FastAPI app, routes, orchestration
-├── parser.py             # rdflib ontology parsing
-├── resolver.py           # async HTTP namespace resolution
-├── term_validator.py     # remote term existence checks
-├── deprecation.py        # shared deprecated-term detection (owl:deprecated, owl:DeprecatedClass/Property, vs:term_status)
-├── metadata_validator.py # SHACL-based ontology metadata checks
-├── definition_docs.py    # SHACL-based label/comment checks
-├── shacl_runner.py        # shared pyshacl runner used by the SHACL-based checks
-├── imports_check.py      # owl:imports resolution check
-├── iri_strategy.py       # hash vs slash IRI consistency
-├── iri_scheme.py         # http vs https per-host consistency
-├── term_inventory.py     # term categories; SHACL-based naming/domains/ranges; datatype inventory
-├── internal_terms.py     # SHACL-based referenced-but-undefined term check
-├── non_ontology_terms.py # SHACL-based whitelist of schema constructs
-├── lang_tags.py          # language-tag consistency checks
-├── reasoner_checks.py    # OWL RL reasoning sanity checks
-├── mermaid_diagram.py    # interactive class diagram
-├── cache.py              # in-memory ontology cache
-├── models.py             # Pydantic models
-├── report.py             # CLI / markdown output
-├── report_html.py        # HTML report rendering (CHECKS registry)
-├── templates.py          # publishing guide content (GUIDE_SECTIONS)
-├── usage.py              # privacy-friendly request tracking (SQLite)
-└── shapes/               # SHACL shapes, run through pyshacl via shacl_runner.py
-
-tests/
-├── test_*.py             # unit + integration tests
-
-html/ontologies/
-├── sample.ttl            # clean ontology - every check passes
-└── broken.ttl            # deliberately broken - every check fires
-```
-
-The HTML report sections and the publishing guide are kept in lockstep by an
-import-time `assert` in `report_html.py`: the `CHECKS` registry and the
-`group="check"` entries in `GUIDE_SECTIONS` must list the same anchors (and the
-same cluster categories) in the same order, otherwise the module fails to load
-(and the test suite catches it).
 
 ## Tests
 

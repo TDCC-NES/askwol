@@ -170,10 +170,10 @@ UPLOAD_HTML = """<!DOCTYPE html>
     SHACL check on the ontology header. Title, description, creator, license
     IRI, and version are required; created/modified dates and publisher are
     recommended.</li>
-    <li><span class="num">1.2</span> <strong>Imports</strong>: external
-    vocabularies actually used in your ontology must be declared with
-    <code>owl:imports</code>. Core W3C vocabularies (RDF, RDFS, OWL, XSD) are
-    excluded.</li>
+    <li><span class="num">1.2</span> <strong>Imports</strong>: every
+    <code>owl:imports</code> target declared in the ontology header is
+    fetched over HTTP and parsed as RDF, the same way a reasoner would
+    follow it.</li>
     <li><span class="num">1.3</span> <strong>IRI strategy</strong>: your
     ontology&rsquo;s own defined terms should consistently use either hash
     (<code>#Term</code>) or slash (<code>/Term</code>), not both.</li>
@@ -193,8 +193,9 @@ UPLOAD_HTML = """<!DOCTYPE html>
     <code>@prefix</code> declarations that are never used in any triple.</li>
     <li><span class="num">2.3</span> <strong>External term definitions</strong>:
     verifies that terms your ontology reuses from an external vocabulary are
-    actually defined there. Catches typos like <code>owl:MadeUpClass</code> and
-    made-up reuse of established prefixes.</li>
+    actually defined there. Catches typos like <code>owl:MadeUpClass</code>,
+    made-up reuse of established prefixes, and reused terms the source
+    vocabulary has marked deprecated.</li>
   </ul>
 
   <h3 class="cluster-h">3. Term structure</h3>
@@ -223,10 +224,12 @@ UPLOAD_HTML = """<!DOCTYPE html>
   <ul class="checks-list">
     <li><span class="num">4.1</span> <strong>Labels</strong>: a SHACL check that
     every internally defined class and property carries an
-    <code>rdfs:label</code>. Reused external terms are ignored.</li>
+    <code>rdfs:label</code>. Reused external terms and deprecated terms are
+    ignored.</li>
     <li><span class="num">4.2</span> <strong>Comments</strong>: a SHACL check
     that every internally defined class and property carries an
-    <code>rdfs:comment</code>. Reused external terms are ignored.</li>
+    <code>rdfs:comment</code>. Reused external terms and deprecated terms are
+    ignored.</li>
     <li><span class="num">4.3</span> <strong>Language tag consistency</strong>:
     language-tagged properties like <code>rdfs:label</code>,
     <code>rdfs:comment</code>, <code>skos:prefLabel</code>, and
@@ -372,25 +375,21 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   to hold &ldquo;a string that describes the IRI&rsquo;s version,&rdquo; with no
   format required.</p>
   <p><span class="tag practice">TDCC guideline</span> This guide recommends
-  filling <code>owl:versionInfo</code> with a
   <a href="https://semver.org/" target="_blank" rel="noopener">Semantic Versioning</a>
-  number (<code>MAJOR.MINOR.PATCH</code>) as a practical convention, not an
-  OWL requirement:</p>
+  (<code>MAJOR.MINOR.PATCH</code>) as a practical convention, not an OWL
+  requirement: bump <strong>major</strong> when you remove or redefine a
+  term, <strong>minor</strong> when you add terms without breaking existing
+  ones, and <strong>patch</strong> for fixes such as corrected labels or
+  comments.</p>
   <pre>&lt;http://example.org/my-ontology&gt; a owl:Ontology ;
     owl:versionIRI &lt;http://example.org/my-ontology/2.0.0&gt; ;
     owl:versionInfo "2.0.0" .</pre>
-  <p>Bump <strong>major</strong> when you remove or redefine a term,
-  <strong>minor</strong> when you add terms without breaking existing ones, and
-  <strong>patch</strong> for fixes such as corrected labels or comments. This
-  lets consumers pin to a specific version and tell at a glance whether
-  upgrading is safe.</p>
   <p>Some ontologies version by <strong>date</strong> instead, especially W3C
   specifications on a fixed release schedule: PROV-O&rsquo;s
   <code>owl:versionIRI</code> is
-  <code>http://www.w3.org/TR/2013/REC-prov-o-20130430/</code>. A date is
-  simpler than semver but only says <em>when</em> something changed, not
-  whether it is safe to upgrade. Pick one scheme per ontology and stick to
-  it.</p>
+  <code>http://www.w3.org/ns/prov-o-20130430</code>. A date is simpler than
+  semver but only says <em>when</em> something changed, not whether it is
+  safe to upgrade. Pick one scheme per ontology and stick to it.</p>
 """,
     },
     {
@@ -450,87 +449,41 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
 
   <h3>Hash vs. slash, in plain terms</h3>
   <p><span class="tag practice">TDCC guideline</span> Neither RDF nor OWL
-  requires hash or slash IRIs; both patterns are valid (the W3C
-  <a href="https://www.w3.org/TR/cooluris/">&ldquo;Cool URIs for the
-  Semantic Web&rdquo;</a> note, a non-normative Interest Group Note,
-  describes both). They differ in how the identifier behaves over HTTP and
-  how the vocabulary scales.</p>
-
-  <p><strong>Hash URIs</strong> &middot; <code>http://example.org/ont<strong>#</strong>Person</code></p>
+  requires hash or slash IRIs; both are valid (the W3C
+  <a href="https://www.w3.org/TR/cooluris/" target="_blank" rel="noopener">&ldquo;Cool URIs for the
+  Semantic Web&rdquo;</a> Interest Group Note describes both). They differ
+  in how the identifier behaves over HTTP and how the vocabulary scales.</p>
   <ul>
-    <li>The fragment (<code>#Person</code>) is <strong>stripped before the HTTP
-    request</strong> is sent. The server never sees it; it returns the
-    entire document at <code>http://example.org/ont</code>.</li>
-    <li>All terms come back in a single request. Efficient, zero server
-    configuration; just upload one RDF file.</li>
-    <li>Downside: a client asking about one term gets <em>every</em>
-    term in the vocabulary. Fine for 50&nbsp;terms, painful for 50&thinsp;000.</li>
+    <li><strong>Hash</strong> &middot; <code>ont<strong>#</strong>Person</code>.
+    The fragment is stripped before the HTTP request, so the server always
+    returns the whole file in one request: zero server configuration, but a
+    client asking about one term gets
+    <em>every</em> term in the vocabulary. Fine for 50&nbsp;terms, painful
+    for 50&thinsp;000. Used by OWL and RDF Schema.</li>
+    <li><strong>Slash</strong> &middot; <code>ont<strong>/</strong>Person</code>.
+    Each term is its own HTTP resource, typically served via a
+    <code>303&nbsp;See&nbsp;Other</code> redirect per the W3C TAG&rsquo;s
+    <a href="http://lists.w3.org/Archives/Public/www-tag/2005Jun/0039.html" target="_blank" rel="noopener">httpRange-14
+    resolution</a> (2005). More flexible for large or growing vocabularies,
+    at the cost of server-side redirect rules and content negotiation. Used
+    by FOAF, Schema.org, Dublin Core, and DBpedia.</li>
   </ul>
-
-  <p><strong>Slash URIs</strong> &middot; <code>http://example.org/ont<strong>/</strong>Person</code></p>
-  <ul>
-    <li>Each term is a first-class HTTP resource with its own URL.</li>
-    <li>The server can return a targeted description (via a
-    <code>303&nbsp;See&nbsp;Other</code> redirect to the describing document),
-    as defined by the W3C TAG&rsquo;s
-    <a href="http://lists.w3.org/Archives/Public/www-tag/2005Jun/0039.html">httpRange-14
-    resolution</a> (2005).</li>
-    <li>More flexible: each term can have its own HTML page, RDF description,
-    and versioning. Better for large or growing vocabularies.</li>
-    <li>Downside: requires server-side redirect rules and content
-    negotiation.</li>
-  </ul>
-
-  <h3>Who uses what?</h3>
-  <table style="width:100%;border-collapse:collapse;font-size:0.9em;margin:0.5em 0 1em;">
-    <tr style="border-bottom:2px solid #ddd;text-align:left;">
-      <th style="padding:0.4em 0.6em;">Vocabulary</th>
-      <th style="padding:0.4em 0.6em;">Pattern</th>
-      <th style="padding:0.4em 0.6em;">Example</th></tr>
-    <tr style="border-bottom:1px solid #eee;">
-      <td style="padding:0.3em 0.6em;">OWL</td>
-      <td style="padding:0.3em 0.6em;">Hash</td>
-      <td style="padding:0.3em 0.6em;"><code>owl:Class</code> = <code>http://&hellip;/owl#Class</code></td></tr>
-    <tr style="border-bottom:1px solid #eee;">
-      <td style="padding:0.3em 0.6em;">RDF Schema</td>
-      <td style="padding:0.3em 0.6em;">Hash</td>
-      <td style="padding:0.3em 0.6em;"><code>rdfs:label</code> = <code>http://&hellip;/rdf-schema#label</code></td></tr>
-    <tr style="border-bottom:1px solid #eee;">
-      <td style="padding:0.3em 0.6em;">FOAF</td>
-      <td style="padding:0.3em 0.6em;">Slash (trailing)</td>
-      <td style="padding:0.3em 0.6em;"><code>foaf:name</code> = <code>http://xmlns.com/foaf/0.1/name</code></td></tr>
-    <tr style="border-bottom:1px solid #eee;">
-      <td style="padding:0.3em 0.6em;">Schema.org</td>
-      <td style="padding:0.3em 0.6em;">Slash</td>
-      <td style="padding:0.3em 0.6em;"><code>schema:Person</code> = <code>https://schema.org/Person</code></td></tr>
-    <tr style="border-bottom:1px solid #eee;">
-      <td style="padding:0.3em 0.6em;">Dublin Core</td>
-      <td style="padding:0.3em 0.6em;">Slash</td>
-      <td style="padding:0.3em 0.6em;"><code>dct:title</code> = <code>http://purl.org/dc/terms/title</code></td></tr>
-    <tr>
-      <td style="padding:0.3em 0.6em;">DBpedia</td>
-      <td style="padding:0.3em 0.6em;">Slash</td>
-      <td style="padding:0.3em 0.6em;"><code>http://dbpedia.org/ontology/Person</code></td></tr>
-  </table>
 
   <h3>Recommendation</h3>
   <p><span class="tag practice">TDCC guideline</span> If in doubt, <strong>go
-  with slash</strong>. It scales. Use hash only when you know the
-  vocabulary is small and will stay that way. The Cool URIs note
-  concludes:</p>
+  with slash</strong>: it scales. Use hash only for a vocabulary you know
+  will stay small. The Cool URIs note concludes:</p>
   <blockquote style="border-left:3px solid #ccc;padding-left:1em;color:#555;margin:1em 0;">
   &ldquo;Hash URIs should be preferred for rather <strong>small and stable</strong>
   sets of resources that evolve together. The ideal case are RDF Schema
   vocabularies and OWL ontologies. [&hellip;] 303&nbsp;URIs may also be
   used for [large] data sets, making neater-looking URIs.&rdquo;
   </blockquote>
-  <p>Either way, <strong>pick one per ontology</strong> and don&rsquo;t mix them.</p>
-
-  <h3>Persistent identifiers</h3>
-  <p>Use a domain you control, or a persistent ID service like
-  <a href="https://w3id.org/">w3id.org</a> or
-  <a href="https://purl.org/">purl.org</a>,
-  so your IRIs survive domain changes.</p>
+  <p>Either way, <strong>pick one per ontology</strong> and don&rsquo;t mix
+  them. Use a domain you control, or a persistent ID service like
+  <a href="https://w3id.org/" target="_blank" rel="noopener">w3id.org</a> or
+  <a href="https://purl.org/" target="_blank" rel="noopener">purl.org</a>, so
+  your IRIs survive domain changes.</p>
 """,
     },
     {
@@ -610,8 +563,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <div class="warn"><strong>Bad:</strong> A namespace that returns
   404 or a generic HTML page with no RDF link.</div>
   <p>If you host your own ontology, configure your server to support
-  <a href="https://www.w3.org/TR/swbp-vocab-pub/">content negotiation</a>,
-  serving RDF to machines and HTML to browsers.</p>
+  <a href="https://www.w3.org/TR/swbp-vocab-pub/" target="_blank" rel="noopener">content negotiation</a>,
+  serving RDF to machines and HTML to browsers; see
+  <a href="#server-config">Server configuration</a> below for the details.</p>
 """,
     },
     {
@@ -930,7 +884,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p><span class="tag spec">Spec</span> If your ontology includes
   human-readable labels and descriptions, tag every literal that carries
   natural-language text with a
-  <a href="https://www.rfc-editor.org/rfc/bcp47">BCP 47 language tag</a>
+  <a href="https://www.rfc-editor.org/info/bcp47" target="_blank" rel="noopener">BCP 47 language tag</a>
   (<code>@en</code>, <code>@nl</code>, <code>@de</code>, &hellip;),
   producing an RDF 1.1
   <a href="https://www.w3.org/TR/rdf11-concepts/#dfn-language-tagged-string" target="_blank" rel="noopener">language-tagged string</a>.</p>

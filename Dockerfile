@@ -11,7 +11,7 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir .
+    && pip install --no-cache-dir -e .
 
 # Run as non-root for safety
 RUN useradd --create-home --uid 1000 askwol \
