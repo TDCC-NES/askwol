@@ -34,7 +34,7 @@ An interactive **class diagram** of your ontology, plus a single HTML report (or
 **1. Ontology basics**
 
 - **1.1 Ontology metadata** - SHACL check on the ontology header: title, description, creator, license IRI, version are required; created/modified dates and publisher are recommended.
-- **1.2 Imports** - external vocabularies actually used in the ontology must be declared with `owl:imports`. Core W3C vocabularies (RDF, RDFS, OWL, XSD) are excluded.
+- **1.2 Imports** - every `owl:imports` target declared in the ontology header is fetched over HTTP and parsed as RDF, the same way a reasoner would follow it.
 - **1.3 IRI strategy** - the ontology's own defined terms should consistently use either hash (`#Term`) or slash (`/Term`), not both.
 - **1.4 IRI scheme** - each host should be referenced under a single URI scheme. `http://example.org/X` and `https://example.org/X` are different IRIs.
 
@@ -276,7 +276,7 @@ src/askwol/
 ├── metadata_validator.py # SHACL-based ontology metadata checks
 ├── definition_docs.py    # SHACL-based label/comment checks
 ├── shacl_runner.py        # shared pyshacl runner used by the SHACL-based checks
-├── imports_check.py      # owl:imports completeness check
+├── imports_check.py      # owl:imports resolution check
 ├── iri_strategy.py       # hash vs slash IRI consistency
 ├── iri_scheme.py         # http vs https per-host consistency
 ├── term_inventory.py     # term categories; SHACL-based naming/domains/ranges; datatype inventory
@@ -296,7 +296,7 @@ src/askwol/
 tests/
 ├── test_*.py             # unit + integration tests
 
-examples/
+html/ontologies/
 ├── sample.ttl            # clean ontology - every check passes
 └── broken.ttl            # deliberately broken - every check fires
 ```
@@ -315,10 +315,11 @@ pytest tests/ -v
 
 117 tests cover every automated check on both good and bad inputs, the HTML
 report rendering, the FastAPI routes via `TestClient`, and a pinned end-to-end
-smoke test on [`examples/broken.ttl`](examples/broken.ttl) that fails loudly
-if any single check ever stops detecting issues. The clean counterpart is
-[`examples/sample.ttl`](examples/sample.ttl). Drop either one into the upload
-form at http://localhost:8000/ to see the report end to end.
+smoke test on [`html/ontologies/broken.ttl`](html/ontologies/broken.ttl) that
+fails loudly if any single check ever stops detecting issues. The clean
+counterpart is [`html/ontologies/sample.ttl`](html/ontologies/sample.ttl).
+Drop either one into the upload form at http://localhost:8000/ to see the
+report end to end.
 
 ## License
 

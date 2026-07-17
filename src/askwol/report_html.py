@@ -338,17 +338,14 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             imp = report.imports
             if not imp:
                 return []
-            if imp.status == Status.SKIP:
-                return [_row('imports', _info, 'Imports',
-                             'skipped (no owl:Ontology declaration)')]
-            missing = imp.missing
-            if missing:
-                return [_row('imports', _warn, 'Imports',
-                             f'{len(missing)} external vocabulary(ies) used but not declared in owl:imports')]
+            broken = imp.broken
+            if broken:
+                return [_row('imports', _fail, 'Imports',
+                             f'{len(broken)} of {len(imp.checks)} declared import(s) do not resolve')]
             if not imp.checks:
-                return [_row('imports', _ok, 'Imports', 'no external vocabularies used')]
+                return [_row('imports', _ok, 'Imports', 'no imports declared')]
             return [_row('imports', _ok, 'Imports',
-                         f'{len(imp.checks)}/{len(imp.checks)} declared')]
+                         f'{len(imp.checks)} declared import(s), all resolve')]
         if report_anchor == 'iri-strategy':
             iri = report.iri_strategy
             if not iri:
@@ -586,46 +583,42 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     imp = report.imports
     if imp is not None:
         _open_cluster('imports')
-        if imp.status == Status.SKIP:
-            i_status, i_label = 'info', 'skipped'
-        elif imp.missing:
-            i_status, i_label = 'warn', f'{len(imp.missing)} missing'
+        broken = imp.broken
+        if broken:
+            i_status, i_label = 'fail', f'{len(broken)} broken'
+        elif imp.checks:
+            i_status, i_label = 'ok', 'all resolve'
         else:
-            i_status, i_label = 'ok', 'all declared'
+            i_status, i_label = 'ok', 'none declared'
         parts.append('<section class="section">')
         parts.append(_section_heading('imports', 'Imports', i_status, i_label))
         parts.append(_guide_link('imports'))
-        parts.append('<p class="subtitle">External vocabularies whose terms you use as subjects should be declared with <code>owl:imports</code> in the ontology header. Core RDF/OWL vocabularies and your ontology&rsquo;s own namespace are excluded.</p>')
-        if imp.status == Status.SKIP:
-            parts.append(_status_subtitle('info', 'no <code>owl:Ontology</code> declaration found; declare one to enable this check'))
-        elif imp.missing:
-            parts.append(_status_subtitle('warn', f'{len(imp.missing)} external vocabulary(ies) used but not declared in <code>owl:imports</code>'))
+        parts.append('<p class="subtitle">Every <code>owl:imports</code> target declared in the ontology header is fetched over HTTP and parsed as RDF, the same way a reasoner would follow it.</p>')
+        if broken:
+            parts.append(_status_subtitle('fail', f'{len(broken)} of {len(imp.checks)} declared import(s) do not resolve'))
         elif imp.checks:
-            parts.append(_status_subtitle('ok', f'{len(imp.checks)} external vocabulary(ies) all declared'))
+            parts.append(_status_subtitle('ok', f'{len(imp.checks)} declared import(s), all resolve'))
         else:
-            parts.append(_status_subtitle('ok', 'no external vocabularies used'))
+            parts.append(_status_subtitle('ok', 'no owl:imports declared'))
         if imp.checks:
-            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show vocabularies ({len(imp.checks)})</summary>')
-            parts.append('<table><tr><th>Prefix</th><th>Namespace</th><th>Status</th></tr>')
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show imports ({len(imp.checks)})</summary>')
             for c in imp.checks:
-                mark = _status_mark(c.status)
-                if c.status == Status.OK:
-                    status_label = '<span style="color:#2e7d32">imported</span>'
-                else:
-                    status_label = '<span style="color:#e6a700">not imported</span>'
-                parts.append(
-                    f'<tr><td><code>{escape(c.prefix)}</code></td><td><code>{escape(c.namespace)}</code></td><td>{mark} {status_label}</td></tr>'
-                )
-            parts.append('</table></details>')
-        if imp.declared:
-            non_empty = [d for d in imp.declared if d and d.strip()]
-            if non_empty:
-                parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Declared owl:imports ({len(non_empty)})</summary>')
-                parts.append('<ul>')
-                for d in non_empty:
-                    safe = escape(d)
-                    parts.append(f'<li><a href="{safe}" target="_blank" rel="noopener"><code>{safe}</code></a></li>')
-                parts.append('</ul></details>')
+                mark = _status_mark(c.resolution.status)
+                iri = escape(c.iri)
+                parts.append(f'<div class="ns"><div class="ns-header">{mark} &lt;<a href="{iri}" target="_blank" rel="noopener">{iri}</a>&gt;</div>')
+                parts.append('<div class="ns-body">')
+                res = c.resolution
+                if res.http_status:
+                    parts.append(f"<p>HTTP {res.http_status}")
+                    if res.content_type:
+                        parts.append(f" &middot; {escape(res.content_type)}")
+                    if res.is_valid_rdf is not None:
+                        parts.append(f" &middot; {'valid' if res.is_valid_rdf else 'invalid'} RDF")
+                    parts.append("</p>")
+                if res.error:
+                    parts.append(f"<p style='color:#c00'>{escape(res.error)}</p>")
+                parts.append('</div></div>')
+            parts.append('</details>')
         parts.append('</section>')
 
     # IRI strategy (hash vs slash) for the ontology's own defined terms

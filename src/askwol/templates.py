@@ -366,7 +366,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "group": "check",
         "category": "basics",
         "anchor": "imports",
-        "title": "Declare imports for vocabularies you use",
+        "title": "Declare imports, and keep them resolving",
         "toc_label": "Imports",
         "body": """\
   <p>If your ontology uses terms from another vocabulary, declare it with
@@ -374,19 +374,22 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <pre>&lt;https://example.org/my-ontology&gt; a owl:Ontology ;
     owl:imports &lt;http://xmlns.com/foaf/0.1/&gt; ,
                 &lt;http://www.w3.org/2004/02/skos/core&gt; .</pre>
-  <p>This tells reasoners and tools where your external terms are defined
-  and lets them load the imported ontology when needed.</p>
-  <p>askwol flags any external namespace whose terms appear as subjects in
-  your ontology but which is not listed in <code>owl:imports</code>. Core
-  vocabularies (<code>rdf</code>, <code>rdfs</code>, <code>owl</code>,
-  <code>xsd</code>) and your ontology&rsquo;s own namespace are excluded.</p>
-  <div class="tip">If you only use a vocabulary for annotation properties
-  (like <code>dcterms:title</code>), importing it is still good practice
-  because it documents the dependency.</div>
-  <div class="tip">askwol only checks that the import is
-  <strong>declared</strong>; it never fetches or merges the imported
-  ontology&rsquo;s content. Every check, including the reasoner, runs on your
-  ontology document alone.</div>
+  <p>This tells reasoners and tools where your external terms are defined,
+  so they can load the imported ontology and reason over it together with
+  yours.</p>
+  <p>Deciding <em>which</em> vocabularies deserve a formal import is a
+  modelling judgement call askwol does not second-guess. What it does check
+  is whether every <code>owl:imports</code> target you already declared is
+  actually reachable: each IRI is fetched over HTTP and parsed as RDF, the
+  same way a reasoner would follow it.</p>
+  <div class="tip">A broken import (a dead link, a renamed URL, a server
+  that no longer serves RDF) silently degrades reasoning for anyone who
+  loads your ontology. Nothing reports the failure back to you unless a
+  tool checks it explicitly.</div>
+  <div class="tip">askwol only checks that declared imports resolve; it
+  never merges their content into the checks that run on your ontology.
+  Every other check, including the reasoner, runs on your ontology document
+  alone.</div>
 """,
     },
     {

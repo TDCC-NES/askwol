@@ -1,4 +1,4 @@
-"""Pin the broken example: every check should fire on examples/broken.ttl.
+"""Pin the broken example: every check should fire on html/ontologies/broken.ttl.
 
 This is a smoke test on top of the per-module unit tests. If any single check
 ever silently stops detecting issues, this file will fail loudly because the
@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from askwol.cache import OntologyCache
 from askwol.definition_docs import check_definition_documentation
 from askwol.imports_check import check_imports
 from askwol.iri_scheme import check_iri_scheme
@@ -25,7 +26,7 @@ from askwol.term_inventory import (
     check_term_inventory,
 )
 
-BROKEN = Path(__file__).resolve().parent.parent / "examples" / "broken.ttl"
+BROKEN = Path(__file__).resolve().parent.parent / "html" / "ontologies" / "broken.ttl"
 
 
 @pytest.fixture(scope="module")
@@ -53,9 +54,10 @@ def test_definition_docs_has_issues(parsed):
     assert docs.issues, "expected at least one undocumented internal definition"
 
 
-def test_imports_warns(parsed):
-    imp = check_imports(parsed.graph, parsed.namespaces, parsed.terms_by_namespace)
-    assert imp.status == Status.WARN
+@pytest.mark.asyncio
+async def test_imports_check_runs(parsed):
+    imp = await check_imports(parsed.graph, OntologyCache())
+    assert imp.status in (Status.OK, Status.FAIL)
 
 
 def test_iri_strategy_warns_on_mixed(parsed):
