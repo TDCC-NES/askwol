@@ -15,7 +15,6 @@ declarations once parsing is done.
 
 from pathlib import Path
 
-import pytest
 
 from askwol.parser import parse_ontology
 

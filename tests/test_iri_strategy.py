@@ -1,6 +1,6 @@
 """Tests for the hash-vs-slash IRI strategy check."""
 
-from rdflib import Graph, Namespace, URIRef
+from rdflib import Graph, URIRef
 from rdflib.namespace import OWL, RDF
 
 from askwol.iri_strategy import check_iri_strategy

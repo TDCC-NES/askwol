@@ -18,8 +18,8 @@ def report_as_markdown(report: ValidationReport) -> str:
     lines: list[str] = []
     w = lines.append
 
-    w(f"# Ontology Check Report")
-    w(f"")
+    w("# Ontology Check Report")
+    w("")
     w(f"**File:** `{report.file}`")
     w("")
 
@@ -42,8 +42,8 @@ def report_as_markdown(report: ValidationReport) -> str:
     warn_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.WARN)
     skip_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.SKIP)
 
-    w(f"| | Count |")
-    w(f"|---|---|")
+    w("| | Count |")
+    w("|---|---|")
     w(f"| Namespaces checked | {report.total_namespaces} |")
     w(f"| Namespaces with RDF | {len(ok_ns)} |")
     if html_ns:

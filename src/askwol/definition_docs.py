@@ -12,6 +12,7 @@ from rdflib import Graph, URIRef
 from rdflib.namespace import OWL, RDF, RDFS
 
 from askwol.deprecation import deprecation_marker
+from askwol.iri_utils import is_external as _is_external, local_name as _local_name, namespace_of as _namespace_of
 from askwol.models import DefinitionDocumentationCheck, DefinitionDocumentationIssue, DefinitionDocumentationReport, Status
 from askwol.shacl_runner import run_shapes
 
@@ -35,45 +36,6 @@ PROPERTY_TYPES = {
     OWL.ReflexiveProperty,
     OWL.IrreflexiveProperty,
 }
-
-EXTERNAL_NAMESPACES = (
-    "http://www.w3.org/2002/07/owl#",
-    "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-    "http://www.w3.org/2000/01/rdf-schema#",
-    "http://www.w3.org/2001/XMLSchema#",
-    "http://www.w3.org/XML/1998/namespace",
-    "http://www.w3.org/2004/02/skos/core#",
-    "http://www.w3.org/ns/prov#",
-    "http://purl.org/dc/terms/",
-    "http://purl.org/dc/elements/1.1/",
-    "http://xmlns.com/foaf/0.1/",
-    "https://schema.org/",
-    "http://schema.org/",
-    "http://www.w3.org/ns/shacl#",
-    "http://www.w3.org/2006/time#",
-    "http://www.w3.org/ns/dcat#",
-    "http://www.opengis.net/ont/geosparql#",
-)
-
-
-def _namespace_of(uri: str) -> str:
-    if "#" in uri:
-        return uri.rsplit("#", 1)[0] + "#"
-    if "/" in uri:
-        return uri.rsplit("/", 1)[0] + "/"
-    return uri
-
-
-def _local_name(uri: str) -> str:
-    if "#" in uri:
-        return uri.rsplit("#", 1)[1]
-    if "/" in uri:
-        return uri.rstrip("/").rsplit("/", 1)[1]
-    return uri
-
-
-def _is_external(uri: str) -> bool:
-    return any(uri.startswith(ns) for ns in EXTERNAL_NAMESPACES)
 
 
 def check_definition_documentation(graph: Graph) -> DefinitionDocumentationReport:

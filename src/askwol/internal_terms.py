@@ -11,6 +11,7 @@ from __future__ import annotations
 from rdflib import Graph
 from rdflib.namespace import OWL, RDF, RDFS
 
+from askwol.iri_utils import local_name as _local_name
 from askwol.models import InternalTermIssue, InternalTermsReport, Status
 from askwol.shacl_runner import run_shapes, run_target
 
@@ -37,13 +38,6 @@ _DEFINITIONAL_TYPES = {
     OWL.NamedIndividual,
 }
 
-
-def _local_name(uri: str) -> str:
-    if "#" in uri:
-        return uri.rsplit("#", 1)[1]
-    if "/" in uri:
-        return uri.rstrip("/").rsplit("/", 1)[1]
-    return uri
 
 
 def check_internal_terms(graph: Graph) -> InternalTermsReport:

@@ -14,26 +14,11 @@ from __future__ import annotations
 from rdflib import Graph, URIRef
 from rdflib.namespace import OWL, RDF, SKOS
 
+from askwol.iri_utils import local_name as _local_name, namespace_of as _namespace_of
 from askwol.models import NonOntologyTermIssue, NonOntologyTermsReport, Status
 from askwol.shacl_runner import run_shapes
 
 _SHAPES_FILE = "non_ontology_terms.ttl"
-
-
-def _namespace_of(uri: str) -> str:
-    if "#" in uri:
-        return uri.rsplit("#", 1)[0] + "#"
-    if "/" in uri:
-        return uri.rsplit("/", 1)[0] + "/"
-    return uri
-
-
-def _local_name(uri: str) -> str:
-    if "#" in uri:
-        return uri.rsplit("#", 1)[1]
-    if "/" in uri:
-        return uri.rstrip("/").rsplit("/", 1)[1]
-    return uri
 
 
 def _type_label(types: set[URIRef]) -> str:

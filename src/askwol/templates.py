@@ -284,7 +284,8 @@ UPLOAD_HTML = """<!DOCTYPE html>
     <strong>External links:</strong>
     <a href="https://tdcc.nl/nes-ontology-engineers/" target="_blank" rel="noopener">TDCC-NES ontology engineers</a> &middot;
     <a href="https://www.w3.org/OWL/" target="_blank" rel="noopener">W3C OWL</a> &middot;
-    <a href="https://www.w3.org/TR/owl2-primer/" target="_blank" rel="noopener">OWL 2 Primer</a>
+    <a href="https://www.w3.org/TR/owl2-primer/" target="_blank" rel="noopener">OWL 2 Primer</a> &middot;
+    <a href="https://www.w3.org/TR/owl2-syntax/" target="_blank" rel="noopener">OWL 2 Specification</a>
   </p>
 </body>
 </html>"""
@@ -318,6 +319,20 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p>Your ontology is itself a published research object. It should say
   what it is, who made it, which version it is, and under which license
   it can be reused.</p>
+  <p><span class="tag spec">Spec</span> <code>rdf:type owl:Ontology</code> and
+  <code>owl:versionIRI</code>/<code>owl:versionInfo</code> come from OWL 2;
+  <code>dcterms:title</code>, <code>dcterms:description</code>,
+  <code>dcterms:creator</code>, <code>dcterms:license</code>,
+  <code>dcterms:created</code>, <code>dcterms:modified</code>, and
+  <code>dcterms:publisher</code> are defined by the
+  <a href="https://www.dublincore.org/specifications/dublin-core/dcmi-terms/" target="_blank" rel="noopener">DCMI Metadata Terms</a>
+  vocabulary, not OWL itself.</p>
+  <p><span class="tag practice">TDCC guideline</span> Neither spec says any
+  of these properties is mandatory on an ontology header. The
+  <strong>Required</strong> / <strong>Recommended</strong> split below, and
+  askwol&rsquo;s choice to fail on the first group and only warn on the
+  second, is this guide&rsquo;s own editorial judgement of what a
+  well-published ontology needs.</p>
   <p>askwol evaluates <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/ontology_metadata.ttl" target="_blank" rel="noopener">SHACL shapes for the ontology header</a> and checks these properties:</p>
   <ul>
     <li><strong>Required:</strong> <code>rdf:type owl:Ontology</code>,
@@ -329,6 +344,14 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     (or <code>dcterms:issued</code>), <code>dcterms:modified</code>,
     and <code>dcterms:publisher</code>.</li>
   </ul>
+  <p><span class="tag practice">TDCC guideline</span> DCMI does not
+  constrain what <code>dcterms:license</code> points to; this guide
+  recommends a
+  <a href="https://creativecommons.org" target="_blank" rel="noopener">Creative Commons</a>
+  IRI: <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener">CC0 1.0</a>
+  (public domain, no conditions), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>
+  (attribution required, the most common choice), or <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
+  (attribution, share-alike).</p>
   <pre>&lt;https://example.org/my-ontology&gt; a owl:Ontology ;
     dcterms:title "My Ontology"@en ;
     dcterms:description "What this ontology is about."@en ;
@@ -341,11 +364,18 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   can understand the provenance and reuse conditions of your ontology.</div>
 
   <h3 id="versioning">Versioning</h3>
-  <p>Version information is part of good ontology metadata. Use
-  <code>owl:versionIRI</code> to give each release its own dereferenceable URL,
-  and <code>owl:versionInfo</code> to record a
+  <p>Version information is part of good ontology metadata.
+  <span class="tag spec">Spec</span> OWL 2 defines
+  <a href="https://www.w3.org/TR/owl2-syntax/#def_version_iri" target="_blank" rel="noopener"><code>owl:versionIRI</code></a>
+  to give each release its own dereferenceable URL, and
+  <a href="https://www.w3.org/TR/owl2-syntax/#a_versionInfo" target="_blank" rel="noopener"><code>owl:versionInfo</code></a>
+  to hold &ldquo;a string that describes the IRI&rsquo;s version,&rdquo; with no
+  format required.</p>
+  <p><span class="tag practice">TDCC guideline</span> This guide recommends
+  filling <code>owl:versionInfo</code> with a
   <a href="https://semver.org/" target="_blank" rel="noopener">Semantic Versioning</a>
-  number (<code>MAJOR.MINOR.PATCH</code>):</p>
+  number (<code>MAJOR.MINOR.PATCH</code>) as a practical convention, not an
+  OWL requirement:</p>
   <pre>&lt;http://example.org/my-ontology&gt; a owl:Ontology ;
     owl:versionIRI &lt;http://example.org/my-ontology/2.0.0&gt; ;
     owl:versionInfo "2.0.0" .</pre>
@@ -370,19 +400,24 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Declare imports, and keep them resolving",
         "toc_label": "Imports",
         "body": """\
-  <p>If your ontology uses terms from another vocabulary, declare it with
-  <code>owl:imports</code> in the ontology header:</p>
+  <p><span class="tag spec">Spec</span> If your ontology uses terms from
+  another vocabulary,
+  <a href="https://www.w3.org/TR/owl2-syntax/#Imports" target="_blank" rel="noopener">OWL 2</a>
+  says to declare it with <code>owl:imports</code> in the ontology header:</p>
   <pre>&lt;https://example.org/my-ontology&gt; a owl:Ontology ;
     owl:imports &lt;http://xmlns.com/foaf/0.1/&gt; ,
                 &lt;http://www.w3.org/2004/02/skos/core&gt; .</pre>
   <p>This tells reasoners and tools where your external terms are defined,
   so they can load the imported ontology and reason over it together with
   yours.</p>
-  <p>Deciding <em>which</em> vocabularies deserve a formal import is a
-  modelling judgement call askwol does not second-guess. What it does check
-  is whether every <code>owl:imports</code> target you already declared is
-  actually reachable: each IRI is fetched over HTTP and parsed as RDF, the
-  same way a reasoner would follow it.</p>
+  <p><span class="tag practice">TDCC guideline</span> Deciding <em>which</em>
+  vocabularies deserve a formal import is a modelling judgement call askwol
+  does not second-guess. What it does check is whether every
+  <code>owl:imports</code> target you already declared is actually
+  reachable: each IRI is fetched over HTTP and parsed as RDF, the same way a
+  reasoner would follow it. This reachability check is askwol&rsquo;s own
+  addition; OWL 2 does not require import targets to be checked at
+  authoring time.</p>
   <div class="tip">A broken import (a dead link, a renamed URL, a server
   that no longer serves RDF) silently degrades reasoning for anyone who
   loads your ontology. Nothing reports the failure back to you unless a
@@ -414,10 +449,12 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   as <code>#Person</code>.</div>
 
   <h3>Hash vs. slash, in plain terms</h3>
-  <p>Both patterns are valid (the W3C
+  <p><span class="tag practice">TDCC guideline</span> Neither RDF nor OWL
+  requires hash or slash IRIs; both patterns are valid (the W3C
   <a href="https://www.w3.org/TR/cooluris/">&ldquo;Cool URIs for the
-  Semantic Web&rdquo;</a> note describes both); they differ in how the
-  identifier behaves over HTTP and how the vocabulary scales.</p>
+  Semantic Web&rdquo;</a> note, a non-normative Interest Group Note,
+  describes both). They differ in how the identifier behaves over HTTP and
+  how the vocabulary scales.</p>
 
   <p><strong>Hash URIs</strong> &middot; <code>http://example.org/ont<strong>#</strong>Person</code></p>
   <ul>
@@ -477,9 +514,10 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   </table>
 
   <h3>Recommendation</h3>
-  <p>If in doubt, <strong>go with slash</strong>. It scales. Use hash
-  only when you know the vocabulary is small and will stay that way.
-  The Cool URIs note concludes:</p>
+  <p><span class="tag practice">TDCC guideline</span> If in doubt, <strong>go
+  with slash</strong>. It scales. Use hash only when you know the
+  vocabulary is small and will stay that way. The Cool URIs note
+  concludes:</p>
   <blockquote style="border-left:3px solid #ccc;padding-left:1em;color:#555;margin:1em 0;">
   &ldquo;Hash URIs should be preferred for rather <strong>small and stable</strong>
   sets of resources that evolve together. The ideal case are RDF Schema
@@ -511,11 +549,15 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   examples of each scheme so you can pick one canonical form and migrate
   the others.</p>
 
-  <p><code>http://example.org/ont/Person</code> and
-  <code>https://example.org/ont/Person</code> are
-  <strong>different IRIs</strong> as far as RDF is concerned. Mixing
-  schemes silently breaks <code>owl:sameAs</code>, SPARQL joins, and
-  every tool that does string comparison on URIs.</p>
+  <p><span class="tag spec">Spec</span> <code>http://example.org/ont/Person</code>
+  and <code>https://example.org/ont/Person</code> are
+  <strong>different IRIs</strong>: RDF identifies resources by their exact
+  IRI string, per
+  <a href="https://www.rfc-editor.org/rfc/rfc3987" target="_blank" rel="noopener">RFC 3987</a>,
+  and OWL never treats two IRIs as the same resource unless you assert
+  <code>owl:sameAs</code> yourself. Mixing schemes silently breaks joins that
+  rely on exact IRI matches, including SPARQL and any tool that does string
+  comparison on URIs.</p>
 
   <h3>The legacy problem</h3>
   <p>Most foundational vocabularies were minted before HTTPS was ubiquitous.
@@ -555,9 +597,13 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <code>http://xmlns.com/foaf/0.1/</code>. This check looks at those namespace
   URIs; the short prefix aliases themselves are covered by
   <a href="#prefixes">Unused prefixes</a> below.</p>
-  <p>Every namespace URI should return something useful when fetched with HTTP.
-  Ideally it returns RDF (content-negotiated), so tools can discover term
-  definitions automatically.</p>
+  <p><span class="tag practice">TDCC guideline</span> Every namespace URI
+  should return something useful when fetched with HTTP. Ideally it returns
+  RDF (content-negotiated), so tools can discover term definitions
+  automatically. Neither RDF nor OWL requires a namespace to be
+  dereferenceable; this expectation comes from the
+  <a href="https://www.w3.org/DesignIssues/LinkedData.html" target="_blank" rel="noopener">Linked Data principles</a>
+  and the W3C Note linked below.</p>
   <div class="tip"><strong>Good:</strong>
   <code>http://xmlns.com/foaf/0.1/</code> returns RDF when asked with
   <code>Accept: application/rdf+xml</code>.</div>
@@ -575,11 +621,14 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Keep your prefixes clean",
         "toc_label": "Unused prefixes",
         "body": """\
-  <p>Each <code>@prefix</code> line binds a short prefix to a
-  <a href="#resolvable">namespace</a> URI. This check is about the prefix
-  side: only declare prefixes you actually use. Leftover
-  <code>@prefix</code> declarations clutter the file and confuse
-  readers; they suggest a dependency that doesn&rsquo;t exist.</p>
+  <p><span class="tag spec">Spec</span> Each
+  <a href="https://www.w3.org/TR/turtle/" target="_blank" rel="noopener"><code>@prefix</code></a>
+  line binds a short prefix to a <a href="#resolvable">namespace</a> URI.
+  <span class="tag practice">TDCC guideline</span> Turtle itself does not
+  forbid declaring a prefix you never use; this check is about good
+  hygiene: only declare prefixes you actually use. Leftover
+  <code>@prefix</code> declarations clutter the file and confuse readers;
+  they suggest a dependency that doesn&rsquo;t exist.</p>
   <pre>@prefix dct: &lt;http://purl.org/dc/terms/&gt; .   # used below
 @prefix geo: &lt;http://www.opengis.net/ont/geosparql#&gt; .  # unused, remove it</pre>
   <div class="tip">askwol flags every prefix that is declared
@@ -593,8 +642,10 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "External term definitions",
         "toc_label": "External term definitions",
         "body": """\
-  <p>Don&rsquo;t reinvent the wheel. Before defining a new term, check if
-  an established vocabulary already covers it:</p>
+  <p><span class="tag practice">TDCC guideline</span> Don&rsquo;t reinvent
+  the wheel. Before defining a new term, check if an established vocabulary
+  already covers it. No spec requires reuse, but the wider Semantic Web
+  interoperates far better when ontologies share terms:</p>
   <ul>
     <li><a href="https://schema.org/">schema.org</a>: broad web vocabulary</li>
     <li><a href="http://xmlns.com/foaf/0.1/">FOAF</a>: people and social networks</li>
@@ -611,15 +662,22 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   prefixes. Terms from your own namespace are checked separately (see
   <a href="#internal-terms">Internal term definitions</a>).</div>
   <div class="warn">A term can also exist but be deprecated by the
-  vocabulary that defines it, marked with <code>owl:deprecated</code>,
-  <code>owl:DeprecatedClass</code>/<code>owl:DeprecatedProperty</code>
-  (used by e.g. <a href="https://vivoweb.org/ontology/core" target="_blank" rel="noopener">VIVO</a>),
-  or a <code>vs:term_status</code> of &ldquo;deprecated&rdquo;/&ldquo;archaic&rdquo;
-  (<a href="https://www.w3.org/2003/06/sw-vocab-status/note" target="_blank" rel="noopener">the W3C vocabulary status note</a>,
-  used by e.g. <a href="http://xmlns.com/foaf/spec/index.rdf" target="_blank" rel="noopener">FOAF</a>).
-  askwol checks for all three and flags a deprecated reused term as a warning,
-  so you don&rsquo;t quietly build on a term the source vocabulary is
-  phasing out.</div>
+  vocabulary that defines it. <span class="tag spec">Spec</span>
+  <code>owl:deprecated</code> is an
+  <a href="https://www.w3.org/TR/owl2-syntax/#Annotation_Properties" target="_blank" rel="noopener">OWL 2</a>
+  annotation property, and
+  <code>owl:DeprecatedClass</code>/<code>owl:DeprecatedProperty</code> come
+  from the
+  <a href="https://www.w3.org/TR/owl-ref/#Deprecation" target="_blank" rel="noopener">OWL 1 Reference</a>
+  (used by e.g. <a href="https://vivoweb.org/ontology/core" target="_blank" rel="noopener">VIVO</a>).
+  <span class="tag practice">TDCC guideline</span> A
+  <code>vs:term_status</code> of &ldquo;deprecated&rdquo;/&ldquo;archaic&rdquo;
+  is a community convention from a non-normative
+  (<a href="https://www.w3.org/2003/06/sw-vocab-status/note" target="_blank" rel="noopener">W3C Note</a>,
+  used by e.g. <a href="http://xmlns.com/foaf/spec/index.rdf" target="_blank" rel="noopener">FOAF</a>),
+  not a REC. askwol checks for all three and flags a deprecated reused term
+  as a warning, so you don&rsquo;t quietly build on a term the source
+  vocabulary is phasing out.</div>
 """,
     },
     {
@@ -629,8 +687,13 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Internal term definitions",
         "toc_label": "Internal term definitions",
         "body": """\
-  <p>Every term you use from your <em>own</em> namespace should also be
-  defined there. Don&rsquo;t just <em>use</em> a term; <em>define</em> it.</p>
+  <p><span class="tag practice">TDCC guideline</span> Every term you use
+  from your <em>own</em> namespace should also be defined there.
+  Don&rsquo;t just <em>use</em> a term; <em>define</em> it. RDF&rsquo;s
+  open-world assumption actually permits referencing an IRI with no triples
+  about it at all; askwol still flags it, because within your <em>own</em>
+  namespace an undefined term is almost always an authoring mistake, not an
+  intentional stub.</p>
   <pre>&lt;#Person&gt; a owl:Class ;
     rdfs:label "Person"@en ;
     rdfs:comment "A human being."@en .</pre>
@@ -652,7 +715,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Categorize your terms and name them consistently",
         "toc_label": "Term inventory &amp; naming",
         "body": """\
-  <p>Every term you define falls into a category: a <strong>class</strong>, an
+  <p><span class="tag spec">Spec</span> Every term you define falls into a
+  category OWL 2 itself defines: a <strong>class</strong>, an
   <strong>object property</strong>, a <strong>datatype property</strong>, an
   <strong>annotation property</strong>, a <strong>datatype</strong>, or a
   <strong>named individual</strong>. askwol lists each internal term with the
@@ -662,6 +726,11 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
 &lt;#hasParent&gt; a owl:ObjectProperty .
 &lt;#birthDate&gt; a owl:DatatypeProperty .</pre>
   <h3>Naming conventions</h3>
+  <p><span class="tag practice">TDCC guideline</span> Capitalization is a
+  community convention, not an OWL or RDFS rule; nothing stops you from
+  naming a class <code>person</code> or a property <code>HasName</code>.
+  askwol checks it anyway, because consistent casing is one of the fastest
+  ways to tell a class from a property at a glance:</p>
   <ul>
     <li><strong>Classes start with an uppercase letter</strong> and are usually
     nouns: <code>Person</code>, <code>Dataset</code>, <code>Organization</code>.</li>
@@ -697,9 +766,14 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Give properties a domain and a range",
         "toc_label": "Domains &amp; ranges",
         "body": """\
-  <p>An <code>rdfs:domain</code> says what kind of subject a property applies
-  to; an <code>rdfs:range</code> says what kind of value it takes. Declaring
-  both makes a property self-documenting and lets tools reason about it.</p>
+  <p><span class="tag spec">Spec</span> An
+  <a href="https://www.w3.org/TR/rdf-schema/#ch_domain" target="_blank" rel="noopener"><code>rdfs:domain</code></a>
+  says what kind of subject a property applies to; an
+  <a href="https://www.w3.org/TR/rdf-schema/#ch_range" target="_blank" rel="noopener"><code>rdfs:range</code></a>
+  says what kind of value it takes.
+  <span class="tag practice">TDCC guideline</span> RDFS does not require
+  either one; declaring both is this guide&rsquo;s recommendation because it
+  makes a property self-documenting and lets tools reason about it.</p>
   <pre>&lt;#hasParent&gt; a owl:ObjectProperty ;
     rdfs:domain &lt;#Person&gt; ;
     rdfs:range  &lt;#Person&gt; .        # a class
@@ -716,8 +790,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     be an object property.</li>
     <li>A <strong>domain</strong> should be a class for either kind.</li>
   </ul>
-  <div class="warn">In OWL, a domain or range is not a constraint that rejects
-  bad data; it <em>licenses inference</em>. Stating
+  <div class="warn"><span class="tag spec">Spec</span> In OWL, a domain or
+  range is not a constraint that rejects bad data; it <em>licenses
+  inference</em>. Stating
   <code>rdfs:domain :Person</code> on <code>:birthDate</code> tells a reasoner
   that anything with a <code>:birthDate</code> is a <code>:Person</code>. Pick
   domains and ranges that are actually true of every use.</div>
@@ -738,12 +813,18 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Use recognized datatypes",
         "toc_label": "Datatypes",
         "body": """\
-  <p>Datatype property ranges and typed literals should use a datatype that
-  tools understand: an <a href="https://www.w3.org/TR/xmlschema11-2/">XSD</a>
+  <p><span class="tag spec">Spec</span> Datatype property ranges and typed
+  literals can use any
+  <a href="https://www.w3.org/TR/xmlschema11-2/" target="_blank" rel="noopener">XSD</a>
   built-in (<code>xsd:string</code>, <code>xsd:integer</code>,
   <code>xsd:date</code>, <code>xsd:boolean</code>, &hellip;),
-  <code>rdfs:Literal</code>, <code>rdf:langString</code>, or a custom datatype
-  you declare with <code>rdfs:Datatype</code>.</p>
+  <a href="https://www.w3.org/TR/rdf-schema/#ch_literal" target="_blank" rel="noopener"><code>rdfs:Literal</code></a>,
+  <code>rdf:langString</code>, or a custom datatype you declare with
+  <a href="https://www.w3.org/TR/rdf-schema/#ch_datatype" target="_blank" rel="noopener"><code>rdfs:Datatype</code></a>.
+  <span class="tag practice">TDCC guideline</span> RDF places no closed list
+  on datatype IRIs; any IRI is technically legal there. askwol checks
+  against this recognized set instead, because an IRI outside it is almost
+  never intentional.</p>
   <pre>&lt;#age&gt; rdfs:range xsd:nonNegativeInteger .
 &lt;#born&gt; rdfs:range xsd:date .
 "42"^^xsd:integer</pre>
@@ -761,12 +842,16 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Keep the ontology to schema, not instance data",
         "toc_label": "Non-ontology terms",
         "body": """\
-  <p>An OWL ontology is the <em>schema</em>: it defines classes, properties,
-  and datatypes (the terminology). Individual <strong>instances</strong> and
-  subject-matter <strong>concepts</strong> (the members of a controlled
-  vocabulary or thesaurus) are instance data; they belong in a separate data
-  resource or a <a href="https://www.w3.org/TR/skos-primer/">SKOS</a> concept
-  scheme, not inside the ontology itself.</p>
+  <p><span class="tag practice">TDCC guideline</span> An OWL ontology is the
+  <em>schema</em>: it defines classes, properties, and datatypes (the
+  terminology). OWL does not forbid mixing individual
+  <strong>instances</strong> (the ABox) or subject-matter
+  <strong>concepts</strong> (the members of a controlled vocabulary or
+  thesaurus) into the same file as the schema (the TBox); this guide
+  recommends keeping them apart, in a separate data resource or a
+  <a href="https://www.w3.org/TR/skos-reference/#Concept" target="_blank" rel="noopener">SKOS</a>
+  concept scheme, so schema and data can each evolve and be reused
+  independently.</p>
   <pre>&lt;#Dataset&gt; a owl:Class .            # schema, belongs here
 &lt;#biology&gt; a skos:Concept .         # concept, belongs in a SKOS scheme
 &lt;#dataset-001&gt; a &lt;#Dataset&gt; .       # instance, belongs in a data file</pre>
@@ -786,8 +871,12 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Labels",
         "toc_label": "Labels",
         "body": """\
-  <p>Every class and property you define should carry a human-readable
-  <code>rdfs:label</code>: a short name a person can read.</p>
+  <p><span class="tag practice">TDCC guideline</span> Every class and
+  property you define should carry a human-readable
+  <a href="https://www.w3.org/TR/rdf-schema/#ch_label" target="_blank" rel="noopener"><code>rdfs:label</code></a>:
+  a short name a person can read. RDFS defines what the property means but
+  does not require any resource to have one; this guide recommends adding
+  one to everything you define.</p>
   <pre>&lt;#hasMother&gt; a owl:ObjectProperty ;
     rdfs:label "has mother"@en ;
     rdfs:domain &lt;#Person&gt; ;
@@ -809,8 +898,12 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Comments",
         "toc_label": "Comments",
         "body": """\
-  <p>Every class and property you define should also carry an
-  <code>rdfs:comment</code>: a brief description of what it means.</p>
+  <p><span class="tag practice">TDCC guideline</span> Every class and
+  property you define should also carry an
+  <a href="https://www.w3.org/TR/rdf-schema/#ch_comment" target="_blank" rel="noopener"><code>rdfs:comment</code></a>:
+  a brief description of what it means. As with labels, RDFS defines the
+  property but does not require you to use it; this guide recommends it for
+  every term you define.</p>
   <pre>&lt;#hasMother&gt; a owl:ObjectProperty ;
     rdfs:label "has mother"@en ;
     rdfs:comment "Relates a person to their biological mother."@en ;
@@ -834,16 +927,23 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Use language tags consistently",
         "toc_label": "Language tag consistency",
         "body": """\
-  <p>If your ontology includes human-readable labels and descriptions,
-  use <a href="https://www.rfc-editor.org/rfc/bcp47">BCP 47 language tags</a>
-  (<code>@en</code>, <code>@nl</code>, <code>@de</code>, &hellip;) on every
-  literal that carries natural-language text.</p>
+  <p><span class="tag spec">Spec</span> If your ontology includes
+  human-readable labels and descriptions, tag every literal that carries
+  natural-language text with a
+  <a href="https://www.rfc-editor.org/rfc/bcp47">BCP 47 language tag</a>
+  (<code>@en</code>, <code>@nl</code>, <code>@de</code>, &hellip;),
+  producing an RDF 1.1
+  <a href="https://www.w3.org/TR/rdf11-concepts/#dfn-language-tagged-string" target="_blank" rel="noopener">language-tagged string</a>.</p>
   <pre>:Person a owl:Class ;
     rdfs:label "person"@en ,
                "persoon"@nl ;
     skos:definition "A human being."@en ,
                     "Een menselijk wezen."@nl .</pre>
   <h3>Consistency rules</h3>
+  <p><span class="tag practice">TDCC guideline</span> Neither RDF nor BCP 47
+  requires every subject to carry the same set of languages; askwol checks
+  for it anyway, because an inconsistency here is usually a missed
+  translation, not a deliberate choice:</p>
   <ul>
     <li><strong>No bare strings next to tagged ones.</strong> If
     <code>rdfs:label</code> uses <code>@en</code> on most subjects but one
@@ -871,9 +971,12 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Check logical consistency",
         "toc_label": "Reasoner checks",
         "body": """\
-  <p>OWL is a logical language. A reasoner can derive consequences from your
-  axioms and detect contradictions you didn&rsquo;t intend. askwol reports
-  these as three separate facets in the
+  <p><span class="tag spec">Spec</span> OWL is a logical language.
+  <a href="https://www.w3.org/TR/owl2-direct-semantics/" target="_blank" rel="noopener">OWL 2 Direct Semantics</a>
+  formally defines when an ontology is consistent and when a class is
+  satisfiable; a reasoner can derive consequences from your axioms and
+  detect contradictions you didn&rsquo;t intend. askwol reports these as
+  three separate facets in the
   <a href="/#reasoner">Reasoner checks</a> section of the report:</p>
   <ul>
     <li><strong>Ontology consistency</strong>: the ontology as a whole
@@ -890,12 +993,15 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     superclasses). The class is syntactically valid but can never have
     instances.</li>
   </ul>
-  <div class="tip">askwol runs a lightweight OWL RL reasoner on the
-  <strong>current ontology only</strong>; it does <em>not</em> follow
-  <code>owl:imports</code>. This catches the obvious self-contained
-  contradictions without the cost of loading every imported vocabulary. For
-  deeper checks (against imports, with HermiT or Pellet), use a desktop
-  tool like Prot&eacute;g&eacute;.</div>
+  <div class="tip"><span class="tag practice">TDCC guideline</span> askwol
+  runs a lightweight
+  <a href="https://www.w3.org/TR/owl2-profiles/#OWL_2_RL" target="_blank" rel="noopener">OWL 2 RL</a>
+  reasoner on the <strong>current ontology only</strong>; it does
+  <em>not</em> follow <code>owl:imports</code>. This is an implementation
+  tradeoff askwol makes, not a spec requirement: it catches the obvious
+  self-contained contradictions without the cost of loading every imported
+  vocabulary. For deeper checks (against imports, with HermiT or Pellet), use
+  a desktop tool like Prot&eacute;g&eacute;.</div>
   <div class="warn">This is the only check that reasons, and only over its own
   private copy of the graph. Every other check, including
   <a href="#domains-ranges">Domains &amp; ranges</a>, runs on the ontology
@@ -1141,6 +1247,12 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   pre {{ background: #f7f7f7; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; line-height: 1.5; }}
   .tip {{ background: #f0f7f2; border-left: 4px solid #4a7c59; padding: 0.8em 1em; margin: 1em 0; border-radius: 0 6px 6px 0; }}
   .warn {{ background: #fef9f0; border-left: 4px solid #d4a017; padding: 0.8em 1em; margin: 1em 0; border-radius: 0 6px 6px 0; }}
+  .tag {{ display: inline-block; font-size: 0.72em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 0.15em 0.5em; border-radius: 4px; margin-right: 0.4em; white-space: nowrap; }}
+  .tag.spec {{ background: #e0e7ff; color: #3730a3; }}
+  .tag.practice {{ background: #f3e8ff; color: #7e22ce; }}
+  .legend {{ background: #f9fafb; border: 1px solid #eee; border-radius: 8px; padding: 0.8em 1.1em; margin: 1.2em 0; font-size: 0.92em; }}
+  .legend p {{ margin: 0.6em 0; }}
+  .legend .tip, .legend .warn {{ margin: 0.6em 0; }}
   .footer {{ margin-top: 2.5em; font-size: 0.85em; color: #aaa; text-align: center; }}
   .topnav {{ margin-bottom: 1em; font-size: 0.95em; color: #555; background: #f7f7f7; border: 1px solid #eee; border-radius: 8px; padding: 0.6em 0.9em; }}
   .toc {{ background: #f9f9f9; padding: 1em 1.5em; border-radius: 8px; margin: 1.5em 0; }}
@@ -1169,6 +1281,20 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   applies every convention below and passes all checks. Load it from the
   <a href="./">home page</a> (the <strong>sample ontology</strong> button) to see a clean report.</div>
 
+  <div class="legend">
+  <p>Two tags mark where a rule comes from, and two colored boxes flag extra context:</p>
+  <p><span class="tag spec">Spec</span> what an OWL, RDF, RDFS, or other
+  W3C/IETF specification actually defines or requires.</p>
+  <p><span class="tag practice">TDCC guideline</span> a recommendation from
+  the TDCC ontology engineers that askwol checks for, but that goes beyond
+  what any specification mandates. A W3C Note (such as Cool URIs, cited
+  below) is informative, not normative, so guidance drawn from one counts as
+  a TDCC guideline here too.</p>
+  <div class="tip">A green box like this one is a tip or extra detail.</div>
+  <div class="warn">An amber box like this one is a warning or common
+  pitfall to watch out for.</div>
+  </div>
+
   <div class="toc">
     <strong>Contents</strong>
 {_render_guide_toc()}
@@ -1180,7 +1306,8 @@ GUIDE_HTML = f"""<!DOCTYPE html>
     <strong>External links:</strong>
     <a href="https://tdcc.nl/nes-ontology-engineers/" target="_blank" rel="noopener">TDCC-NES ontology engineers</a> &middot;
     <a href="https://www.w3.org/OWL/" target="_blank" rel="noopener">W3C OWL</a> &middot;
-    <a href="https://www.w3.org/TR/owl2-primer/" target="_blank" rel="noopener">OWL 2 Primer</a>
+    <a href="https://www.w3.org/TR/owl2-primer/" target="_blank" rel="noopener">OWL 2 Primer</a> &middot;
+    <a href="https://www.w3.org/TR/owl2-syntax/" target="_blank" rel="noopener">OWL 2 Specification</a>
   </p>
 </body>
 </html>"""

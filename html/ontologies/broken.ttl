@@ -5,8 +5,7 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-@prefix neverused: <http://example.org/never/used/> .
-@prefix mixedhost: <https://w3id.org/askwol/broken/> .
+@prefix neverused: <http://example.org/never/used/> .    # (2.2) declared, never used
 
 # -----------------------------------------------------------------------------
 # A deliberately broken sample ontology - every askwol check should fire here.
@@ -15,63 +14,78 @@
 # the upload form at http://localhost:8000/ (or POST it to /api/validate) and
 # walk through the report sections top to bottom.
 #
-# What each check should report:
+# What each check should report (numbering matches the CLI/HTML report):
 #
-#   1. Ontology metadata     - FAIL (5 required missing) + WARN (3 recommended)
-#   2. Imports               - WARN (the non-resolvable vocab below is used in
-#                              the ontology but not declared in owl:imports).
-#                              foaf/skos are treated as well-known core
-#                              vocabularies and are intentionally not flagged.
-#   3. IRI strategy          - WARN (mixes hash AND slash style for own terms)
-#   4. IRI scheme            - WARN (w3id.org appears under http:// and https://)
-#   5. Namespaces            - FAIL (the nonexistent.invalid host does not
-#                              resolve, and the term cannot be looked up there)
-#   6. Definition docs       - FAIL (Orphan has no rdfs:label/rdfs:comment;
-#                              Organization is missing the rdfs:comment)
-#   7. Language tags         - WARN (mixed @en + untagged label on Person)
-#   8. Reasoner              - FAIL (Alice is both Person and NotPerson which
-#                              are owl:disjointWith)
-#   9. Unused prefixes       - WARN (neverused is declared but not used in any
-#                              triple)
-#  10. Non-ontology terms   - WARN (:Biology is a skos:Concept and :alice/:bob
-#                              are named individuals defined in the ontology's
-#                              own namespace; instance data and concepts belong
-#                              in a separate resource)
-#  11. Term inventory/naming - FAIL (:badFormat is a lowercase class name;
-#                              :HasOwner is an uppercase property name)
-#  12. Domains and ranges    - FAIL (:worksFor is an object property ranging
-#                              over a datatype; :hasLabelText is a datatype
-#                              property ranging over a class) + WARN (:relatedTo
-#                              declares no domain and no range)
-#  13. Datatypes             - FAIL (xsd:flaot and xsd:stirng are misspelled and
-#                              not recognized datatypes)
+#   1.1 Ontology metadata     - FAIL (5 required missing) + WARN (3 recommended)
+#   1.2 Imports               - FAIL (the declared owl:imports target is on the
+#                               reserved nonexistent.invalid host, which never
+#                               resolves). askwol only checks that a *declared*
+#                               import resolves; it does not flag a vocabulary
+#                               that is used but never imported at all.
+#   1.3 IRI strategy          - WARN (mixes hash AND slash style for this
+#                               ontology's own terms)
+#   1.4 IRI scheme            - WARN (w3id.org appears under http:// and https://)
+#   2.1 Namespaces            - FAIL (the ontology's own hash/slash namespaces
+#                               and the nonexistent.invalid host fail to
+#                               resolve; only the real foaf: namespace, pulled
+#                               in by 2.3 below, resolves)
+#   2.2 Unused prefixes       - WARN (neverused is declared but not used in any
+#                               triple)
+#   2.3 External term definitions - FAIL (foaf:MadeUpConcept is asserted as a
+#                               brand new class under the foaf: prefix instead
+#                               of this ontology's own namespace; the real
+#                               FOAF vocabulary has no such term  -  a classic
+#                               "namespace hijacking" mistake)
+#   3.1 Internal term definitions - FAIL (:hasNickname is used as a predicate
+#                               but is never itself declared as a property)
+#   3.2 Term inventory & naming - FAIL (:badFormat is a lowercase class name;
+#                               :HasOwner is an uppercase property name)
+#   3.3 Domains and ranges    - FAIL (:worksFor is an object property ranging
+#                               over a datatype; :hasLabelText is a datatype
+#                               property ranging over a class) + WARN (:relatedTo
+#                               declares no domain and no range)
+#   3.4 Datatypes             - FAIL (xsd:flaot and xsd:stirng are misspelled and
+#                               not recognized datatypes)
+#   3.5 Non-ontology terms    - WARN (:Biology is a skos:Concept and :alice/:bob
+#                               are named individuals defined in the ontology's
+#                               own namespace; instance data and concepts belong
+#                               in a separate resource)
+#   4.1 Labels                - FAIL (Orphan has no rdfs:label)
+#   4.2 Comments              - FAIL (Orphan and Organization have no
+#                               rdfs:comment)
+#   4.3 Language tag consistency - WARN (mixed @en + untagged label on Person)
+#   5.1 Reasoner checks       - FAIL (Alice is both Person and NotPerson which
+#                               are owl:disjointWith)
 # -----------------------------------------------------------------------------
 
-# (1) Ontology declaration with NO metadata at all - missing title, creator,
+# (1.1) Ontology declaration with NO metadata at all - missing title, creator,
 # license, version, etc. Triggers the metadata SHACL shapes.
-<http://w3id.org/askwol/broken/> a owl:Ontology .
+# (1.2) The declared import target is on a reserved, never-resolving host
+# (RFC 2606), so the Imports check should FAIL.
+<http://w3id.org/askwol/broken/> a owl:Ontology ;
+    owl:imports <http://nonexistent.invalid/broken-import/> .
 
-# (2) + (3) Hash-style term (good practice on its own, but see slash term below)
+# (1.3) Hash-style term (good practice on its own, but see slash term below)
 :Person a owl:Class ;
     rdfs:label "Person"@en ;
-    rdfs:label "Person" ;                # (7) mixed: tagged AND untagged
+    rdfs:label "Person" ;                # (4.3) mixed: tagged AND untagged
     rdfs:comment "A human being."@en ;
-    rdfs:subClassOf foaf:Agent .         # (2) foaf used but not imported
+    rdfs:subClassOf foaf:Agent .
 
 :NotPerson a owl:Class ;
     rdfs:label "Not a person"@en ;
     rdfs:comment "Complement of Person."@en ;
     owl:disjointWith :Person .
 
-# (3) Slash-style term in the SAME ontology - mixes IRI strategies
+# (1.3) Slash-style term in the SAME ontology - mixes IRI strategies
 <http://w3id.org/askwol/broken/Organization> a owl:Class ;
     rdfs:label "Organization"@en .
-    # (6) deliberately no rdfs:comment - definition-docs should flag this
+# (4.2) deliberately no rdfs:comment - the Comments check should flag this
 
-# (6) Class with no documentation at all
+# (4.1 + 4.2) Class with no documentation at all
 :Orphan a owl:Class .
 
-# (3) Hash-style term in the SAME ontology stem (`http://w3id.org/askwol/broken`)
+# (1.3) Hash-style term in the SAME ontology stem (`http://w3id.org/askwol/broken`)
 # alongside slash-style :Person, :NotPerson etc. - mixes IRI strategies.
 <http://w3id.org/askwol/broken#LegacyThing> a owl:Class ;
     rdfs:label "Legacy thing"@en ;
@@ -82,9 +96,9 @@
     rdfs:comment "Acquaintance relation."@en ;
     rdfs:domain :Person ;
     rdfs:range :Person ;
-    skos:prefLabel "knows"@en .          # (2) skos used but not imported
+    skos:prefLabel "knows"@en .
 
-# (8) Reasoner: Alice is asserted as both Person and NotPerson, which are
+# (5.1) Reasoner: Alice is asserted as both Person and NotPerson, which are
 # disjoint - the consistency check should fail.
 :alice a :Person, :NotPerson ;
     rdfs:label "Alice"@en ;
@@ -93,24 +107,36 @@
 :bob a :Person ;
     rdfs:label "Bob"@en .
 
-# (4) IRI scheme: the same host (w3id.org) is referenced under https:// here
+# (1.4) IRI scheme: the same host (w3id.org) is referenced under https:// here
 # while the ontology IRI above uses http://. The check should flag this host.
 :bob rdfs:seeAlso <https://w3id.org/askwol/broken/Person> .
 
-# (5) A subject under a non-resolvable namespace, used as a class reference.
+# (3.1) :hasNickname is referenced as a predicate but never itself declared
+# as a property anywhere in this ontology - the internal term definitions
+# check should flag it as referenced but undefined.
+:alice :hasNickname "Ali"@en .
+
+# (2.1) A subject under a non-resolvable namespace, used as a class reference.
 # This exercises the resolver and the term validator FAIL path. The host is
 # RFC 2606 reserved so it will never resolve.
 <http://nonexistent.invalid/vocab#Widget> a owl:Class ;
     rdfs:label "Widget"@en ;
     rdfs:comment "From a vocabulary that does not resolve."@en .
 
-# (10) SKOS concept defined inside the ontology itself. Subject-matter concepts
-# belong in a separate SKOS concept scheme, not in the OWL ontology - the SKOS
-# concepts check should warn about this one.
+# (2.3) Namespace hijacking: a brand new class asserted under the foaf:
+# prefix instead of this ontology's own namespace. The real FOAF vocabulary
+# has no such term, so the external term definitions check should FAIL.
+foaf:MadeUpConcept a owl:Class ;
+    rdfs:label "Made up concept"@en ;
+    rdfs:comment "Wrongly asserted under the foaf: prefix; not a real FOAF term."@en .
+
+# (3.5) SKOS concept defined inside the ontology itself. Subject-matter concepts
+# belong in a separate SKOS concept scheme, not in the OWL ontology - the
+# non-ontology terms check should warn about this one.
 :Biology a skos:Concept ;
     skos:prefLabel "Biology"@en .
 
-# (11) Naming conventions: a class name should start uppercase and a property
+# (3.2) Naming conventions: a class name should start uppercase and a property
 # name should start lowercase. These two break the convention.
 :badFormat a owl:Class ;
     rdfs:label "bad format"@en ;
@@ -122,7 +148,7 @@
     rdfs:domain :Organization ;
     rdfs:range :Person .
 
-# (12) Domains and ranges:
+# (3.3) Domains and ranges:
 #   - :worksFor is an object property but ranges over a datatype (should be a class).
 #   - :hasLabelText is a datatype property but ranges over a class (should be a datatype).
 #   - :relatedTo declares neither a domain nor a range.
@@ -142,7 +168,7 @@
     rdfs:label "related to"@en ;
     rdfs:comment "A property with no declared domain or range."@en .
 
-# (13) Datatypes: a misspelled datatype in a property range and in a typed
+# (3.4) Datatypes: a misspelled datatype in a property range and in a typed
 # literal. Neither xsd:flaot nor xsd:stirng is a recognized datatype.
 :weight a owl:DatatypeProperty ;
     rdfs:label "weight"@en ;

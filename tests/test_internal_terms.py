@@ -1,4 +1,4 @@
-from rdflib import Graph, Literal, Namespace, URIRef
+from rdflib import Graph, Namespace, URIRef
 from rdflib.namespace import OWL, RDF, RDFS
 
 from askwol.internal_terms import check_internal_terms
