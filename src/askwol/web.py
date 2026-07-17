@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import threading
 import time
 from html import escape
 from pathlib import Path
@@ -41,6 +42,34 @@ ROOT_PATH = os.environ.get("ASKWOL_ROOT_PATH", "").rstrip("/")
 # almost always a few MB at most. Bounds memory/disk use against oversized
 # or abusive uploads.
 MAX_UPLOAD_SIZE = 20 * 1024 * 1024
+
+# Per-IP throttle for the two validation endpoints, since each request can
+# trigger many outbound HTTP fetches (namespaces, imports). In-memory only, so
+# it resets on restart and is tracked per worker process - fine for abuse
+# mitigation, not a strict global limit. Set ASKWOL_RATE_LIMIT=0 to disable.
+RATE_LIMIT_WINDOW_SECONDS = 60
+RATE_LIMIT_MAX_REQUESTS = int(os.environ.get("ASKWOL_RATE_LIMIT", "20"))
+
+_rate_limit_lock = threading.Lock()
+_rate_limit_buckets: dict[str, tuple[float, int]] = {}
+
+
+def _rate_limited(client_ip: str | None) -> bool:
+    """True if client_ip has exceeded the per-window request budget."""
+    if not client_ip or RATE_LIMIT_MAX_REQUESTS <= 0:
+        return False
+    now = time.monotonic()
+    with _rate_limit_lock:
+        if len(_rate_limit_buckets) > 10_000:
+            cutoff = now - RATE_LIMIT_WINDOW_SECONDS
+            for ip in [k for k, (start, _) in _rate_limit_buckets.items() if start < cutoff]:
+                del _rate_limit_buckets[ip]
+        window_start, count = _rate_limit_buckets.get(client_ip, (now, 0))
+        if now - window_start >= RATE_LIMIT_WINDOW_SECONDS:
+            window_start, count = now, 0
+        count += 1
+        _rate_limit_buckets[client_ip] = (window_start, count)
+        return count > RATE_LIMIT_MAX_REQUESTS
 
 app = FastAPI(
     title="askwol",
@@ -436,7 +465,13 @@ async def validate(
     source: str | None = None
     kind = "validate"
 
-    if url and url.strip():
+    if _rate_limited(client_ip):
+        source = "(rate limited)"
+        response = HTMLResponse(
+            "<p>Too many requests. Please wait a minute and try again.</p>",
+            status_code=429,
+        )
+    elif url and url.strip():
         source = url.strip()
         response = await _validate_url(source)
     elif file and file.filename:
@@ -631,9 +666,11 @@ async def _run_validation(tmp_path: Path, source_name: str) -> HTMLResponse:
     tags=["validation"],
     responses={
         422: {"description": "Parse error  -  the file could not be parsed as RDF"},
+        429: {"description": "Too many requests from this client"},
     },
 )
 async def validate_api(
+    request: Request,
     file: UploadFile = File(..., description="OWL ontology file (Turtle, RDF/XML, JSON-LD, N-Triples, or N3)"),
 ):
     """Upload an OWL ontology and get a full validation report as JSON.
@@ -660,6 +697,12 @@ async def validate_api(
     remote vocabularies. Terms used only as predicates or objects are
     treated as well-known vocabulary.
     """
+    client_ip = request.client.host if request.client else None
+    if _rate_limited(client_ip):
+        return JSONResponse(
+            content={"detail": "Too many requests. Please wait a minute and try again."},
+            status_code=429,
+        )
     try:
         content = await _read_upload_capped(file)
     except UploadTooLargeError as exc:
