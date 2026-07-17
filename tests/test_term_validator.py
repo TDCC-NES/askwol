@@ -51,6 +51,23 @@ def test_mixed_terms():
     assert by_name["FakeClass"].status == Status.FAIL
 
 
+def test_deprecated_upstream_term_is_warned():
+    cache = OntologyCache()
+    g = Graph()
+    g.parse(
+        data=REMOTE_TURTLE + "\n<http://example.org/vocab#OldClass> a owl:DeprecatedClass .\n",
+        format="turtle",
+    )
+    cache.put("http://example.org/vocab#", g)
+
+    results = validate_terms("v", "http://example.org/vocab#", {"RealClass", "OldClass"}, cache)
+    by_name = {r.local_name: r for r in results}
+    assert by_name["RealClass"].status == Status.OK
+    assert by_name["RealClass"].deprecated is None
+    assert by_name["OldClass"].status == Status.WARN
+    assert by_name["OldClass"].deprecated == "owl:DeprecatedClass"
+
+
 def test_namespace_not_cached():
     cache = OntologyCache()
     results = validate_terms("missing", "http://example.org/nope/", {"SomeTerm"}, cache)

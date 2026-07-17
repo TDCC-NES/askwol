@@ -11,6 +11,7 @@ from __future__ import annotations
 from rdflib import Graph, URIRef
 from rdflib.namespace import OWL, RDF, RDFS
 
+from askwol.deprecation import deprecation_marker
 from askwol.models import DefinitionDocumentationCheck, DefinitionDocumentationIssue, DefinitionDocumentationReport, Status
 from askwol.shacl_runner import run_shapes
 
@@ -118,6 +119,23 @@ def check_definition_documentation(graph: Graph) -> DefinitionDocumentationRepor
             continue
 
         total += 1
+        marker = deprecation_marker(graph, subject)
+        if marker:
+            documented += 1
+            checks.append(
+                DefinitionDocumentationCheck(
+                    term=uri,
+                    display_name=_local_name(uri),
+                    term_type=term_type,
+                    has_label=True,
+                    has_comment=True,
+                    status=Status.OK,
+                    message="Deprecated; documentation not checked.",
+                    deprecated=marker,
+                )
+            )
+            continue
+
         node_violations = violations.get(uri, {})
         has_label = "Label" not in node_violations
         has_comment = "Comment" not in node_violations

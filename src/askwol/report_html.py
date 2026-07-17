@@ -198,6 +198,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     total_terms = sum(len(ns.terms) for ns in report.namespaces)
     ok_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.OK)
     fail_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.FAIL)
+    warn_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.WARN)
 
     # Ontology diagram (Mermaid)  -  shown first
     if mermaid:
@@ -250,10 +251,14 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                          f'{ok_ns}/{total_ns} resolved')]
         if report_anchor == 'external-terms':
             term_mark = _ok if fail_terms == 0 else _fail
-            skipped = total_terms - ok_terms - fail_terms
+            if fail_terms == 0 and warn_terms:
+                term_mark = _warn
+            skipped = total_terms - ok_terms - fail_terms - warn_terms
             term_bits = [f'{ok_terms} confirmed']
             if fail_terms:
                 term_bits.append(f'{fail_terms} failed')
+            if warn_terms:
+                term_bits.append(f'{warn_terms} deprecated')
             if skipped:
                 term_bits.append(f'{skipped} skipped')
             return [_row('external-terms', term_mark, 'External term definitions', ', '.join(term_bits))]
@@ -453,7 +458,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     def _ns_has_issues(ns: NamespaceReport) -> bool:
         if ns.resolution.status != Status.OK:
             return True
-        return any(t.status == Status.FAIL for t in ns.terms)
+        return any(t.status in (Status.FAIL, Status.WARN) for t in ns.terms)
 
     prominent = [ns for ns in report.namespaces if _ns_has_issues(ns) or ns.uri not in STANDARD_NS]
     standard_ok = sorted(
@@ -484,12 +489,15 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         if ns.terms:
             t_ok = sum(1 for t in ns.terms if t.status == Status.OK)
             t_fail = sum(1 for t in ns.terms if t.status == Status.FAIL)
+            t_warn = sum(1 for t in ns.terms if t.status == Status.WARN)
             t_skip = sum(1 for t in ns.terms if t.status == Status.SKIP)
             summary_parts = []
             if t_ok:
                 summary_parts.append(f"{t_ok} confirmed")
             if t_fail:
                 summary_parts.append(f"{t_fail} not found")
+            if t_warn:
+                summary_parts.append(f"{t_warn} deprecated")
             if t_skip:
                 summary_parts.append(f"{t_skip} skipped")
             parts.append(f'<p style="font-size:0.9em;color:#666;">'
@@ -802,28 +810,36 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     parts.append('</section>')
 
     # --- External term definitions: per-term verification against the remote vocabulary ---
-    term_only_status = 'ok' if fail_terms == 0 else 'fail'
-    skipped = total_terms - ok_terms - fail_terms
+    skipped = total_terms - ok_terms - fail_terms - warn_terms
     if fail_terms:
+        term_only_status = 'fail'
         term_label = f'{fail_terms} not found in remote vocabulary'
+    elif warn_terms:
+        term_only_status = 'warn'
+        term_label = f'{warn_terms} deprecated upstream'
     elif skipped:
+        term_only_status = 'ok'
         term_label = f'{skipped} not checkable'
     else:
+        term_only_status = 'ok'
         term_label = 'all verified'
     _open_cluster('external-terms')
     parts.append('<section class="section">')
     parts.append(_section_heading('external-terms', 'External term definitions', term_only_status, term_label))
     parts.append(_guide_link('external-terms'))
-    parts.append('<p class="subtitle">Every term you reuse from an external vocabulary must actually be defined in that vocabulary. askwol looks each one up in the resolved namespace; a term that is missing there is usually a typo or made-up reuse of an established prefix.</p>')
+    parts.append('<p class="subtitle">Every term you reuse from an external vocabulary must actually be defined in that vocabulary. askwol looks each one up in the resolved namespace; a term that is missing there is usually a typo or made-up reuse of an established prefix. A term that exists but is marked deprecated there (<code>owl:deprecated</code>, <code>owl:DeprecatedClass</code>/<code>owl:DeprecatedProperty</code>, or a <code>vs:term_status</code> of &ldquo;deprecated&rdquo;/&ldquo;archaic&rdquo;) is flagged so you don&rsquo;t build on a term the source vocabulary is phasing out.</p>')
     term_summary_bits = [f'<strong>{ok_terms}</strong> confirmed']
     if fail_terms:
         term_summary_bits.append(f'<strong>{fail_terms}</strong> not found')
+    if warn_terms:
+        term_summary_bits.append(f'<strong>{warn_terms}</strong> deprecated upstream')
     if skipped:
         term_summary_bits.append(f'<strong>{skipped}</strong> skipped (namespace unavailable)')
     parts.append(f'<p class="subtitle">{" &middot; ".join(term_summary_bits)} of {total_terms} total.</p>')
 
     # Flat list of problem terms across all namespaces
     failed_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.FAIL]
+    deprecated_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.WARN]
     skipped_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.SKIP]
     if failed_terms_flat:
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Terms not found in their vocabulary ({len(failed_terms_flat)})</summary>')
@@ -832,6 +848,16 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             t_iri = escape(t.term_uri)
             parts.append(f'<tr><td><code>{escape(t.local_name)}</code></td>'
                          f'<td><code>{escape(ns.prefix)}</code></td>'
+                         f'<td><a href="{t_iri}" target="_blank" rel="noopener"><code>{t_iri}</code></a></td></tr>')
+        parts.append('</table></details>')
+    if deprecated_terms_flat:
+        parts.append(f'<details open><summary style="cursor:pointer;font-weight:600;">Deprecated upstream ({len(deprecated_terms_flat)})</summary>')
+        parts.append('<table><tr><th>Term</th><th>Prefix</th><th>Marker</th><th>Full IRI</th></tr>')
+        for ns, t in deprecated_terms_flat:
+            t_iri = escape(t.term_uri)
+            parts.append(f'<tr><td><code>{escape(t.local_name)}</code></td>'
+                         f'<td><code>{escape(ns.prefix)}</code></td>'
+                         f'<td>{escape(t.deprecated or "")}</td>'
                          f'<td><a href="{t_iri}" target="_blank" rel="noopener"><code>{t_iri}</code></a></td></tr>')
         parts.append('</table></details>')
     if skipped_terms_flat:
@@ -907,9 +933,12 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<table><tr><th>Term</th><th>Category</th><th>Naming</th></tr>')
         for e in sorted(inv.entries, key=lambda x: (x.category, x.display_name.lower())):
             t_iri = escape(e.term)
-            mark = ('<span style="color:#2e7d32;font-size:1.2em;line-height:1">&#x2713;</span>'
-                    if e.naming_ok else
-                    '<span style="color:#c62828;font-size:1.2em;line-height:1">&#x2717;</span>')
+            if e.deprecated:
+                mark = f'<span title="Deprecated ({escape(e.deprecated)}); naming not checked" style="color:#999;font-size:1.2em;line-height:1">&#x2298;</span>'
+            elif e.naming_ok:
+                mark = '<span style="color:#2e7d32;font-size:1.2em;line-height:1">&#x2713;</span>'
+            else:
+                mark = '<span style="color:#c62828;font-size:1.2em;line-height:1">&#x2717;</span>'
             parts.append(
                 f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener"><code>{escape(e.display_name)}</code></a></td>'
                 f'<td>{escape(e.category)}</td><td>{mark}</td></tr>'
@@ -958,9 +987,12 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                      else '<span style="color:#c62828">&#x2717;</span>')
             rmark = ('<span style="color:#2e7d32">&#x2713;</span>' if c.has_range
                      else '<span style="color:#c62828">&#x2717;</span>')
+            category = escape(c.category)
+            if c.deprecated:
+                category += f' <span title="Deprecated ({escape(c.deprecated)}); not checked" style="color:#999;">&#x2298;</span>'
             parts.append(
                 f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener"><code>{escape(c.display_name)}</code></a></td>'
-                f'<td>{escape(c.category)}</td><td>{dmark}</td><td>{rmark}</td></tr>'
+                f'<td>{category}</td><td>{dmark}</td><td>{rmark}</td></tr>'
             )
         parts.append('</table></details>')
         parts.append('</section>')
@@ -1038,7 +1070,9 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     docs = report.definition_docs
     if docs and docs.total_definitions:
         _open_cluster('labels')
-        def _mark_cell(present: bool) -> str:
+        def _mark_cell(present: bool, deprecated: str | None) -> str:
+            if deprecated:
+                return f'<span title="Deprecated ({escape(deprecated)}); not checked" style="color:#999;font-size:1.3em;line-height:1">&#x2298;</span>'
             if present:
                 return '<span style="color:#2e7d32;font-size:1.3em;line-height:1">&#x2713;</span>'
             return '<span style="color:#c62828;font-size:1.3em;line-height:1">&#x2717;</span>'
@@ -1050,7 +1084,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             parts.append('<section class="section">')
             parts.append(_section_heading(anchor, title, status, label))
             parts.append(_guide_link(anchor))
-            parts.append(f'<p class="subtitle">Every internally defined class and property should carry an <code>{prop}</code>. Reused external vocabulary terms are ignored. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes for term documentation</a>.</p>')
+            parts.append(f'<p class="subtitle">Every internally defined class and property should carry an <code>{prop}</code>. Reused external vocabulary terms, and terms you have marked deprecated, are ignored. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes for term documentation</a>.</p>')
             parts.append(_status_subtitle(status, f'{present_count}/{docs.total_definitions} have an <code>{prop}</code> &middot; {len(missing)} missing'))
             parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show {title.lower()} ({docs.total_definitions})</summary>')
             parts.append(f'<table><tr><th>Term</th><th>Type</th><th>{title.rstrip("s")}</th></tr>')
@@ -1060,7 +1094,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 present = check.has_label if anchor == 'labels' else check.has_comment
                 parts.append(
                     f'<tr><td><a href="{term_uri}" target="_blank" rel="noopener"><code>{term}</code></a></td>'
-                    f'<td>{escape(check.term_type)}</td><td>{_mark_cell(present)}</td></tr>'
+                    f'<td>{escape(check.term_type)}</td><td>{_mark_cell(present, check.deprecated)}</td></tr>'
                 )
             parts.append('</table></details>')
             parts.append('</section>')

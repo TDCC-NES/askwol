@@ -95,6 +95,22 @@ def test_inventory_naming_ok_for_well_named_terms():
     assert report.naming_issues == []
 
 
+def test_inventory_exempts_deprecated_term_from_naming():
+    """A badly-named term kept only for backward compatibility, and marked
+    deprecated, should not be flagged: it's on its way out, not a mistake."""
+    g = _base_graph()
+    g.add((EX["person"], RDF.type, OWL.Class))
+    g.add((EX["person"], OWL.deprecated, Literal(True)))
+
+    report = check_term_inventory(g)
+
+    assert report.status == Status.OK
+    assert report.naming_issues == []
+    entry = next(e for e in report.entries if e.display_name == "person")
+    assert entry.naming_ok is True
+    assert entry.deprecated == "owl:deprecated"
+
+
 def test_inventory_ignores_external_terms():
     g = _base_graph()
     g.add((EX["Person"], RDF.type, OWL.Class))
@@ -210,6 +226,20 @@ def test_domain_range_skips_without_properties():
     g = _base_graph()
     g.add((EX["Person"], RDF.type, OWL.Class))
     assert check_domains_ranges(g).status == Status.SKIP
+
+
+def test_domain_range_exempts_deprecated_property():
+    g = _base_graph()
+    g.add((EX["relatedTo"], RDF.type, OWL.ObjectProperty))
+    g.add((EX["relatedTo"], OWL.deprecated, Literal(True)))
+
+    report = check_domains_ranges(g)
+
+    assert report.status == Status.OK
+    assert report.issues == []
+    check = report.checks[0]
+    assert check.status == Status.OK
+    assert check.deprecated == "owl:deprecated"
 
 
 # ---------------------------------------------------------------------------

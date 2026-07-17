@@ -65,6 +65,20 @@ def test_no_tags_at_all_no_issues():
     assert report.issues == []
 
 
+def test_deprecated_subject_is_exempt():
+    """A deprecated subject's untagged or inconsistent labels are ignored,
+    and don't affect what's expected of the still-active subjects."""
+    g = Graph()
+    g.add((EX.A, RDFS.label, Literal("A", lang="en")))
+    g.add((EX.A, RDFS.label, Literal("A-nl", lang="nl")))
+    g.add((EX.Old, RDF.type, OWL.Class))
+    g.add((EX.Old, OWL.deprecated, Literal(True)))
+    g.add((EX.Old, RDFS.label, Literal("old label")))  # untagged; would normally fail
+
+    report = check_lang_tags(g, _make_ns_map())
+    assert report.issues == []
+
+
 def test_skos_definition_checked():
     """skos:definition is among the checked properties."""
     g = Graph()
