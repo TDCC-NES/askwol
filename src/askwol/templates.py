@@ -121,6 +121,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
         <button type="button" class="chip" data-url="https://www.w3.org/2006/time">Time</button>
         <button type="button" class="chip" data-url="https://opengeospatial.github.io/ogc-geosparql/geosparql11/geo.ttl">GeoSPARQL</button>
         <button type="button" class="chip" data-url="https://www.w3.org/TR/owl-guide/wine.rdf">Wine</button>
+        <button type="button" class="chip" data-url="https://cidoc-crm.org/rdfs/7.1.3/CIDOC_CRM_v7.1.3.rdfs">CIDOC CRM</button>
         <button type="button" class="chip" data-url="https://lod-4tu.tudelft.nl/ontologies/sample.ttl">sample ontology</button>
       </div>
     </div>
@@ -657,6 +658,12 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     <li><strong>Properties start with a lowercase letter</strong>:
     <code>hasParent</code>, <code>birthDate</code>, <code>title</code>.</li>
   </ul>
+  <p>Some vocabularies use stable, coded identifiers instead: CIDOC CRM's
+  properties look like <code>P2_has_type</code> (the number is the permanent
+  identifier; the wording after it can change between versions), and
+  Wikidata's are fully opaque, like <code>P19</code>, deliberately avoiding
+  any one language's naming bias. askwol recognizes this pattern, an
+  uppercase letter directly followed by a digit, and does not flag it.</p>
   <div class="tip">Object properties read best as verb phrases. A
   <code>has</code> or <code>is</code> prefix, or an <code>of</code>/<code>by</code>
   form, gives a single unambiguous reading: <code>hasWife</code>,
@@ -664,8 +671,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   not something askwol enforces; askwol only checks the leading upper/lower
   case, via <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/term_inventory.ttl" target="_blank" rel="noopener">SHACL shapes</a>.</div>
   <div class="warn">Mixing conventions (a lowercase class like
-  <code>person</code>, or an uppercase property like <code>HasName</code>)
-  makes an ontology harder to read and to reuse.</div>
+  <code>person</code>, or an uppercase property like <code>HasName</code>,
+  with no digit following the capital) makes an ontology harder to read and
+  to reuse.</div>
 """,
     },
     {

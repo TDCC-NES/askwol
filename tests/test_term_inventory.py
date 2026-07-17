@@ -69,6 +69,21 @@ def test_inventory_flags_uppercase_property():
     assert "lowercase" in report.naming_issues[0].naming_message
 
 
+def test_inventory_exempts_coded_identifier_properties():
+    """CIDOC CRM (P2_has_type) and Wikidata (P19) style numbered property
+    identifiers are a deliberate, established convention, not a naming
+    mistake, so an uppercase letter directly followed by a digit is exempt."""
+    g = _base_graph()
+    g.add((EX["P2_has_type"], RDF.type, OWL.ObjectProperty))
+    g.add((EX["P19"], RDF.type, OWL.ObjectProperty))
+    g.add((EX["P1i_identifies"], RDF.type, OWL.ObjectProperty))
+
+    report = check_term_inventory(g)
+
+    assert report.status == Status.OK
+    assert report.naming_issues == []
+
+
 def test_inventory_naming_ok_for_well_named_terms():
     g = _base_graph()
     g.add((EX["Person"], RDF.type, OWL.Class))

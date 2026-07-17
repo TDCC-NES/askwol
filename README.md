@@ -47,7 +47,7 @@ An interactive **class diagram** of your ontology, plus a single HTML report (or
 **3. Term structure**
 
 - **3.1 Internal term definitions** - flags terms in the ontology's own namespace that are referenced but never defined (never appear as a subject). Usually a typo or a forgotten declaration.
-- **3.2 Term inventory & naming** - categorizes every internal term (class, object property, datatype property, datatype, individual) and checks capitalization: classes start uppercase, properties lowercase.
+- **3.2 Term inventory & naming** - categorizes every internal term (class, object property, datatype property, datatype, individual) and checks capitalization: classes start uppercase, properties lowercase. Coded identifiers (an uppercase letter directly followed by a digit, e.g. CIDOC CRM's `P2_has_type` or Wikidata's `P19`) are exempt.
 - **3.3 Domains & ranges** - object and datatype properties should declare a domain and a range. Object properties range over classes; datatype properties over datatypes.
 - **3.4 Datatypes** - datatypes used as property ranges and literal datatypes should be recognized XSD built-ins, `rdfs:Literal`, `rdf:langString`, or a locally declared `rdfs:Datatype`. Catches typos like `xsd:stirng`.
 - **3.5 Non-ontology terms** - an OWL ontology defines schema (classes, properties, datatypes). Individuals, `skos:Concept` instances, and other instance data belong in a separate resource. Works from a whitelist of schema constructs.

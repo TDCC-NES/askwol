@@ -152,11 +152,12 @@
     sh:sparql [
         a sh:SPARQLConstraint ;
         sh:name "PropertyNaming" ;
-        sh:message "A property name should start with a lowercase letter (e.g. hasName)." ;
+        sh:message "A property name should start with a lowercase letter (e.g. hasName), unless it follows a coded-identifier convention like CIDOC CRM's P2_has_type or Wikidata's P19 (an uppercase letter directly followed by a digit)." ;
         sh:select """
             SELECT $this WHERE {
                 BIND(REPLACE(STR($this), "^.*[/#]", "") AS ?local)
                 FILTER(REGEX(?local, "^[A-Z]"))
+                FILTER(!REGEX(?local, "^[A-Z][0-9]"))
             }
         """ ;
     ] .
