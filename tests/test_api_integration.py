@@ -135,6 +135,20 @@ def test_html_validate_requires_file_or_url(client):
     assert r.status_code == 400
 
 
+def test_api_validate_rate_limited(monkeypatch, client):
+    monkeypatch.setattr(web, "_rate_limit_buckets", {})
+    monkeypatch.setattr(web, "RATE_LIMIT_MAX_REQUESTS", 1)
+
+    with SAMPLE.open("rb") as fh:
+        first = client.post("/api/validate", files={"file": ("sample.ttl", fh, "text/turtle")})
+    assert first.status_code == 200, first.text
+
+    with SAMPLE.open("rb") as fh:
+        second = client.post("/api/validate", files={"file": ("sample.ttl", fh, "text/turtle")})
+    assert second.status_code == 429
+    assert "detail" in second.json()
+
+
 def test_usage_dashboard_requires_token(monkeypatch, client):
     monkeypatch.setenv("ASKWOL_STATS_TOKEN", "secret-token")
 
