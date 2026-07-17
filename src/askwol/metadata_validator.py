@@ -1,153 +1,79 @@
-"""Validate ontology-level metadata using SHACL shapes and a normalized summary."""
+"""Validate ontology-level metadata by running it through pyshacl against
+`shapes/ontology_metadata.ttl`, folded into a normalized summary."""
 
 from __future__ import annotations
 
-from typing import Iterable
-
-from rdflib import Graph, URIRef
-from rdflib.namespace import DCTERMS, OWL, RDF, RDFS
+from rdflib import Graph
+from rdflib.namespace import OWL, RDF
 
 from askwol.models import MetadataCheck, MetadataReport, Status
+from askwol.shacl_runner import load_shape_messages, run_shapes
 
+_SHAPES_FILE = "ontology_metadata.ttl"
 
-CHECK_SPECS = (
-    {
-        "key": "ontology_declaration",
-        "label": "Ontology declaration",
-        "property": "rdf:type owl:Ontology",
-        "severity": "required",
-        "message": "Declare the ontology itself with rdf:type owl:Ontology.",
-    },
-    {
-        "key": "title",
-        "label": "Title",
-        "property": "dcterms:title or rdfs:label",
-        "severity": "required",
-        "predicates": (DCTERMS.title, RDFS.label),
-        "message": "Add a title using dcterms:title or rdfs:label.",
-    },
-    {
-        "key": "description",
-        "label": "Description",
-        "property": "dcterms:description or rdfs:comment",
-        "severity": "required",
-        "predicates": (DCTERMS.description, RDFS.comment),
-        "message": "Add a description using dcterms:description or rdfs:comment.",
-    },
-    {
-        "key": "creator",
-        "label": "Creator",
-        "property": "dcterms:creator",
-        "severity": "required",
-        "predicates": (DCTERMS.creator,),
-        "message": "Add at least one creator using dcterms:creator.",
-    },
-    {
-        "key": "license",
-        "label": "License",
-        "property": "dcterms:license",
-        "severity": "required",
-        "predicates": (DCTERMS.license,),
-        "require_iri": True,
-        "message": "Add a license IRI using dcterms:license.",
-    },
-    {
-        "key": "version",
-        "label": "Version",
-        "property": "owl:versionInfo or owl:versionIRI",
-        "severity": "required",
-        "predicates": (OWL.versionInfo, OWL.versionIRI),
-        "message": "Add version information using owl:versionInfo or owl:versionIRI.",
-    },
-    {
-        "key": "created",
-        "label": "Created date",
-        "property": "dcterms:created or dcterms:issued",
-        "severity": "recommended",
-        "predicates": (DCTERMS.created, DCTERMS.issued),
-        "message": "Consider adding a creation or issue date.",
-    },
-    {
-        "key": "modified",
-        "label": "Modified date",
-        "property": "dcterms:modified",
-        "severity": "recommended",
-        "predicates": (DCTERMS.modified,),
-        "message": "Consider adding a modification date.",
-    },
-    {
-        "key": "publisher",
-        "label": "Publisher",
-        "property": "dcterms:publisher",
-        "severity": "recommended",
-        "predicates": (DCTERMS.publisher,),
-        "message": "Consider adding a publisher.",
-    },
+# key, sh:name (as used in the shape file), label, property, severity.
+# "key" is the stable identifier consumers rely on; sh:name is how the shape
+# file's own violations correlate back to it.
+_SPECS: tuple[tuple[str, str, str, str, str], ...] = (
+    ("ontology_declaration", "", "Ontology declaration", "rdf:type owl:Ontology", "required"),
+    ("title", "Title", "Title", "dcterms:title or rdfs:label", "required"),
+    ("description", "Description", "Description", "dcterms:description or rdfs:comment", "required"),
+    ("creator", "Creator", "Creator", "dcterms:creator", "required"),
+    ("license", "License", "License", "dcterms:license", "required"),
+    ("version", "Version", "Version", "owl:versionInfo or owl:versionIRI", "required"),
+    ("created", "Created date", "Created date", "dcterms:created or dcterms:issued", "recommended"),
+    ("modified", "Modified date", "Modified date", "dcterms:modified", "recommended"),
+    ("publisher", "Publisher", "Publisher", "dcterms:publisher", "recommended"),
 )
-
-METADATA_PREDICATES = tuple(
-    pred for spec in CHECK_SPECS for pred in spec.get("predicates", ())
-)
-
-
-def _candidate_ontology_nodes(graph: Graph) -> list[URIRef]:
-    """Find ontology resources to evaluate metadata on."""
-    ontology_nodes = {s for s in graph.subjects(RDF.type, OWL.Ontology) if isinstance(s, URIRef)}
-    if ontology_nodes:
-        return sorted(ontology_nodes, key=str)
-
-    # Fallback: find subjects that already carry ontology-like metadata.
-    candidates = set()
-    for pred in METADATA_PREDICATES:
-        candidates.update(s for s in graph.subjects(pred, None) if isinstance(s, URIRef))
-    return sorted(candidates, key=str)
-
-
-def _values_for_any_predicate(graph: Graph, subjects: Iterable[URIRef], predicates: tuple) -> list:
-    values = []
-    for subject in subjects:
-        for pred in predicates:
-            values.extend(graph.objects(subject, pred))
-    return values
 
 
 def validate_ontology_metadata(graph: Graph) -> MetadataReport:
     """Evaluate whether an ontology has the key metadata properties it should have."""
 
-    subjects = _candidate_ontology_nodes(graph)
-    checks: list[MetadataCheck] = []
-
+    # A missing rdf:type owl:Ontology declaration leaves the shape below with
+    # no focus node to attach a result to, so it is checked directly rather
+    # than through the shape.
     has_ontology_decl = any(True for _ in graph.triples((None, RDF.type, OWL.Ontology)))
-    checks.append(
-        MetadataCheck(
-            key="ontology_declaration",
-            label="Ontology declaration",
-            property="rdf:type owl:Ontology",
-            severity="required",
-            status=Status.OK if has_ontology_decl else Status.FAIL,
-            message=None if has_ontology_decl else "Declare the ontology itself with rdf:type owl:Ontology.",
-        )
-    )
 
-    for spec in CHECK_SPECS[1:]:
-        values = _values_for_any_predicate(graph, subjects, spec["predicates"])
-        if values:
-            if spec.get("require_iri") and not any(isinstance(v, URIRef) for v in values):
-                status = Status.FAIL if spec["severity"] == "required" else Status.WARN
-                message = "Use an IRI value here rather than plain text."
-            else:
-                status = Status.OK
-                message = None
+    results_by_name = {}
+    if has_ontology_decl:
+        for result in run_shapes(graph, _SHAPES_FILE):
+            if result.name:
+                results_by_name.setdefault(result.name, result)
+
+    # Fallback text for when there is no owl:Ontology node at all: nothing
+    # ran, but the report should still explain what each check wants.
+    fallback_messages = load_shape_messages(_SHAPES_FILE)
+
+    checks: list[MetadataCheck] = []
+    for key, shape_name, label, prop, severity in _SPECS:
+        if key == "ontology_declaration":
+            checks.append(
+                MetadataCheck(
+                    key=key,
+                    label=label,
+                    property=prop,
+                    severity=severity,
+                    status=Status.OK if has_ontology_decl else Status.FAIL,
+                    message=None if has_ontology_decl else "Declare the ontology itself with rdf:type owl:Ontology.",
+                )
+            )
+            continue
+
+        if not has_ontology_decl:
+            status = Status.FAIL if severity == "required" else Status.WARN
+            message = fallback_messages.get(shape_name)
         else:
-            status = Status.FAIL if spec["severity"] == "required" else Status.WARN
-            message = spec["message"]
+            result = results_by_name.get(shape_name)
+            status = result.status if result else Status.OK
+            message = result.message if result else None
 
         checks.append(
             MetadataCheck(
-                key=spec["key"],
-                label=spec["label"],
-                property=spec["property"],
-                severity=spec["severity"],
+                key=key,
+                label=label,
+                property=prop,
+                severity=severity,
                 status=status,
                 message=message,
             )

@@ -1,0 +1,248 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# --- Shared "own namespace" targets -----------------------------------------
+# Same own-namespace-wins-even-for-well-known-vocabularies rule as
+# definition_documentation.ttl: prefer the declared owl:Ontology's own
+# namespace; fall back to excluding well-known vocabularies only when no
+# owl:Ontology is declared at all.
+
+<https://w3id.org/askwol/shapes/inventory/ClassTarget>
+    a sh:SPARQLTarget ;
+    sh:select """
+        PREFIX owl: <http://www.w3.org/2002/07/owl#>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        SELECT DISTINCT ?this WHERE {
+            ?this a ?type .
+            FILTER(?type IN (owl:Class, rdfs:Class))
+            FILTER(isIRI(?this))
+            {
+                ?ont a owl:Ontology .
+                BIND(REPLACE(STR(?ont), "^(.*[/#])[^/#]*$", "$1") AS ?ontologyNs)
+                FILTER(STRSTARTS(STR(?this), ?ontologyNs))
+            }
+            UNION
+            {
+                FILTER NOT EXISTS { ?anyOnt a owl:Ontology }
+                FILTER(
+                    !STRSTARTS(STR(?this), "http://www.w3.org/2002/07/owl#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/1999/02/22-rdf-syntax-ns#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/2000/01/rdf-schema#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/2001/XMLSchema#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/2004/02/skos/core#") &&
+                    !STRSTARTS(STR(?this), "http://purl.org/dc/terms/") &&
+                    !STRSTARTS(STR(?this), "http://xmlns.com/foaf/0.1/") &&
+                    !STRSTARTS(STR(?this), "http://schema.org/") &&
+                    !STRSTARTS(STR(?this), "https://schema.org/")
+                )
+            }
+        }
+    """ .
+
+<https://w3id.org/askwol/shapes/inventory/PropertyTarget>
+    a sh:SPARQLTarget ;
+    sh:select """
+        PREFIX owl: <http://www.w3.org/2002/07/owl#>
+        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+        SELECT DISTINCT ?this WHERE {
+            ?this a ?type .
+            FILTER(?type IN (
+                rdf:Property, owl:ObjectProperty, owl:DatatypeProperty, owl:AnnotationProperty,
+                owl:FunctionalProperty, owl:InverseFunctionalProperty, owl:TransitiveProperty,
+                owl:SymmetricProperty, owl:AsymmetricProperty, owl:ReflexiveProperty, owl:IrreflexiveProperty
+            ))
+            FILTER(isIRI(?this))
+            {
+                ?ont a owl:Ontology .
+                BIND(REPLACE(STR(?ont), "^(.*[/#])[^/#]*$", "$1") AS ?ontologyNs)
+                FILTER(STRSTARTS(STR(?this), ?ontologyNs))
+            }
+            UNION
+            {
+                FILTER NOT EXISTS { ?anyOnt a owl:Ontology }
+                FILTER(
+                    !STRSTARTS(STR(?this), "http://www.w3.org/2002/07/owl#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/1999/02/22-rdf-syntax-ns#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/2000/01/rdf-schema#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/2001/XMLSchema#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/2004/02/skos/core#") &&
+                    !STRSTARTS(STR(?this), "http://purl.org/dc/terms/") &&
+                    !STRSTARTS(STR(?this), "http://xmlns.com/foaf/0.1/") &&
+                    !STRSTARTS(STR(?this), "http://schema.org/") &&
+                    !STRSTARTS(STR(?this), "https://schema.org/")
+                )
+            }
+        }
+    """ .
+
+<https://w3id.org/askwol/shapes/inventory/ObjectPropertyTarget>
+    a sh:SPARQLTarget ;
+    sh:select """
+        PREFIX owl: <http://www.w3.org/2002/07/owl#>
+        SELECT DISTINCT ?this WHERE {
+            ?this a owl:ObjectProperty .
+            FILTER(isIRI(?this))
+            {
+                ?ont a owl:Ontology .
+                BIND(REPLACE(STR(?ont), "^(.*[/#])[^/#]*$", "$1") AS ?ontologyNs)
+                FILTER(STRSTARTS(STR(?this), ?ontologyNs))
+            }
+            UNION
+            { FILTER NOT EXISTS { ?anyOnt a owl:Ontology } }
+        }
+    """ .
+
+<https://w3id.org/askwol/shapes/inventory/DatatypePropertyTarget>
+    a sh:SPARQLTarget ;
+    sh:select """
+        PREFIX owl: <http://www.w3.org/2002/07/owl#>
+        SELECT DISTINCT ?this WHERE {
+            ?this a owl:DatatypeProperty .
+            FILTER(isIRI(?this))
+            {
+                ?ont a owl:Ontology .
+                BIND(REPLACE(STR(?ont), "^(.*[/#])[^/#]*$", "$1") AS ?ontologyNs)
+                FILTER(STRSTARTS(STR(?this), ?ontologyNs))
+            }
+            UNION
+            { FILTER NOT EXISTS { ?anyOnt a owl:Ontology } }
+        }
+    """ .
+
+<https://w3id.org/askwol/shapes/inventory/PropertyOnlyTarget>
+    a sh:SPARQLTarget ;
+    sh:select """
+        PREFIX owl: <http://www.w3.org/2002/07/owl#>
+        SELECT DISTINCT ?this WHERE {
+            { ?this a owl:ObjectProperty } UNION { ?this a owl:DatatypeProperty }
+            FILTER(isIRI(?this))
+            {
+                ?ont a owl:Ontology .
+                BIND(REPLACE(STR(?ont), "^(.*[/#])[^/#]*$", "$1") AS ?ontologyNs)
+                FILTER(STRSTARTS(STR(?this), ?ontologyNs))
+            }
+            UNION
+            { FILTER NOT EXISTS { ?anyOnt a owl:Ontology } }
+        }
+    """ .
+
+# --- Naming convention ------------------------------------------------------
+
+<https://w3id.org/askwol/shapes/inventory/ClassNaming>
+    a sh:NodeShape ;
+    sh:target <https://w3id.org/askwol/shapes/inventory/ClassTarget> ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:name "ClassNaming" ;
+        sh:message "A class name should start with an uppercase letter (e.g. Person)." ;
+        sh:select """
+            SELECT $this WHERE {
+                BIND(REPLACE(STR($this), "^.*[/#]", "") AS ?local)
+                FILTER(REGEX(?local, "^[a-z]"))
+            }
+        """ ;
+    ] .
+
+<https://w3id.org/askwol/shapes/inventory/PropertyNaming>
+    a sh:NodeShape ;
+    sh:target <https://w3id.org/askwol/shapes/inventory/PropertyTarget> ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:name "PropertyNaming" ;
+        sh:message "A property name should start with a lowercase letter (e.g. hasName)." ;
+        sh:select """
+            SELECT $this WHERE {
+                BIND(REPLACE(STR($this), "^.*[/#]", "") AS ?local)
+                FILTER(REGEX(?local, "^[A-Z]"))
+            }
+        """ ;
+    ] .
+
+# --- Domains and ranges ------------------------------------------------------
+# Only *direct* rdfs:domain/rdfs:range triples are considered; domains and
+# ranges inherited via super-properties or inference are not followed.
+
+<https://w3id.org/askwol/shapes/inventory/DomainMissing>
+    a sh:PropertyShape ;
+    sh:target <https://w3id.org/askwol/shapes/inventory/PropertyOnlyTarget> ;
+    sh:name "DomainMissing" ;
+    sh:path rdfs:domain ;
+    sh:minCount 1 ;
+    sh:severity sh:Warning ;
+    sh:message "No rdfs:domain declared." .
+
+<https://w3id.org/askwol/shapes/inventory/RangeMissing>
+    a sh:PropertyShape ;
+    sh:target <https://w3id.org/askwol/shapes/inventory/PropertyOnlyTarget> ;
+    sh:name "RangeMissing" ;
+    sh:path rdfs:range ;
+    sh:minCount 1 ;
+    sh:severity sh:Warning ;
+    sh:message "No rdfs:range declared." .
+
+<https://w3id.org/askwol/shapes/inventory/DomainIsDatatype>
+    a sh:NodeShape ;
+    sh:target <https://w3id.org/askwol/shapes/inventory/PropertyOnlyTarget> ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:name "DomainIsDatatype" ;
+        sh:message "Domain is a datatype; a domain should be a class." ;
+        sh:select """
+            PREFIX owl: <http://www.w3.org/2002/07/owl#>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+            SELECT $this WHERE {
+                $this rdfs:domain ?domain .
+                FILTER(isIRI(?domain))
+                FILTER(
+                    STRSTARTS(STR(?domain), STR(xsd:)) ||
+                    ?domain IN (rdfs:Literal, rdf:langString, owl:real, owl:rational) ||
+                    EXISTS { ?domain a rdfs:Datatype }
+                )
+            }
+        """ ;
+    ] .
+
+<https://w3id.org/askwol/shapes/inventory/ObjectPropertyRangeIsDatatype>
+    a sh:NodeShape ;
+    sh:target <https://w3id.org/askwol/shapes/inventory/ObjectPropertyTarget> ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:name "ObjectPropertyRangeIsDatatype" ;
+        sh:message "Range is a datatype; an object property should range over a class (use a datatype property instead)." ;
+        sh:select """
+            PREFIX owl: <http://www.w3.org/2002/07/owl#>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+            SELECT $this WHERE {
+                $this rdfs:range ?range .
+                FILTER(isIRI(?range))
+                FILTER(
+                    STRSTARTS(STR(?range), STR(xsd:)) ||
+                    ?range IN (rdfs:Literal, rdf:langString, owl:real, owl:rational) ||
+                    EXISTS { ?range a rdfs:Datatype }
+                )
+            }
+        """ ;
+    ] .
+
+<https://w3id.org/askwol/shapes/inventory/DatatypePropertyRangeIsClass>
+    a sh:NodeShape ;
+    sh:target <https://w3id.org/askwol/shapes/inventory/DatatypePropertyTarget> ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:name "DatatypePropertyRangeIsClass" ;
+        sh:message "Range is a class; a datatype property should range over a datatype (use an object property instead)." ;
+        sh:select """
+            PREFIX owl: <http://www.w3.org/2002/07/owl#>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            SELECT $this WHERE {
+                $this rdfs:range ?range .
+                FILTER(isIRI(?range))
+                FILTER(?range = owl:Thing || EXISTS { ?range a owl:Class } || EXISTS { ?range a rdfs:Class })
+            }
+        """ ;
+    ] .

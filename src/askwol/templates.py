@@ -341,12 +341,25 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
 
   <h3 id="versioning">Versioning</h3>
   <p>Version information is part of good ontology metadata. Use
-  <code>owl:versionIRI</code> and/or <code>owl:versionInfo</code> to track
-  changes over time:</p>
+  <code>owl:versionIRI</code> to give each release its own dereferenceable URL,
+  and <code>owl:versionInfo</code> to record a
+  <a href="https://semver.org/" target="_blank" rel="noopener">Semantic Versioning</a>
+  number (<code>MAJOR.MINOR.PATCH</code>):</p>
   <pre>&lt;http://example.org/my-ontology&gt; a owl:Ontology ;
-    owl:versionIRI &lt;http://example.org/my-ontology/2.0&gt; ;
-    owl:versionInfo "2.0" .</pre>
-  <p>This lets consumers pin to a specific version and detect breaking changes.</p>
+    owl:versionIRI &lt;http://example.org/my-ontology/2.0.0&gt; ;
+    owl:versionInfo "2.0.0" .</pre>
+  <p>Bump <strong>major</strong> when you remove or redefine a term,
+  <strong>minor</strong> when you add terms without breaking existing ones, and
+  <strong>patch</strong> for fixes such as corrected labels or comments. This
+  lets consumers pin to a specific version and tell at a glance whether
+  upgrading is safe.</p>
+  <p>Some ontologies version by <strong>date</strong> instead, especially W3C
+  specifications on a fixed release schedule: PROV-O&rsquo;s
+  <code>owl:versionIRI</code> is
+  <code>http://www.w3.org/TR/2013/REC-prov-o-20130430/</code>. A date is
+  simpler than semver but only says <em>when</em> something changed, not
+  whether it is safe to upgrade. Pick one scheme per ontology and stick to
+  it.</p>
 """,
     },
     {
@@ -370,6 +383,10 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <div class="tip">If you only use a vocabulary for annotation properties
   (like <code>dcterms:title</code>), importing it is still good practice
   because it documents the dependency.</div>
+  <div class="tip">askwol only checks that the import is
+  <strong>declared</strong>; it never fetches or merges the imported
+  ontology&rsquo;s content. Every check, including the reasoner, runs on your
+  ontology document alone.</div>
 """,
     },
     {
@@ -610,7 +627,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <strong>referenced</strong> when it appears as a predicate or object. A term
   in your own namespace that is referenced but never defined is flagged.
   External vocabulary terms are covered by the
-  <a href="#external-terms">External term definitions</a> check instead.</div>
+  <a href="#external-terms">External term definitions</a> check instead.
+  Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/internal_terms.ttl" target="_blank" rel="noopener">SHACL shapes</a>.</div>
 """,
     },
     {
@@ -640,7 +658,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <code>has</code> or <code>is</code> prefix, or an <code>of</code>/<code>by</code>
   form, gives a single unambiguous reading: <code>hasWife</code>,
   <code>wifeOf</code>, <code>lovedBy</code>. This is a readability convention,
-  not something askwol enforces; askwol only checks the leading upper/lower case.</div>
+  not something askwol enforces; askwol only checks the leading upper/lower
+  case, via <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/term_inventory.ttl" target="_blank" rel="noopener">SHACL shapes</a>.</div>
   <div class="warn">Mixing conventions (a lowercase class like
   <code>person</code>, or an uppercase property like <code>HasName</code>)
   makes an ontology harder to read and to reuse.</div>
@@ -679,7 +698,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   domains and ranges that are actually true of every use.</div>
   <div class="tip">askwol reads <code>rdfs:domain</code> and
   <code>rdfs:range</code> directly on each property; it does not follow domains
-  or ranges inherited from a super-property.</div>
+  or ranges inherited from a super-property. A reasoner would follow that
+  inheritance, so this check can warn even where reasoning finds no problem.
+  Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/term_inventory.ttl" target="_blank" rel="noopener">SHACL shapes</a>.</div>
 """,
     },
     {
@@ -726,7 +747,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   (or is the ontology header). Anything else that carries a type but no schema
   type (a <code>skos:Concept</code>, a named individual, stray instance data) is
   flagged so you can move it out. External terms are ignored. Keeping the
-  schema and the data apart lets each evolve, and be reused, independently.</div>
+  schema and the data apart lets each evolve, and be reused, independently.
+  Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/non_ontology_terms.ttl" target="_blank" rel="noopener">SHACL shapes</a>.</div>
 """,
     },
     {
@@ -770,6 +792,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <div class="tip">askwol uses <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes</a> to check that each
   <em>internally defined</em> class and property has an
   <code>rdfs:comment</code>. Reused external vocabulary terms are ignored.</div>
+  <div class="tip">An <strong>inverse property</strong>
+  (<code>owl:inverseOf</code>) doesn&rsquo;t need its own comment when its
+  partner already has one: the relationship is documented either way.</div>
 """,
     },
     {
@@ -840,6 +865,11 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   contradictions without the cost of loading every imported vocabulary. For
   deeper checks (against imports, with HermiT or Pellet), use a desktop
   tool like Prot&eacute;g&eacute;.</div>
+  <div class="warn">This is the only check that reasons, and only over its own
+  private copy of the graph. Every other check, including
+  <a href="#domains-ranges">Domains &amp; ranges</a>, runs on the ontology
+  <strong>as asserted</strong>; reasoning first could change some of those
+  results.</div>
 """,
     },
     {
@@ -893,10 +923,11 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     depending on <code>Accept</code>.</li>
   </ul>
   <div class="tip">Keep the <strong>namespace IRI</strong> and the
-  <strong>document URL</strong> consistent: if terms live under
-  <code>https://example.org/onto#</code>, dereferencing
-  <code>https://example.org/onto</code> should return the ontology (directly or
-  via redirect).</div>
+  <strong>document URL</strong> consistent. In the
+  <a href="https://lod-4tu.tudelft.nl/ontologies/sample.ttl" target="_blank" rel="noopener">askwol sample ontology</a>,
+  terms live under <code>https://lod-4tu.tudelft.nl/dataset#</code>, and
+  dereferencing <code>https://lod-4tu.tudelft.nl/dataset</code> (no fragment)
+  returns the ontology itself, directly or via redirect.</div>
   <div class="warn">Static file servers often default to <code>text/plain</code>
   for <code>.ttl</code>. Set the MIME type explicitly in your web server or
   reverse proxy, otherwise namespace resolution (including askwol&rsquo;s) fails.</div>
@@ -913,25 +944,28 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   reads your Turtle file and produces a page humans can read, ready to serve
   alongside the RDF via <a href="#server-config">content negotiation</a>.</p>
   <p><strong><a href="https://github.com/RDFLib/pyLODE" target="_blank" rel="noopener">pyLODE</a></strong>
-  is our recommended starting point: lightweight, fast and simple. It takes a
-  Turtle file and returns a single HTML page
+  is a lightweight Python tool: a single command turns a Turtle file into one
+  static HTML page that needs no server or JavaScript to view
   (<a href="https://lod-4tu.tudelft.nl/pylode/sample.html" target="_blank" rel="noopener">example output</a>).</p>
   <pre>python3 -m venv .venv &amp;&amp; source .venv/bin/activate
 python -m pip install pylode
 pylode my-ontology.ttl -o my-ontology.html</pre>
   <p><strong><a href="https://github.com/dgarijo/Widoco" target="_blank" rel="noopener">WIDOCO</a></strong>
-  is a Java-based alternative for publication-style documentation, with metadata
-  extraction and an optional WebVOWL visualisation.</p>
+  is a Java-based documentation generator that produces a multi-page bundle:
+  metadata extraction, an optional WebVOWL diagram, and a ready-to-deploy
+  <code>.htaccess</code> for content negotiation.</p>
   <pre>java -jar widoco.jar -ontFile my-ontology.ttl -outFolder docs \\
     -getOntologyMetadata -rewriteAll -uniteSections -webVowl -htaccess</pre>
   <div class="tip">WIDOCO&rsquo;s WebVOWL view needs a web server to load; open the
   page over HTTP (<code>python3 -m http.server 8080</code>) rather than from the
   file system.</div>
-  <p>For W3C specification-style output, look at
-  <a href="https://respec.org/" target="_blank" rel="noopener">ReSpec</a> and
-  <a href="https://github.com/floresbakker/OntoReSpec" target="_blank" rel="noopener">OntoReSpec</a>,
-  which render any RDF ontology or data model as a ReSpec document
-  (<a href="https://floresbakker.github.io/htmlvoc/" target="_blank" rel="noopener">example</a>).</p>
+  <p>For W3C specification-style output,
+  <a href="https://respec.org/" target="_blank" rel="noopener">ReSpec</a> renders
+  technical documents in the browser, and
+  <a href="https://github.com/floresbakker/OntoReSpec" target="_blank" rel="noopener">OntoReSpec</a>
+  generates the markup it needs from an RDF ontology or data model
+  (<a href="https://floresbakker.github.io/htmlvoc/" target="_blank" rel="noopener">example</a>).
+  OntoReSpec is early-stage, with no stable release yet.</p>
 """,
     },
 ]

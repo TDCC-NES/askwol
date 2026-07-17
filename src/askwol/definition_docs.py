@@ -1,4 +1,10 @@
-"""Check that internal class and property definitions have labels and comments."""
+"""Check that internal class and property definitions have labels and comments.
+
+Label and comment presence (including the owl:inverseOf comment exemption) is
+checked by running the ontology through pyshacl against
+shapes/definition_documentation.ttl; this module gathers the candidate terms
+(for the total/type-per-term summary) and folds the SHACL results in.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +12,9 @@ from rdflib import Graph, URIRef
 from rdflib.namespace import OWL, RDF, RDFS
 
 from askwol.models import DefinitionDocumentationCheck, DefinitionDocumentationIssue, DefinitionDocumentationReport, Status
+from askwol.shacl_runner import run_shapes
 
+_SHAPES_FILE = "definition_documentation.ttl"
 
 CLASS_TYPES = {
     OWL.Class,
@@ -85,6 +93,13 @@ def check_definition_documentation(graph: Graph) -> DefinitionDocumentationRepor
         if isinstance(subject, URIRef)
     }
 
+    # Index SHACL violations by focus node and shape name ("Label"/"Comment").
+    # A term absent from this map for a given name satisfied that shape.
+    violations: dict[str, dict[str, str]] = {}
+    for result in run_shapes(graph, _SHAPES_FILE):
+        if result.name in ("Label", "Comment"):
+            violations.setdefault(result.focus_node, {})[result.name] = result.message
+
     checks: list[DefinitionDocumentationCheck] = []
     issues: list[DefinitionDocumentationIssue] = []
     total = 0
@@ -103,8 +118,9 @@ def check_definition_documentation(graph: Graph) -> DefinitionDocumentationRepor
             continue
 
         total += 1
-        has_label = any(True for _ in graph.objects(subject, RDFS.label))
-        has_comment = any(True for _ in graph.objects(subject, RDFS.comment))
+        node_violations = violations.get(uri, {})
+        has_label = "Label" not in node_violations
+        has_comment = "Comment" not in node_violations
         missing: list[str] = []
         if not has_label:
             missing.append("label")
