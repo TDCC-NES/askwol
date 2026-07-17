@@ -324,4 +324,4 @@ report end to end.
 
 ## License
 
-MIT
+MIT - see [LICENSE](LICENSE).

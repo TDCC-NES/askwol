@@ -27,7 +27,7 @@ from askwol.models import NamespaceReport, UnusedPrefix, ValidationReport
 from askwol.parser import parse_ontology
 from askwol.reasoner_checks import run_reasoner_checks
 from askwol.report_html import render_report
-from askwol.resolver import resolve_all_namespaces
+from askwol.resolver import block_private_network_requests, resolve_all_namespaces
 from askwol.non_ontology_terms import check_non_ontology_terms
 from askwol.templates import GUIDE_HTML, UPLOAD_HTML
 from askwol.term_inventory import check_datatypes, check_domains_ranges, check_term_inventory
@@ -36,6 +36,11 @@ from askwol.term_validator import validate_terms
 # ASKWOL_ROOT_PATH is the reverse-proxy sub-path prefix (e.g. /askwol); empty
 # for a root deployment.
 ROOT_PATH = os.environ.get("ASKWOL_ROOT_PATH", "").rstrip("/")
+
+# Generous cap for ontology uploads - real Turtle/RDF-XML/JSON-LD files are
+# almost always a few MB at most. Bounds memory/disk use against oversized
+# or abusive uploads.
+MAX_UPLOAD_SIZE = 20 * 1024 * 1024
 
 app = FastAPI(
     title="askwol",
@@ -74,44 +79,44 @@ def _apply_prefix(html: str) -> str:
 
 
 def _format_int(value: int | None) -> str:
-        return "0" if value is None else f"{value:,}"
+    return "0" if value is None else f"{value:,}"
 
 
 def _format_duration(value: int | None) -> str:
-        if value is None:
-                return "n/a"
-        if value < 1000:
-                return f"{value:,} ms"
-        return f"{value / 1000:.1f} s"
+    if value is None:
+        return "n/a"
+    if value < 1000:
+        return f"{value:,} ms"
+    return f"{value / 1000:.1f} s"
 
 
 def _stats_bar(value: int, maximum: int) -> str:
-        if maximum <= 0:
-                return "0%"
-        return f"{max(4, round((value / maximum) * 100))}%"
+    if maximum <= 0:
+        return "0%"
+    return f"{max(4, round((value / maximum) * 100))}%"
 
 
 _STATUS_NOTES = {
-        "200": "OK, validation succeeded",
-        "400": "bad request, missing or unusable input",
-        "401": "unauthorized stats access",
-        "415": "URL returned HTML instead of RDF",
-        "422": "ontology could not be parsed or fetched",
-        "503": "usage tracking or stats disabled",
+    "200": "OK, validation succeeded",
+    "400": "bad request, missing or unusable input",
+    "401": "unauthorized stats access",
+    "415": "URL returned HTML instead of RDF",
+    "422": "ontology could not be parsed or fetched",
+    "503": "usage tracking or stats disabled",
 }
 
 
 def _status_note(status: object) -> str:
-        return _STATUS_NOTES.get(str(status) if status is not None else "", "")
+    return _STATUS_NOTES.get(str(status) if status is not None else "", "")
 
 
 def _format_ts(ts: object) -> str:
-        """Shorten an ISO timestamp to `YYYY-MM-DD HH:MM`."""
-        text = str(ts) if ts is not None else ""
-        text = text.replace("T", " ")
-        if len(text) >= 16:
-                return text[:16]
-        return text
+    """Shorten an ISO timestamp to `YYYY-MM-DD HH:MM`."""
+    text = str(ts) if ts is not None else ""
+    text = text.replace("T", " ")
+    if len(text) >= 16:
+        return text[:16]
+    return text
 
 
 def _is_local_request(request: Request) -> bool:
@@ -120,112 +125,130 @@ def _is_local_request(request: Request) -> bool:
     return host in {"localhost", "127.0.0.1", "::1"} or client_host in {"localhost", "127.0.0.1", "::1"}
 
 
+class UploadTooLargeError(Exception):
+    """Raised when an uploaded file exceeds MAX_UPLOAD_SIZE."""
+
+
+async def _read_upload_capped(file: UploadFile) -> bytes:
+    """Read an upload in chunks, aborting once it exceeds MAX_UPLOAD_SIZE."""
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(1024 * 1024):
+        total += len(chunk)
+        if total > MAX_UPLOAD_SIZE:
+            raise UploadTooLargeError(
+                f"File exceeds the {MAX_UPLOAD_SIZE // (1024 * 1024)} MB upload limit"
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def _render_stats_page(data: dict[str, object]) -> str:
-        total_events = int(data.get("total_events") or 0)
-        unique_visitors = int(data.get("unique_visitors") or 0)
-        avg_duration = data.get("avg_duration_ms")
-        days = int(data.get("days") or 30)
+    total_events = int(data.get("total_events") or 0)
+    unique_visitors = int(data.get("unique_visitors") or 0)
+    avg_duration = data.get("avg_duration_ms")
+    days = int(data.get("days") or 30)
 
-        by_day = list(data.get("by_day") or [])
-        by_status = list(data.get("by_status") or [])
-        top_sources = list(data.get("top_sources") or [])
-        all_events = list(data.get("all_events") or [])
-        page = int(data.get("page") or 1)
-        page_size = int(data.get("page_size") or 50)
-        total_entries = int(data.get("total_entries") or 0)
-        token = data.get("token") or None
-        total_pages = max(1, (total_entries + page_size - 1) // page_size)
-        first_index = (page - 1) * page_size + 1 if all_events else 0
-        last_index = (page - 1) * page_size + len(all_events)
+    by_day = list(data.get("by_day") or [])
+    by_status = list(data.get("by_status") or [])
+    top_sources = list(data.get("top_sources") or [])
+    all_events = list(data.get("all_events") or [])
+    page = int(data.get("page") or 1)
+    page_size = int(data.get("page_size") or 50)
+    total_entries = int(data.get("total_entries") or 0)
+    token = data.get("token") or None
+    total_pages = max(1, (total_entries + page_size - 1) // page_size)
+    first_index = (page - 1) * page_size + 1 if all_events else 0
+    last_index = (page - 1) * page_size + len(all_events)
 
-        max_day = max((int(row["n"]) for row in by_day), default=0)
-        max_status = max((int(row["n"]) for row in by_status), default=0)
-        max_source = max((int(row["n"]) for row in top_sources), default=0)
+    max_day = max((int(row["n"]) for row in by_day), default=0)
+    max_status = max((int(row["n"]) for row in by_status), default=0)
+    max_source = max((int(row["n"]) for row in top_sources), default=0)
 
-        day_rows = []
-        for row in by_day:
-                count = int(row["n"])
-                day_rows.append(
-                        "<div class=\"bar-row\">"
-                        f"<div class=\"bar-label\">{escape(str(row['day']))}</div>"
-                        f"<div class=\"bar-track\"><span style=\"width:{_stats_bar(count, max_day)}\"></span></div>"
-                        f"<div class=\"bar-value\">{_format_int(count)}</div>"
-                        "</div>"
-                )
-        day_html = "".join(day_rows) or '<p class="empty">No events recorded in this period.</p>'
-
-        status_rows = []
-        for row in by_status:
-                count = int(row["n"])
-                status_rows.append(
-                        "<tr>"
-                        f"<td>{escape(str(row['status']))}</td>"
-                        f"<td class=\"hint\">{escape(_status_note(row['status']))}</td>"
-                        f"<td class=\"num\">{_format_int(count)}</td>"
-                        f"<td><span class=\"mini-bar\"><span style=\"width:{_stats_bar(count, max_status)}\"></span></span></td>"
-                        "</tr>"
-                )
-        status_html = "".join(status_rows) or '<tr><td colspan="4" class="empty-cell">No events recorded in this period.</td></tr>'
-
-        source_rows = []
-        for row in top_sources:
-                count = int(row["n"])
-                source_rows.append(
-                        "<tr>"
-                        f"<td class=\"source\">{escape(str(row['source']))}</td>"
-                        f"<td class=\"num\">{_format_int(count)}</td>"
-                        f"<td><span class=\"mini-bar\"><span style=\"width:{_stats_bar(count, max_source)}\"></span></span></td>"
-                        "</tr>"
-                )
-        source_html = "".join(source_rows) or '<tr><td colspan="3" class="empty-cell">No sources yet.</td></tr>'
-
-        all_rows = []
-        for row in all_events:
-                status = str(row['status']) if row['status'] is not None else ''
-                note = _status_note(row['status'])
-                status_cell = (
-                        f"<span title=\"{escape(note)}\">{escape(status)}</span>"
-                        if note else escape(status)
-                )
-                visitor = str(row['ip_hash']) if row.get('ip_hash') else ''
-                visitor_cell = (
-                        f"<code title=\"Salted hash of the visitor IP (raw IP is never stored)\">{escape(visitor)}</code>"
-                        if visitor else '<span class="hint">unknown</span>'
-                )
-                all_rows.append(
-                        "<tr>"
-                        f"<td>{escape(_format_ts(row['ts']))}</td>"
-                        f"<td>{visitor_cell}</td>"
-                        f"<td>{escape(str(row['kind']))}</td>"
-                        f"<td>{status_cell}</td>"
-                        f"<td>{escape(_format_duration(row.get('duration_ms')))}</td>"
-                        f"<td class=\"source\">{escape(str(row['source']) if row['source'] is not None else '')}</td>"
-                        "</tr>"
-                )
-        all_html = "".join(all_rows) or '<tr><td colspan="6" class="empty-cell">No database entries yet.</td></tr>'
-
-        def _page_href(target: int) -> str:
-                query = f"?page={target}"
-                if token:
-                        query += f"&token={quote(str(token))}"
-                return query
-
-        prev_link = (
-                f'<a class="page-btn" href="{_page_href(page - 1)}">&larr; Newer</a>'
-                if page > 1 else '<span class="page-btn disabled">&larr; Newer</span>'
+    day_rows = []
+    for row in by_day:
+        count = int(row["n"])
+        day_rows.append(
+            "<div class=\"bar-row\">"
+            f"<div class=\"bar-label\">{escape(str(row['day']))}</div>"
+            f"<div class=\"bar-track\"><span style=\"width:{_stats_bar(count, max_day)}\"></span></div>"
+            f"<div class=\"bar-value\">{_format_int(count)}</div>"
+            "</div>"
         )
-        next_link = (
-                f'<a class="page-btn" href="{_page_href(page + 1)}">Older &rarr;</a>'
-                if page < total_pages else '<span class="page-btn disabled">Older &rarr;</span>'
-        )
-        pagination_html = (
-                f'<div class="pagination">{prev_link}'
-                f'<span class="page-info">Showing {_format_int(first_index)}&ndash;{_format_int(last_index)} '
-                f'of {_format_int(total_entries)} &middot; page {_format_int(page)} of {_format_int(total_pages)}</span>'
-                f'{next_link}</div>'
-        )
+    day_html = "".join(day_rows) or '<p class="empty">No events recorded in this period.</p>'
 
-        return _apply_prefix(f"""<!DOCTYPE html>
+    status_rows = []
+    for row in by_status:
+        count = int(row["n"])
+        status_rows.append(
+            "<tr>"
+            f"<td>{escape(str(row['status']))}</td>"
+            f"<td class=\"hint\">{escape(_status_note(row['status']))}</td>"
+            f"<td class=\"num\">{_format_int(count)}</td>"
+            f"<td><span class=\"mini-bar\"><span style=\"width:{_stats_bar(count, max_status)}\"></span></span></td>"
+            "</tr>"
+        )
+    status_html = "".join(status_rows) or '<tr><td colspan="4" class="empty-cell">No events recorded in this period.</td></tr>'
+
+    source_rows = []
+    for row in top_sources:
+        count = int(row["n"])
+        source_rows.append(
+            "<tr>"
+            f"<td class=\"source\">{escape(str(row['source']))}</td>"
+            f"<td class=\"num\">{_format_int(count)}</td>"
+            f"<td><span class=\"mini-bar\"><span style=\"width:{_stats_bar(count, max_source)}\"></span></span></td>"
+            "</tr>"
+        )
+    source_html = "".join(source_rows) or '<tr><td colspan="3" class="empty-cell">No sources yet.</td></tr>'
+
+    all_rows = []
+    for row in all_events:
+        status = str(row['status']) if row['status'] is not None else ''
+        note = _status_note(row['status'])
+        status_cell = (
+            f"<span title=\"{escape(note)}\">{escape(status)}</span>"
+            if note else escape(status)
+        )
+        visitor = str(row['ip_hash']) if row.get('ip_hash') else ''
+        visitor_cell = (
+            f"<code title=\"Salted hash of the visitor IP (raw IP is never stored)\">{escape(visitor)}</code>"
+            if visitor else '<span class="hint">unknown</span>'
+        )
+        all_rows.append(
+            "<tr>"
+            f"<td>{escape(_format_ts(row['ts']))}</td>"
+            f"<td>{visitor_cell}</td>"
+            f"<td>{escape(str(row['kind']))}</td>"
+            f"<td>{status_cell}</td>"
+            f"<td>{escape(_format_duration(row.get('duration_ms')))}</td>"
+            f"<td class=\"source\">{escape(str(row['source']) if row['source'] is not None else '')}</td>"
+            "</tr>"
+        )
+    all_html = "".join(all_rows) or '<tr><td colspan="6" class="empty-cell">No database entries yet.</td></tr>'
+
+    def _page_href(target: int) -> str:
+        query = f"?page={target}"
+        if token:
+            query += f"&token={quote(str(token))}"
+        return query
+
+    prev_link = (
+        f'<a class="page-btn" href="{_page_href(page - 1)}">&larr; Newer</a>'
+        if page > 1 else '<span class="page-btn disabled">&larr; Newer</span>'
+    )
+    next_link = (
+        f'<a class="page-btn" href="{_page_href(page + 1)}">Older &rarr;</a>'
+        if page < total_pages else '<span class="page-btn disabled">Older &rarr;</span>'
+    )
+    pagination_html = (
+        f'<div class="pagination">{prev_link}'
+        f'<span class="page-info">Showing {_format_int(first_index)}&ndash;{_format_int(last_index)} '
+        f'of {_format_int(total_entries)} &middot; page {_format_int(page)} of {_format_int(total_pages)}</span>'
+        f'{next_link}</div>'
+    )
+
+    return _apply_prefix(f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -451,49 +474,68 @@ async def _validate_url(url: str) -> HTMLResponse:
     )
 
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
-            resp = await client.get(url, headers={"Accept": accept_header})
+        async with httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=30,
+            event_hooks={"request": [block_private_network_requests]},
+        ) as client, client.stream("GET", url, headers={"Accept": accept_header}) as resp:
             resp.raise_for_status()
+
+            # Pick a suffix from the Content-Type so the parser can sniff the
+            # format. Fall back to the URL path, then to .ttl.
+            ctype = (resp.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
+            ctype_suffix = {
+                "text/turtle": ".ttl",
+                "application/x-turtle": ".ttl",
+                "application/rdf+xml": ".rdf",
+                "application/xml": ".rdf",
+                "text/xml": ".rdf",
+                "application/ld+json": ".jsonld",
+                "application/json": ".jsonld",
+                "application/n-triples": ".nt",
+                # Note: text/plain is intentionally NOT mapped. Many servers (e.g.
+                # raw.githubusercontent.com) serve Turtle/RDF as text/plain, so we
+                # fall back to the URL path extension instead of assuming N-Triples.
+                "text/n3": ".n3",
+            }.get(ctype)
+
+            if ctype in ("text/html", "application/xhtml+xml"):
+                return HTMLResponse(
+                    f"<p>The URL <code>{escape(url)}</code> returned an HTML page "
+                    f"(<code>{escape(ctype)}</code>) instead of RDF. The server does not "
+                    f"support content negotiation for this namespace. Try a direct link "
+                    f"to the ontology file (e.g. <code>.ttl</code> or <code>.rdf</code>).</p>",
+                    status_code=415,
+                )
+
+            chunks: list[bytes] = []
+            total = 0
+            async for chunk in resp.aiter_bytes(1024 * 1024):
+                total += len(chunk)
+                if total > MAX_UPLOAD_SIZE:
+                    return HTMLResponse(
+                        f"<p>The URL response exceeds the "
+                        f"{MAX_UPLOAD_SIZE // (1024 * 1024)} MB limit.</p>",
+                        status_code=413,
+                    )
+                chunks.append(chunk)
+            content = b"".join(chunks)
     except httpx.HTTPError as exc:
         return HTMLResponse(f"<p>Could not fetch URL: {escape(str(exc))}</p>", status_code=422)
 
-    # Pick a suffix from the Content-Type so the parser can sniff the format.
-    # Fall back to the URL path, then to .ttl.
-    ctype = (resp.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
-    ctype_suffix = {
-        "text/turtle": ".ttl",
-        "application/x-turtle": ".ttl",
-        "application/rdf+xml": ".rdf",
-        "application/xml": ".rdf",
-        "text/xml": ".rdf",
-        "application/ld+json": ".jsonld",
-        "application/json": ".jsonld",
-        "application/n-triples": ".nt",
-        # Note: text/plain is intentionally NOT mapped. Many servers (e.g.
-        # raw.githubusercontent.com) serve Turtle/RDF as text/plain, so we
-        # fall back to the URL path extension instead of assuming N-Triples.
-        "text/n3": ".n3",
-    }.get(ctype)
-
-    if ctype in ("text/html", "application/xhtml+xml"):
-        return HTMLResponse(
-            f"<p>The URL <code>{escape(url)}</code> returned an HTML page "
-            f"(<code>{escape(ctype)}</code>) instead of RDF. The server does not "
-            f"support content negotiation for this namespace. Try a direct link "
-            f"to the ontology file (e.g. <code>.ttl</code> or <code>.rdf</code>).</p>",
-            status_code=415,
-        )
-
     suffix = ctype_suffix or Path(parsed_url.path).suffix or ".ttl"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(resp.content)
+        tmp.write(content)
         tmp_path = Path(tmp.name)
 
     return await _run_validation(tmp_path, url)
 
 
 async def _validate_upload(file: UploadFile) -> HTMLResponse:
-    content = await file.read()
+    try:
+        content = await _read_upload_capped(file)
+    except UploadTooLargeError as exc:
+        return HTMLResponse(f"<p>{escape(str(exc))}.</p>", status_code=413)
     suffix = Path(file.filename or "ontology.ttl").suffix or ".ttl"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(content)
@@ -618,7 +660,10 @@ async def validate_api(
     remote vocabularies. Terms used only as predicates or objects are
     treated as well-known vocabulary.
     """
-    content = await file.read()
+    try:
+        content = await _read_upload_capped(file)
+    except UploadTooLargeError as exc:
+        return JSONResponse(content={"detail": str(exc)}, status_code=413)
     suffix = Path(file.filename or "ontology.ttl").suffix or ".ttl"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(content)

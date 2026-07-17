@@ -651,7 +651,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 'warn',
                 f'<strong>Mixed</strong>: {iri.hash_count} hash-style and {iri.slash_count} slash-style terms in the same ontology. Pick one and migrate the others.',
             ))
-            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show examples</summary>')
+            parts.append('<details><summary style="cursor:pointer;font-weight:600;">Show examples</summary>')
             if iri.hash_examples:
                 parts.append(f'<p style="margin:0.5em 0 0.2em;font-weight:600;">Hash style ({iri.hash_count}):</p>')
                 parts.append('<ul style="margin:0.2em 0 0.4em 1.2em;font-size:0.9em;">')
@@ -674,7 +674,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             ))
             examples = iri.hash_examples if iri.strategy == 'hash' else iri.slash_examples
             if examples:
-                parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show examples</summary>')
+                parts.append('<details><summary style="cursor:pointer;font-weight:600;">Show examples</summary>')
                 parts.append('<ul style="margin:0.2em 0 0.4em 1.2em;font-size:0.9em;">')
                 for ex in examples:
                     parts.append(f'<li><code>{escape(ex)}</code></li>')
@@ -779,7 +779,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
 
     if standard_ok:
         total_std_terms = sum(len(ns.terms) for ns in standard_ok)
-        parts.append(f'<details style="margin-top:1.5em;"><summary style="cursor:pointer;padding:0.6em 0;font-weight:bold;color:#555;">')
+        parts.append('<details style="margin-top:1.5em;"><summary style="cursor:pointer;padding:0.6em 0;font-weight:bold;color:#555;">')
         parts.append(f'{len(standard_ok)} standard vocabularies OK ({total_std_terms} terms verified)</summary>')
         for ns in standard_ok:
             _render_ns_card(ns)
@@ -851,7 +851,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                          f'<td><a href="{t_iri}" target="_blank" rel="noopener"><code>{t_iri}</code></a></td></tr>')
         parts.append('</table></details>')
     if deprecated_terms_flat:
-        parts.append(f'<details open><summary style="cursor:pointer;font-weight:600;">Deprecated upstream ({len(deprecated_terms_flat)})</summary>')
+        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Deprecated upstream ({len(deprecated_terms_flat)})</summary>')
         parts.append('<table><tr><th>Term</th><th>Prefix</th><th>Marker</th><th>Full IRI</th></tr>')
         for ns, t in deprecated_terms_flat:
             t_iri = escape(t.term_uri)

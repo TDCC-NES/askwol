@@ -8,10 +8,12 @@ example is hand-crafted to trip *every* check at once.
 from pathlib import Path
 
 import pytest
+from rdflib import Graph
 
 from askwol.cache import OntologyCache
 from askwol.definition_docs import check_definition_documentation
 from askwol.imports_check import check_imports
+from askwol.internal_terms import check_internal_terms
 from askwol.iri_scheme import check_iri_scheme
 from askwol.iri_strategy import check_iri_strategy
 from askwol.lang_tags import check_lang_tags
@@ -25,6 +27,7 @@ from askwol.term_inventory import (
     check_domains_ranges,
     check_term_inventory,
 )
+from askwol.term_validator import validate_terms
 
 BROKEN = Path(__file__).resolve().parent.parent / "html" / "ontologies" / "broken.ttl"
 
@@ -32,6 +35,25 @@ BROKEN = Path(__file__).resolve().parent.parent / "html" / "ontologies" / "broke
 @pytest.fixture(scope="module")
 def parsed():
     return parse_ontology(BROKEN)
+
+
+@pytest.fixture
+def foaf_stub():
+    """A small stand-in FOAF graph (real terms, no MadeUpConcept).
+
+    Lets tests validate against a namespace with the same shape as the real
+    FOAF vocabulary without depending on it being reachable over the network.
+    """
+    g = Graph()
+    g.parse(
+        data="""
+        @prefix owl: <http://www.w3.org/2002/07/owl#> .
+        <http://xmlns.com/foaf/0.1/Agent> a owl:Class .
+        <http://xmlns.com/foaf/0.1/Person> a owl:Class .
+        """,
+        format="turtle",
+    )
+    return g
 
 
 def test_parses_cleanly(parsed):
@@ -55,9 +77,37 @@ def test_definition_docs_has_issues(parsed):
 
 
 @pytest.mark.asyncio
-async def test_imports_check_runs(parsed):
+async def test_imports_check_fails_on_broken_import(parsed):
+    # The declared owl:imports target is on the reserved nonexistent.invalid
+    # host (RFC 2606), so it can never resolve.
     imp = await check_imports(parsed.graph, OntologyCache())
-    assert imp.status in (Status.OK, Status.FAIL)
+    assert imp.status == Status.FAIL
+    assert len(imp.broken) == 1
+    assert imp.broken[0].iri == "http://nonexistent.invalid/broken-import/"
+
+
+def test_internal_terms_flags_undefined_predicate(parsed):
+    it = check_internal_terms(parsed.graph)
+    assert it.status == Status.FAIL
+    undefined = {i.display_name for i in it.undefined}
+    assert "hasNickname" in undefined
+
+
+def test_external_terms_flags_hijacked_foaf_term(parsed, foaf_stub):
+    # foaf:MadeUpConcept is asserted as a class in broken.ttl but is not a
+    # real FOAF term. Seed the cache with a stand-in FOAF graph so this stays
+    # network-free and deterministic.
+    assert "foaf" in parsed.terms_by_namespace
+    assert "MadeUpConcept" in parsed.terms_by_namespace["foaf"]
+
+    cache = OntologyCache()
+    cache.put("http://xmlns.com/foaf/0.1/", foaf_stub)
+
+    results = validate_terms(
+        "foaf", "http://xmlns.com/foaf/0.1/", parsed.terms_by_namespace["foaf"], cache,
+    )
+    by_name = {r.local_name: r for r in results}
+    assert by_name["MadeUpConcept"].status == Status.FAIL
 
 
 def test_iri_strategy_warns_on_mixed(parsed):
@@ -117,3 +167,49 @@ def test_datatypes_flags_unrecognized(parsed):
     flagged = {u.display_name for u in dt.unrecognized}
     assert "flaot" in flagged
     assert "stirng" in flagged
+
+
+@pytest.mark.asyncio
+async def test_cli_pipeline_populates_every_check(monkeypatch, foaf_stub):
+    """Regression guard: the CLI must actually run all 16 checks.
+
+    cli.py's _run_check() used to never call check_iri_strategy,
+    check_iri_scheme, or check_non_ontology_terms, so those three checks
+    silently never ran from the CLI even though web.py wired them up
+    correctly and the report renderer had a row ready for them. This pins
+    the full pipeline, not just the individual modules.
+
+    The ontology's own w3id.org namespaces and the real foaf: vocabulary are
+    pre-seeded into the cache so this stays network-free, matching the
+    fixture's other tests. The nonexistent.invalid host (RFC 2606) is left
+    to resolve for real, since it fails via DNS instantly and needs no
+    external service to be up.
+    """
+    cache = OntologyCache()
+    cache.put("http://xmlns.com/foaf/0.1/", foaf_stub)
+    cache.put("http://w3id.org/askwol/broken/", None, error="404 - not found")
+    cache.put("http://w3id.org/askwol/broken#", None, error="404 - not found")
+    monkeypatch.setattr("askwol.cli.OntologyCache", lambda: cache)
+
+    from askwol.cli import _run_check
+
+    report = await _run_check(BROKEN, timeout=10.0, skip_resolution=False)
+
+    assert report.ontology_metadata is not None and report.ontology_metadata.failed_checks
+    assert report.imports is not None and report.imports.status == Status.FAIL
+    assert report.iri_strategy is not None and report.iri_strategy.status == Status.WARN
+    assert report.iri_scheme is not None and report.iri_scheme.status == Status.WARN
+    assert report.unused_prefixes
+    assert report.non_ontology_terms is not None and report.non_ontology_terms.status == Status.WARN
+    assert report.internal_terms is not None and report.internal_terms.status == Status.FAIL
+    assert report.term_inventory is not None and report.term_inventory.status == Status.FAIL
+    assert report.domains_ranges is not None and report.domains_ranges.status == Status.FAIL
+    assert report.datatypes is not None and report.datatypes.status == Status.FAIL
+    assert report.definition_docs is not None and report.definition_docs.issues
+    assert report.lang_tags is not None and report.lang_tags.issues
+    assert report.reasoner is not None and report.reasoner.consistent is False
+    assert report.namespaces
+    foaf_ns = next(n for n in report.namespaces if n.prefix == "foaf")
+    assert foaf_ns.resolution.status == Status.OK
+    madeup = next(t for t in foaf_ns.terms if t.local_name == "MadeUpConcept")
+    assert madeup.status == Status.FAIL

@@ -13,8 +13,11 @@ from askwol.cache import OntologyCache
 from askwol.definition_docs import check_definition_documentation
 from askwol.imports_check import check_imports
 from askwol.internal_terms import check_internal_terms
+from askwol.iri_scheme import check_iri_scheme
+from askwol.iri_strategy import check_iri_strategy
 from askwol.lang_tags import check_lang_tags
 from askwol.metadata_validator import validate_ontology_metadata
+from askwol.non_ontology_terms import check_non_ontology_terms
 from askwol.reasoner_checks import run_reasoner_checks
 from askwol.models import NamespaceCheck, NamespaceReport, Status, UnusedPrefix, ValidationReport
 from askwol.parser import parse_ontology
@@ -82,6 +85,15 @@ async def _run_check(
 
     # Declared owl:imports targets must actually resolve
     report.imports = await check_imports(parsed.graph, cache, timeout=timeout)
+
+    # IRI strategy (hash vs slash) for the ontology's own terms
+    report.iri_strategy = check_iri_strategy(parsed.graph)
+
+    # IRI scheme consistency (http vs https) per host
+    report.iri_scheme = check_iri_scheme(parsed.graph, parsed.namespaces)
+
+    # Terms in the ontology's own namespace that are not OWL schema
+    report.non_ontology_terms = check_non_ontology_terms(parsed.graph)
 
     # Only resolve and report namespaces that have subject-position terms
     active_ns = {pfx: uri for pfx, uri in parsed.namespaces.items()

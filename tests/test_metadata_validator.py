@@ -1,7 +1,7 @@
 """Tests for ontology metadata validation using SHACL-inspired checks."""
 
 from rdflib import Graph, Literal, Namespace
-from rdflib.namespace import DCTERMS, OWL, RDF, RDFS, XSD
+from rdflib.namespace import DCTERMS, OWL, RDF, XSD
 
 from askwol.metadata_validator import validate_ontology_metadata
 from askwol.models import MetadataCheck, MetadataReport, Status, ValidationReport

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import re
+import socket
 from io import BytesIO
 
 import httpx
@@ -15,8 +17,58 @@ from askwol.models import NamespaceCheck, Status
 from askwol.term_validator import KNOWN_TERMS
 
 
+class SSRFBlockedError(httpx.HTTPError):
+    """Raised when a request target resolves to a private/internal address."""
+
+
+def _is_unsafe_ip(ip_str: str) -> bool:
+    """True if the IP is private, loopback, link-local, reserved, or otherwise non-public."""
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return True
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
+
+async def block_private_network_requests(request: httpx.Request) -> None:
+    """httpx request hook: reject requests whose host resolves to a private or
+    internal address (SSRF guard). Namespace URIs and owl:imports targets come
+    from untrusted ontology content, so they could point at cloud metadata
+    endpoints or internal services. httpx invokes request hooks for every hop
+    of a redirect chain, so this also covers redirects to internal hosts.
+    """
+    host = request.url.host
+    if not host:
+        return
+    loop = asyncio.get_running_loop()
+    try:
+        infos = await asyncio.wait_for(
+            loop.run_in_executor(None, socket.getaddrinfo, host, None), timeout=5.0,
+        )
+    except (OSError, TimeoutError):
+        return  # DNS failure/slow DNS - let the real request fail naturally
+    for info in infos:
+        ip_str = info[4][0]
+        if _is_unsafe_ip(ip_str):
+            raise SSRFBlockedError(
+                f"Blocked request to '{host}' ({ip_str}): private/internal "
+                f"addresses are not allowed"
+            )
+
+
 def _friendly_error(exc: httpx.HTTPError) -> str:
     """Turn a raw httpx exception into a short, user-friendly message."""
+    if isinstance(exc, SSRFBlockedError):
+        return str(exc)
     msg = str(exc)
     if "nodename nor servname" in msg or "Name or service not known" in msg:
         return "Server not found  -  the domain name could not be resolved"
@@ -260,7 +312,9 @@ async def resolve_all_namespaces(
         else:
             to_resolve.append((prefix, uri))
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with httpx.AsyncClient(
+        timeout=timeout, event_hooks={"request": [block_private_network_requests]},
+    ) as client:
         tasks = [
             _limited(prefix, uri, client)
             for prefix, uri in to_resolve
@@ -268,7 +322,7 @@ async def resolve_all_namespaces(
         resolved = await asyncio.gather(*tasks)
 
     resolved_iter = iter(resolved)
-    for i, (prefix, uri) in enumerate(namespaces.items()):
+    for i, (_prefix, _uri) in enumerate(namespaces.items()):
         if i in known_idx:
             results.append(known_idx[i])
         else:

@@ -388,6 +388,7 @@ class IRISchemeReport(BaseModel):
     status: Status = Status.SKIP
     message: str | None = None
 
+
 class ReasonerCheck(BaseModel):
     """One result from the consistency and satisfiability checks."""
 
