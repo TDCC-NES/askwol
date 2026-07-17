@@ -274,12 +274,14 @@ src/askwol/
 ├── resolver.py           # async HTTP namespace resolution
 ├── term_validator.py     # remote term existence checks
 ├── metadata_validator.py # SHACL-based ontology metadata checks
-├── definition_docs.py    # SHACL-based definition documentation checks
+├── definition_docs.py    # SHACL-based label/comment checks
+├── shacl_runner.py        # shared pyshacl runner used by the SHACL-based checks
 ├── imports_check.py      # owl:imports completeness check
 ├── iri_strategy.py       # hash vs slash IRI consistency
 ├── iri_scheme.py         # http vs https per-host consistency
-├── term_inventory.py     # term categories, naming, domains/ranges, datatypes
-├── non_ontology_terms.py # flags instance data/concepts (whitelist of schema)
+├── term_inventory.py     # term categories; SHACL-based naming/domains/ranges; datatype inventory
+├── internal_terms.py     # SHACL-based referenced-but-undefined term check
+├── non_ontology_terms.py # SHACL-based whitelist of schema constructs
 ├── lang_tags.py          # language-tag consistency checks
 ├── reasoner_checks.py    # OWL RL reasoning sanity checks
 ├── mermaid_diagram.py    # interactive class diagram
@@ -289,7 +291,7 @@ src/askwol/
 ├── report_html.py        # HTML report rendering (CHECKS registry)
 ├── templates.py          # publishing guide content (GUIDE_SECTIONS)
 ├── usage.py              # privacy-friendly request tracking (SQLite)
-└── shapes/               # SHACL shapes (metadata + documentation)
+└── shapes/               # SHACL shapes, run through pyshacl via shacl_runner.py
 
 tests/
 ├── test_*.py             # unit + integration tests

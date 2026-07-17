@@ -27,7 +27,10 @@ from askwol.models import (
     Status,
     TermInventoryReport,
 )
+from askwol.shacl_runner import run_shapes
 from askwol.term_validator import XSD_BUILTIN_TYPES
+
+_SHAPES_FILE = "term_inventory.ttl"
 
 RDF_LANG_STRING = URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#langString")
 
@@ -153,31 +156,6 @@ def _primary_category(types: set[URIRef]) -> str:
     return UNTYPED
 
 
-def _naming_check(category: str, local: str) -> tuple[bool, str | None]:
-    """Return (ok, message) for the capitalization convention.
-
-    Classes start with an uppercase letter; properties start with a lowercase
-    letter. The convention is only applied to terms whose local name starts
-    with a letter, and only to classes and properties.
-    """
-    first = next((ch for ch in local if ch.isalpha()), None)
-    if first is None or local[0] != first:
-        # No leading letter to judge (e.g. starts with "_" or a digit).
-        return True, None
-
-    if category == CLASS:
-        if not first.isupper():
-            return False, "A class name should start with an uppercase letter (e.g. Person)."
-        return True, None
-
-    if category in _PROPERTY_CATEGORIES:
-        if not first.islower():
-            return False, "A property name should start with a lowercase letter (e.g. hasName)."
-        return True, None
-
-    return True, None
-
-
 def _classify_internal_terms(graph: Graph) -> dict[str, str]:
     """Map each internal term URI to its primary category.
 
@@ -224,17 +202,23 @@ def check_term_inventory(graph: Graph) -> TermInventoryReport:
             message="no terms are defined in the ontology's own namespace",
         )
 
+    naming_violations: dict[str, str] = {
+        result.focus_node: result.message
+        for result in run_shapes(graph, _SHAPES_FILE)
+        if result.name in ("ClassNaming", "PropertyNaming")
+    }
+
     entries: list[InternalTermEntry] = []
     counts: dict[str, int] = {}
     for uri, category in sorted(classified.items()):
         local = _local_name(uri)
-        naming_ok, naming_message = _naming_check(category, local)
+        naming_message = naming_violations.get(uri)
         entries.append(
             InternalTermEntry(
                 term=uri,
                 display_name=local,
                 category=category,
-                naming_ok=naming_ok,
+                naming_ok=naming_message is None,
                 naming_message=naming_message,
             )
         )
@@ -249,17 +233,6 @@ def check_term_inventory(graph: Graph) -> TermInventoryReport:
         entries=entries,
         status=Status.FAIL if naming_issues else Status.OK,
     )
-
-
-def _is_datatype_value(graph: Graph, value: URIRef) -> bool:
-    uri = str(value)
-    if uri.startswith(str(XSD)):
-        return True
-    if uri in _OTHER_DATATYPES:
-        return True
-    if (value, RDF.type, RDFS.Datatype) in graph:
-        return True
-    return False
 
 
 def _is_class_value(graph: Graph, value: URIRef) -> bool:
@@ -291,65 +264,42 @@ def check_domains_ranges(graph: Graph) -> DomainRangeReport:
             message="no object or datatype properties are defined in the ontology's own namespace",
         )
 
+    violations: dict[str, dict[str, str]] = {}
+    for result in run_shapes(graph, _SHAPES_FILE):
+        if result.name in (
+            "DomainMissing", "RangeMissing", "DomainIsDatatype",
+            "ObjectPropertyRangeIsDatatype", "DatatypePropertyRangeIsClass",
+        ):
+            violations.setdefault(result.focus_node, {})[result.name] = result.message
+
     checks: list[DomainRangeCheck] = []
     object_count = 0
     datatype_count = 0
 
     for uri, category in sorted(properties.items()):
         subject = URIRef(uri)
-        domains = list(graph.objects(subject, RDFS.domain))
-        ranges = list(graph.objects(subject, RDFS.range))
-        has_domain = len(domains) > 0
-        has_range = len(ranges) > 0
+        has_domain = any(True for _ in graph.objects(subject, RDFS.domain))
+        has_range = any(True for _ in graph.objects(subject, RDFS.range))
 
         if category == OBJECT_PROPERTY:
             object_count += 1
         else:
             datatype_count += 1
 
-        problems: list[str] = []
-
-        # Domain should be a class for both property kinds.
-        for dom in domains:
-            if isinstance(dom, URIRef) and _is_datatype_value(graph, dom):
-                problems.append(
-                    f"Domain <code>{_local_name(str(dom))}</code> is a datatype; "
-                    "a domain should be a class."
-                )
-                break
-
-        # Range must match the property kind.
-        if category == OBJECT_PROPERTY:
-            for rng in ranges:
-                if isinstance(rng, URIRef) and _is_datatype_value(graph, rng):
-                    problems.append(
-                        f"Range <code>{_local_name(str(rng))}</code> is a datatype; "
-                        "an object property should range over a class "
-                        "(use a datatype property instead)."
-                    )
-                    break
-        else:  # datatype property
-            for rng in ranges:
-                if isinstance(rng, URIRef) and _is_class_value(graph, rng):
-                    problems.append(
-                        f"Range <code>{_local_name(str(rng))}</code> is a class; "
-                        "a datatype property should range over a datatype "
-                        "(use an object property instead)."
-                    )
-                    break
-
-        missing: list[str] = []
-        if not has_domain:
-            missing.append("domain")
-        if not has_range:
-            missing.append("range")
+        node_violations = violations.get(uri, {})
+        problems = [
+            node_violations[name]
+            for name in ("DomainIsDatatype", "ObjectPropertyRangeIsDatatype", "DatatypePropertyRangeIsClass")
+            if name in node_violations
+        ]
+        missing = [node_violations[name] for name in ("DomainMissing", "RangeMissing") if name in node_violations]
 
         if problems:
             status = Status.FAIL
             message = " ".join(problems)
         elif missing:
             status = Status.WARN
-            message = f"No <code>rdfs:{'</code> and <code>rdfs:'.join(missing)}</code> declared."
+            message = " ".join(missing)
         else:
             status = Status.OK
             message = "Domain and range declared."

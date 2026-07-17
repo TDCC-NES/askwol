@@ -4,57 +4,20 @@ An OWL ontology should define *schema*: classes, properties, and datatypes.
 Individuals, SKOS concepts, and other instance data belong in a separate data
 resource or concept scheme, not mixed into the ontology itself.
 
-This check uses a *whitelist* of schema constructs. A term defined in the
-ontology's own namespace is fine when it carries at least one schema type
-(class, property, datatype, or the ontology header). A term that carries a type
-but no schema type (a SKOS concept, a named individual, other instance data) is
-flagged.
+The whitelist check itself (does a term carry at least one recognized schema
+type?) runs through pyshacl against shapes/non_ontology_terms.ttl; this module
+only computes the display label for whatever it flags.
 """
 
 from __future__ import annotations
 
 from rdflib import Graph, URIRef
-from rdflib.namespace import OWL, RDF, RDFS, SKOS
+from rdflib.namespace import OWL, RDF, SKOS
 
 from askwol.models import NonOntologyTermIssue, NonOntologyTermsReport, Status
+from askwol.shacl_runner import run_shapes
 
-# rdf:type values that mark a term as legitimate OWL/RDFS schema.
-SCHEMA_TYPES: frozenset[URIRef] = frozenset({
-    OWL.Class,
-    RDFS.Class,
-    OWL.ObjectProperty,
-    OWL.DatatypeProperty,
-    OWL.AnnotationProperty,
-    RDF.Property,
-    OWL.FunctionalProperty,
-    OWL.InverseFunctionalProperty,
-    OWL.TransitiveProperty,
-    OWL.SymmetricProperty,
-    OWL.AsymmetricProperty,
-    OWL.ReflexiveProperty,
-    OWL.IrreflexiveProperty,
-    RDFS.Datatype,
-    OWL.Ontology,
-})
-
-EXTERNAL_NAMESPACES = (
-    "http://www.w3.org/2002/07/owl#",
-    "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-    "http://www.w3.org/2000/01/rdf-schema#",
-    "http://www.w3.org/2001/XMLSchema#",
-    "http://www.w3.org/XML/1998/namespace",
-    "http://www.w3.org/2004/02/skos/core#",
-    "http://www.w3.org/ns/prov#",
-    "http://purl.org/dc/terms/",
-    "http://purl.org/dc/elements/1.1/",
-    "http://xmlns.com/foaf/0.1/",
-    "https://schema.org/",
-    "http://schema.org/",
-    "http://www.w3.org/ns/shacl#",
-    "http://www.w3.org/2006/time#",
-    "http://www.w3.org/ns/dcat#",
-    "http://www.opengis.net/ont/geosparql#",
-)
+_SHAPES_FILE = "non_ontology_terms.ttl"
 
 
 def _namespace_of(uri: str) -> str:
@@ -71,10 +34,6 @@ def _local_name(uri: str) -> str:
     if "/" in uri:
         return uri.rstrip("/").rsplit("/", 1)[1]
     return uri
-
-
-def _is_external(uri: str) -> bool:
-    return any(uri.startswith(ns) for ns in EXTERNAL_NAMESPACES)
 
 
 def _type_label(types: set[URIRef]) -> str:
@@ -101,29 +60,16 @@ def check_non_ontology_terms(graph: Graph) -> NonOntologyTermsReport:
             message="no owl:Ontology declaration found",
         )
 
-    def _in_own_namespace(uri: str) -> bool:
-        return any(uri.startswith(ns) for ns in ontology_namespaces)
-
     flagged: list[NonOntologyTermIssue] = []
-    for subject in set(graph.subjects()):
-        if not isinstance(subject, URIRef):
+    for result in run_shapes(graph, _SHAPES_FILE):
+        if result.name != "SchemaWhitelist":
             continue
-        uri = str(subject)
-        # Only the ontology's own namespace is considered. The own namespace
-        # wins even when it is a well-known vocabulary (e.g. validating FOAF).
-        if uri in ontology_iris or not _in_own_namespace(uri):
-            continue
+        subject = URIRef(result.focus_node)
         types = set(graph.objects(subject, RDF.type))
-        if not types:
-            # Untyped terms are covered by the internal-terms check.
-            continue
-        if any(t in SCHEMA_TYPES for t in types):
-            # Carries at least one schema type: a legitimate ontology term.
-            continue
         flagged.append(
             NonOntologyTermIssue(
-                term=uri,
-                display_name=_local_name(uri),
+                term=result.focus_node,
+                display_name=_local_name(result.focus_node),
                 type_label=_type_label(types),
             )
         )

@@ -14,25 +14,38 @@
 
             SELECT DISTINCT ?this WHERE {
                 ?this a ?type .
-                VALUES ?type {
-                    owl:Class rdfs:Class rdf:Property
-                    owl:ObjectProperty owl:DatatypeProperty owl:AnnotationProperty
-                    owl:FunctionalProperty owl:InverseFunctionalProperty
-                    owl:TransitiveProperty owl:SymmetricProperty
-                    owl:AsymmetricProperty owl:ReflexiveProperty owl:IrreflexiveProperty
-                }
+                FILTER(?type IN (
+                    owl:Class, rdfs:Class, rdf:Property,
+                    owl:ObjectProperty, owl:DatatypeProperty, owl:AnnotationProperty,
+                    owl:FunctionalProperty, owl:InverseFunctionalProperty,
+                    owl:TransitiveProperty, owl:SymmetricProperty,
+                    owl:AsymmetricProperty, owl:ReflexiveProperty, owl:IrreflexiveProperty
+                ))
                 FILTER(isIRI(?this))
-                FILTER(
-                    !STRSTARTS(STR(?this), "http://www.w3.org/2002/07/owl#") &&
-                    !STRSTARTS(STR(?this), "http://www.w3.org/1999/02/22-rdf-syntax-ns#") &&
-                    !STRSTARTS(STR(?this), "http://www.w3.org/2000/01/rdf-schema#") &&
-                    !STRSTARTS(STR(?this), "http://www.w3.org/2001/XMLSchema#") &&
-                    !STRSTARTS(STR(?this), "http://www.w3.org/2004/02/skos/core#") &&
-                    !STRSTARTS(STR(?this), "http://purl.org/dc/terms/") &&
-                    !STRSTARTS(STR(?this), "http://xmlns.com/foaf/0.1/") &&
-                    !STRSTARTS(STR(?this), "http://schema.org/") &&
-                    !STRSTARTS(STR(?this), "https://schema.org/")
-                )
+                {
+                    # The ontology's own namespace wins, even when it is a
+                    # well-known vocabulary (e.g. validating FOAF itself).
+                    ?ont a owl:Ontology .
+                    BIND(REPLACE(STR(?ont), "^(.*[/#])[^/#]*$", "$1") AS ?ontologyNs)
+                    FILTER(STRSTARTS(STR(?this), ?ontologyNs))
+                }
+                UNION
+                {
+                    # No owl:Ontology declared at all: fall back to excluding
+                    # well-known vocabularies.
+                    FILTER NOT EXISTS { ?anyOnt a owl:Ontology }
+                    FILTER(
+                        !STRSTARTS(STR(?this), "http://www.w3.org/2002/07/owl#") &&
+                        !STRSTARTS(STR(?this), "http://www.w3.org/1999/02/22-rdf-syntax-ns#") &&
+                        !STRSTARTS(STR(?this), "http://www.w3.org/2000/01/rdf-schema#") &&
+                        !STRSTARTS(STR(?this), "http://www.w3.org/2001/XMLSchema#") &&
+                        !STRSTARTS(STR(?this), "http://www.w3.org/2004/02/skos/core#") &&
+                        !STRSTARTS(STR(?this), "http://purl.org/dc/terms/") &&
+                        !STRSTARTS(STR(?this), "http://xmlns.com/foaf/0.1/") &&
+                        !STRSTARTS(STR(?this), "http://schema.org/") &&
+                        !STRSTARTS(STR(?this), "https://schema.org/")
+                    )
+                }
             }
         """ ;
     ] ;
@@ -45,10 +58,20 @@
         sh:message "Add an rdfs:label to each internally defined class and property." ;
     ] ;
 
-    sh:property [
+    sh:sparql [
+        a sh:SPARQLConstraint ;
         sh:name "Comment" ;
-        sh:path rdfs:comment ;
-        sh:minCount 1 ;
-        sh:severity sh:Violation ;
-        sh:message "Add an rdfs:comment to each internally defined class and property." ;
+        sh:message "Add an rdfs:comment to each internally defined class and property, unless its owl:inverseOf partner already has one." ;
+        sh:select """
+            PREFIX owl: <http://www.w3.org/2002/07/owl#>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+            SELECT $this WHERE {
+                FILTER NOT EXISTS { $this rdfs:comment ?comment }
+                FILTER NOT EXISTS {
+                    { $this owl:inverseOf ?inverse } UNION { ?inverse owl:inverseOf $this }
+                    ?inverse rdfs:comment ?inverseComment .
+                }
+            }
+        """ ;
     ] .
