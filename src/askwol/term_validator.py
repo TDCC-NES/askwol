@@ -5,6 +5,7 @@ from __future__ import annotations
 from rdflib import URIRef
 
 from askwol.cache import OntologyCache
+from askwol.deprecation import deprecation_marker
 from askwol.models import Status, TermCheck
 
 # ---------------------------------------------------------------------------
@@ -114,12 +115,14 @@ def validate_terms(
     for local in sorted(local_names):
         full_uri = namespace_uri + local
         if full_uri in remote_uris:
+            marker = deprecation_marker(remote_graph, URIRef(full_uri))
             results.append(
                 TermCheck(
                     term_uri=full_uri,
                     prefix=prefix,
                     local_name=local,
-                    status=Status.OK,
+                    status=Status.WARN if marker else Status.OK,
+                    deprecated=marker,
                 )
             )
         else:

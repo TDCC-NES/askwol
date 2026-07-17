@@ -42,12 +42,12 @@ app = FastAPI(
     description=(
         "Validate OWL ontologies: namespace resolution, external term "
         "definitions (existence in remote vocabularies), internal term "
-        "definitions (own-namespace terms are defined), label and comment "
-        "documentation (SHACL), ontology metadata (SHACL), language-tag "
-        "consistency, unused prefix declarations, owl:imports resolution, "
-        "IRI strategy consistency (hash vs slash), IRI scheme consistency "
-        "(http vs https), and lightweight OWL RL reasoner checks (ontology "
-        "consistency, inconsistent individuals, and unsatisfiable "
+        "definitions (own-namespace terms are defined), label "
+        "and comment documentation (SHACL), ontology metadata (SHACL), "
+        "language-tag consistency, unused prefix declarations, owl:imports "
+        "resolution, IRI strategy consistency (hash vs slash), IRI scheme "
+        "consistency (http vs https), and lightweight OWL RL reasoner checks "
+        "(ontology consistency, inconsistent individuals, and unsatisfiable "
         "classes)."
     ),
     version="0.1.0",
@@ -634,15 +634,12 @@ async def validate_api(
     finally:
         tmp_path.unlink(missing_ok=True)
 
-    ns_checks = await resolve_all_namespaces(
-        {pfx: uri for pfx, uri in parsed.namespaces.items()
-         if parsed.terms_by_namespace.get(pfx)},
-        cache,
-    )
+    active_ns = {pfx: uri for pfx, uri in parsed.namespaces.items()
+                 if parsed.terms_by_namespace.get(pfx)}
+
+    ns_checks = await resolve_all_namespaces(active_ns, cache)
     ns_check_map = {c.uri: c for c in ns_checks}
-    for prefix, uri in parsed.namespaces.items():
-        if not parsed.terms_by_namespace.get(prefix):
-            continue
+    for prefix, uri in active_ns.items():
         ns_check = ns_check_map[uri]
         local_names = parsed.terms_by_namespace.get(prefix, set())
         term_checks = validate_terms(prefix, uri, local_names, cache)

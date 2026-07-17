@@ -610,6 +610,16 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   catches typos like <code>foaf:nme</code> and made-up reuse of established
   prefixes. Terms from your own namespace are checked separately (see
   <a href="#internal-terms">Internal term definitions</a>).</div>
+  <div class="warn">A term can also exist but be deprecated by the
+  vocabulary that defines it, marked with <code>owl:deprecated</code>,
+  <code>owl:DeprecatedClass</code>/<code>owl:DeprecatedProperty</code>
+  (used by e.g. <a href="https://vivoweb.org/ontology/core" target="_blank" rel="noopener">VIVO</a>),
+  or a <code>vs:term_status</code> of &ldquo;deprecated&rdquo;/&ldquo;archaic&rdquo;
+  (<a href="https://www.w3.org/2003/06/sw-vocab-status/note" target="_blank" rel="noopener">the W3C vocabulary status note</a>,
+  used by e.g. <a href="http://xmlns.com/foaf/spec/index.rdf" target="_blank" rel="noopener">FOAF</a>).
+  askwol checks for all three and flags a deprecated reused term as a warning,
+  so you don&rsquo;t quietly build on a term the source vocabulary is
+  phasing out.</div>
 """,
     },
     {
@@ -674,6 +684,10 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <code>person</code>, or an uppercase property like <code>HasName</code>,
   with no digit following the capital) makes an ontology harder to read and
   to reuse.</div>
+  <div class="tip">A term marked deprecated (see
+  <a href="#external-terms">External term definitions</a>) is exempt from
+  naming checks: an old term kept around for backward compatibility
+  shouldn&rsquo;t need renaming on its way out.</div>
 """,
     },
     {
@@ -711,7 +725,10 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <code>rdfs:range</code> directly on each property; it does not follow domains
   or ranges inherited from a super-property. A reasoner would follow that
   inheritance, so this check can warn even where reasoning finds no problem.
-  Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/term_inventory.ttl" target="_blank" rel="noopener">SHACL shapes</a>.</div>
+  Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/term_inventory.ttl" target="_blank" rel="noopener">SHACL shapes</a>.
+  A property marked deprecated (see
+  <a href="#external-terms">External term definitions</a>) is exempt from
+  this check.</div>
 """,
     },
     {
@@ -781,7 +798,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   labeling.</div>
   <div class="tip">askwol uses <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes</a> to check that each
   <em>internally defined</em> class and property has an
-  <code>rdfs:label</code>. Reused external vocabulary terms are ignored.</div>
+  <code>rdfs:label</code>. Reused external vocabulary terms, and terms you
+  have marked deprecated yourself, are ignored.</div>
 """,
     },
     {
@@ -802,7 +820,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   helpful, how the term should (and should not) be used.</div>
   <div class="tip">askwol uses <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes</a> to check that each
   <em>internally defined</em> class and property has an
-  <code>rdfs:comment</code>. Reused external vocabulary terms are ignored.</div>
+  <code>rdfs:comment</code>. Reused external vocabulary terms, and terms you
+  have marked deprecated yourself, are ignored.</div>
   <div class="tip">An <strong>inverse property</strong>
   (<code>owl:inverseOf</code>) doesn&rsquo;t need its own comment when its
   partner already has one: the relationship is documented either way.</div>
@@ -841,7 +860,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <div class="tip">askwol checks
   <code>rdfs:label</code>, <code>rdfs:comment</code>,
   <code>skos:prefLabel</code>, <code>skos:definition</code>, and other
-  standard annotation properties for tag consistency.</div>
+  standard annotation properties for tag consistency. A term you have marked
+  deprecated yourself is exempt.</div>
 """,
     },
     {

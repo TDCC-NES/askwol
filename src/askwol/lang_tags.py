@@ -6,6 +6,7 @@ from collections import defaultdict
 
 from rdflib import BNode, Graph, Literal, URIRef
 
+from askwol.deprecation import is_deprecated
 from askwol.models import LangTagIssue, LangTagPropertySummary, LangTagReport
 
 # Annotation properties where language tags are expected
@@ -59,6 +60,8 @@ def check_lang_tags(graph: Graph, ns_map: dict[str, str]) -> LangTagReport:
     prop_data: dict[str, dict[str, set[str | None]]] = defaultdict(lambda: defaultdict(set))
     # remember which subjects were blank nodes
     bnode_subjects: set[str] = set()
+    # memoize deprecation lookups; a deprecated term is exempt from this check
+    deprecated_cache: dict[URIRef, bool] = {}
 
     for s, p, o in graph:
         if not isinstance(p, URIRef) or not isinstance(o, Literal):
@@ -66,6 +69,11 @@ def check_lang_tags(graph: Graph, ns_map: dict[str, str]) -> LangTagReport:
         p_str = str(p)
         if p_str not in LABEL_PROPERTIES:
             continue
+        if isinstance(s, URIRef):
+            if s not in deprecated_cache:
+                deprecated_cache[s] = is_deprecated(graph, s)
+            if deprecated_cache[s]:
+                continue
         s_str = str(s)
         if isinstance(s, BNode):
             bnode_subjects.add(s_str)

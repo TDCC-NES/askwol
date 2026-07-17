@@ -34,6 +34,9 @@ class TermCheck(BaseModel):
     local_name: str
     status: Status
     error: str | None = None
+    deprecated: str | None = None
+    """Set to the deprecation marker (e.g. ``owl:DeprecatedClass``) when a
+    confirmed term is marked deprecated by the vocabulary that defines it."""
 
 
 class NamespaceReport(BaseModel):
@@ -148,6 +151,9 @@ class DefinitionDocumentationCheck(BaseModel):
     has_comment: bool = False
     status: Status
     message: str | None = None
+    deprecated: str | None = None
+    """Set to the deprecation marker (e.g. ``owl:DeprecatedClass``) when this
+    term is marked deprecated; label/comment issues are not raised for it."""
 
 
 class DefinitionDocumentationReport(BaseModel):
@@ -241,6 +247,9 @@ class InternalTermEntry(BaseModel):
     category: str
     naming_ok: bool = True
     naming_message: str | None = None
+    deprecated: str | None = None
+    """Set to the deprecation marker (e.g. ``owl:DeprecatedClass``) when this
+    term is marked deprecated; naming issues are not raised for it."""
 
 
 class TermInventoryReport(BaseModel):
@@ -267,6 +276,9 @@ class DomainRangeCheck(BaseModel):
     has_range: bool = False
     status: Status = Status.OK
     message: str | None = None
+    deprecated: str | None = None
+    """Set to the deprecation marker (e.g. ``owl:DeprecatedClass``) when this
+    property is marked deprecated; domain/range issues are not raised for it."""
 
 
 class DomainRangeReport(BaseModel):
@@ -431,6 +443,8 @@ class ValidationReport(BaseModel):
                 return True
             if ns.invalid_terms > 0:
                 return True
+            if any(t.status == Status.WARN for t in ns.terms):
+                return True
         if self.unused_prefixes:
             return True
         if self.lang_tags and self.lang_tags.issues:
@@ -447,7 +461,7 @@ class ValidationReport(BaseModel):
             return True
         if self.datatypes and self.datatypes.unrecognized:
             return True
-        if self.imports and self.imports.missing:
+        if self.imports and self.imports.broken:
             return True
         if self.iri_strategy and self.iri_strategy.status == Status.WARN:
             return True

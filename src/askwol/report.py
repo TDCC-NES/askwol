@@ -39,6 +39,7 @@ def report_as_markdown(report: ValidationReport) -> str:
 
     ok_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.OK)
     fail_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.FAIL)
+    warn_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.WARN)
     skip_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.SKIP)
 
     w(f"| | Count |")
@@ -74,6 +75,8 @@ def report_as_markdown(report: ValidationReport) -> str:
             w(f"| Unsatisfiable classes | {len(reasoner.unsatisfiable_classes)} |")
     if fail_terms:
         w(f"| **Terms NOT found in vocabulary** | **{fail_terms}** |")
+    if warn_terms:
+        w(f"| Terms deprecated upstream | {warn_terms} |")
     if skip_terms:
         w(f"| Terms not checkable (namespace unavailable) | {skip_terms} |")
     w("")
@@ -111,6 +114,21 @@ def report_as_markdown(report: ValidationReport) -> str:
             w("|------|--------|----------|")
             for ns, t in failed_in_ok:
                 w(f"| `{t.local_name}` | `{ns.prefix}` | {t.term_uri} |")
+            w("")
+
+        # Show any WARN (deprecated upstream) terms from these namespaces
+        deprecated_in_ok = [(ns, t) for ns in ok_ns for t in ns.terms if t.status == Status.WARN]
+        if deprecated_in_ok:
+            w("### Terms deprecated upstream")
+            w("")
+            w("These terms exist in the remote vocabulary, but that vocabulary marks them deprecated: "
+              "the OWL 2 `owl:deprecated` annotation, the older `owl:DeprecatedClass`/`owl:DeprecatedProperty` "
+              "typing, or a `vs:term_status` of deprecated or archaic. Consider migrating to the replacement term.")
+            w("")
+            w("| Term | Prefix | Marker | Full URI |")
+            w("|------|--------|--------|----------|")
+            for ns, t in deprecated_in_ok:
+                w(f"| `{t.local_name}` | `{ns.prefix}` | {t.deprecated} | {t.term_uri} |")
             w("")
 
     if html_ns:
@@ -457,13 +475,17 @@ def _overview_line(report: ValidationReport, anchor: str) -> tuple[str, str] | N
             return None
         ok = sum(1 for ns in report.namespaces for t in ns.terms if t.status == S.OK)
         fail = sum(1 for ns in report.namespaces for t in ns.terms if t.status == S.FAIL)
-        skipped = total - ok - fail
+        warn = sum(1 for ns in report.namespaces for t in ns.terms if t.status == S.WARN)
+        skipped = total - ok - fail - warn
         bits = [f"{ok} confirmed"]
         if fail:
             bits.append(f"{fail} not found")
+        if warn:
+            bits.append(f"{warn} deprecated")
         if skipped:
             bits.append(f"{skipped} skipped")
-        return ("fail" if fail else "ok"), ", ".join(bits)
+        status = "fail" if fail else ("warn" if warn else "ok")
+        return status, ", ".join(bits)
     if anchor == "internal-terms":
         it = report.internal_terms
         if not it:
@@ -630,6 +652,7 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     # Term validation  -  grouped by status for clarity
     ok_terms = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.OK]
     fail_terms = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.FAIL]
+    warn_terms = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.WARN]
     skip_terms = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.SKIP]
 
     if fail_terms:
@@ -645,6 +668,11 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     if ok_terms:
         console.print(f"[green]{len(ok_terms)} terms verified[/green] in vocabularies: "
                        + ", ".join(sorted({ns.prefix for ns, _ in ok_terms})))
+
+    if warn_terms:
+        console.print(f"[yellow]⚠ {len(warn_terms)} term(s) deprecated upstream:[/yellow]")
+        for ns, t in warn_terms:
+            console.print(f"  [dim]{ns.prefix}:[/dim]{t.local_name} ({t.deprecated})")
 
     if skip_terms:
         console.print(f"[dim]{len(skip_terms)} terms could not be checked[/dim] (namespace unavailable)")

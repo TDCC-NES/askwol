@@ -35,6 +35,23 @@ def test_external_reused_terms_are_ignored():
     assert report.issues == []
 
 
+def test_deprecated_term_missing_docs_is_not_flagged():
+    g = Graph()
+    g.add((EX["ontology"], RDF.type, OWL.Ontology))
+    g.add((EX["OldClass"], RDF.type, OWL.Class))
+    g.add((EX["OldClass"], OWL.deprecated, Literal(True)))
+
+    report = check_definition_documentation(g)
+
+    assert report.total_definitions == 1
+    assert report.issues == []
+    check = report.checks[0]
+    assert check.status == Status.OK
+    assert check.has_label is True
+    assert check.has_comment is True
+    assert check.deprecated == "owl:deprecated"
+
+
 def test_inverse_property_does_not_need_its_own_comment():
     g = Graph()
     g.add((EX["ontology"], RDF.type, OWL.Ontology))

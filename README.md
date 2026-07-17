@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-117%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-133%20passing-brightgreen.svg)](#tests)
 [![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 
 <!-- Once deployed, add a live link here:
@@ -42,21 +42,21 @@ An interactive **class diagram** of your ontology, plus a single HTML report (or
 
 - **2.1 Namespaces** - fetches each declared namespace URI, checks HTTP status, tries to parse as RDF (Turtle, RDF/XML, JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF links.
 - **2.2 Unused prefixes** - flags `@prefix` declarations that are never used in any triple.
-- **2.3 External term definitions** - verifies that terms reused from an external vocabulary are actually defined there. Catches typos like `owl:MadeUpClass` and made-up reuse of established prefixes.
+- **2.3 External term definitions** - verifies that terms reused from an external vocabulary are actually defined there. Catches typos like `owl:MadeUpClass` and made-up reuse of established prefixes. A term that exists but is marked deprecated upstream (`owl:deprecated`, `owl:DeprecatedClass`/`owl:DeprecatedProperty`, or a `vs:term_status` of "deprecated"/"archaic") is flagged as a warning.
 
 **3. Term structure**
 
 - **3.1 Internal term definitions** - flags terms in the ontology's own namespace that are referenced but never defined (never appear as a subject). Usually a typo or a forgotten declaration.
-- **3.2 Term inventory & naming** - categorizes every internal term (class, object property, datatype property, datatype, individual) and checks capitalization: classes start uppercase, properties lowercase. Coded identifiers (an uppercase letter directly followed by a digit, e.g. CIDOC CRM's `P2_has_type` or Wikidata's `P19`) are exempt.
-- **3.3 Domains & ranges** - object and datatype properties should declare a domain and a range. Object properties range over classes; datatype properties over datatypes.
+- **3.2 Term inventory & naming** - categorizes every internal term (class, object property, datatype property, datatype, individual) and checks capitalization: classes start uppercase, properties lowercase. Coded identifiers (an uppercase letter directly followed by a digit, e.g. CIDOC CRM's `P2_has_type` or Wikidata's `P19`) are exempt, as is any term marked deprecated.
+- **3.3 Domains & ranges** - object and datatype properties should declare a domain and a range. Object properties range over classes; datatype properties over datatypes. Deprecated properties are exempt.
 - **3.4 Datatypes** - datatypes used as property ranges and literal datatypes should be recognized XSD built-ins, `rdfs:Literal`, `rdf:langString`, or a locally declared `rdfs:Datatype`. Catches typos like `xsd:stirng`.
 - **3.5 Non-ontology terms** - an OWL ontology defines schema (classes, properties, datatypes). Individuals, `skos:Concept` instances, and other instance data belong in a separate resource. Works from a whitelist of schema constructs.
 
 **4. Term documentation**
 
-- **4.1 Labels** - SHACL check that every internally defined class and property carries an `rdfs:label`. Reused external terms are ignored.
-- **4.2 Comments** - SHACL check that every internally defined class and property carries an `rdfs:comment`. Reused external terms are ignored.
-- **4.3 Language tag consistency** - labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) should use the same language tags across subjects.
+- **4.1 Labels** - SHACL check that every internally defined class and property carries an `rdfs:label`. Reused external terms, and terms marked deprecated, are ignored.
+- **4.2 Comments** - SHACL check that every internally defined class and property carries an `rdfs:comment`. Reused external terms, and terms marked deprecated, are ignored.
+- **4.3 Language tag consistency** - labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) should use the same language tags across subjects. Deprecated terms are exempt.
 
 **5. Logic**
 
@@ -273,6 +273,7 @@ src/askwol/
 ├── parser.py             # rdflib ontology parsing
 ├── resolver.py           # async HTTP namespace resolution
 ├── term_validator.py     # remote term existence checks
+├── deprecation.py        # shared deprecated-term detection (owl:deprecated, owl:DeprecatedClass/Property, vs:term_status)
 ├── metadata_validator.py # SHACL-based ontology metadata checks
 ├── definition_docs.py    # SHACL-based label/comment checks
 ├── shacl_runner.py        # shared pyshacl runner used by the SHACL-based checks
@@ -313,7 +314,7 @@ same cluster categories) in the same order, otherwise the module fails to load
 pytest tests/ -v
 ```
 
-117 tests cover every automated check on both good and bad inputs, the HTML
+139 tests cover every automated check on both good and bad inputs, the HTML
 report rendering, the FastAPI routes via `TestClient`, and a pinned end-to-end
 smoke test on [`html/ontologies/broken.ttl`](html/ontologies/broken.ttl) that
 fails loudly if any single check ever stops detecting issues. The clean

@@ -18,6 +18,7 @@ from __future__ import annotations
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import OWL, RDF, RDFS, XSD
 
+from askwol.deprecation import deprecation_marker
 from askwol.models import (
     DatatypeReport,
     DatatypeUsage,
@@ -212,7 +213,8 @@ def check_term_inventory(graph: Graph) -> TermInventoryReport:
     counts: dict[str, int] = {}
     for uri, category in sorted(classified.items()):
         local = _local_name(uri)
-        naming_message = naming_violations.get(uri)
+        marker = deprecation_marker(graph, URIRef(uri))
+        naming_message = None if marker else naming_violations.get(uri)
         entries.append(
             InternalTermEntry(
                 term=uri,
@@ -220,6 +222,7 @@ def check_term_inventory(graph: Graph) -> TermInventoryReport:
                 category=category,
                 naming_ok=naming_message is None,
                 naming_message=naming_message,
+                deprecated=marker,
             )
         )
         counts[category] = counts.get(category, 0) + 1
@@ -287,6 +290,7 @@ def check_domains_ranges(graph: Graph) -> DomainRangeReport:
             datatype_count += 1
 
         node_violations = violations.get(uri, {})
+        marker = deprecation_marker(graph, subject)
         problems = [
             node_violations[name]
             for name in ("DomainIsDatatype", "ObjectPropertyRangeIsDatatype", "DatatypePropertyRangeIsClass")
@@ -294,7 +298,10 @@ def check_domains_ranges(graph: Graph) -> DomainRangeReport:
         ]
         missing = [node_violations[name] for name in ("DomainMissing", "RangeMissing") if name in node_violations]
 
-        if problems:
+        if marker:
+            status = Status.OK
+            message = "Deprecated; domain and range are not checked."
+        elif problems:
             status = Status.FAIL
             message = " ".join(problems)
         elif missing:
@@ -313,6 +320,7 @@ def check_domains_ranges(graph: Graph) -> DomainRangeReport:
                 has_range=has_range,
                 status=status,
                 message=message,
+                deprecated=marker,
             )
         )
 
