@@ -12,7 +12,7 @@ from rdflib import Graph
 from rdflib.namespace import OWL, RDF, RDFS
 
 from askwol.iri_utils import local_name as _local_name
-from askwol.models import InternalTermIssue, InternalTermsReport, Status
+from askwol.models import InternalTermIssue, InternalTermReference, InternalTermsReport, Status
 from askwol.shacl_runner import run_shapes, run_target
 
 _SHAPES_FILE = "internal_terms.ttl"
@@ -66,14 +66,20 @@ def check_internal_terms(graph: Graph) -> InternalTermsReport:
         for result in run_shapes(graph, _SHAPES_FILE)
         if result.name == "InternalTermDefined"
     )
+    undefined_set = set(undefined_uris)
     undefined = [
         InternalTermIssue(term=uri, display_name=_local_name(uri))
         for uri in undefined_uris
+    ]
+    all_referenced = [
+        InternalTermReference(term=uri, display_name=_local_name(uri), defined=uri not in undefined_set)
+        for uri in sorted(referenced)
     ]
 
     return InternalTermsReport(
         total_referenced=len(referenced),
         defined=len(referenced) - len(undefined),
         undefined=undefined,
+        referenced=all_referenced,
         status=Status.OK if not undefined else Status.FAIL,
     )

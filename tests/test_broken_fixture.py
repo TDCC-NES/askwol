@@ -132,6 +132,9 @@ def test_reasoner_detects_inconsistency(parsed):
     r = run_reasoner_checks(parsed.graph)
     assert r.consistent is False
     assert r.inconsistent_individuals, "expected Alice to be flagged"
+    assert any(cls.endswith("ImpossiblePerson") for cls in r.unsatisfiable_classes), (
+        "expected ImpossiblePerson to be flagged as unsatisfiable"
+    )
 
 
 def test_non_ontology_terms_warns(parsed):
@@ -208,6 +211,7 @@ async def test_cli_pipeline_populates_every_check(monkeypatch, foaf_stub):
     assert report.definition_docs is not None and report.definition_docs.issues
     assert report.lang_tags is not None and report.lang_tags.issues
     assert report.reasoner is not None and report.reasoner.consistent is False
+    assert report.reasoner.unsatisfiable_classes, "expected ImpossiblePerson to be flagged as unsatisfiable"
     assert report.namespaces
     foaf_ns = next(n for n in report.namespaces if n.prefix == "foaf")
     assert foaf_ns.resolution.status == Status.OK

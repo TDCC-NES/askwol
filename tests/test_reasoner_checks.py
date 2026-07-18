@@ -21,6 +21,37 @@ def test_consistent_ontology_reports_ok():
     assert any(c.key == "ontology_consistency" and c.status == Status.OK for c in report.checks)
 
 
+def test_all_three_facets_always_present_when_ok():
+    g = Graph()
+    g.add((EX.ontology, RDF.type, OWL.Ontology))
+    g.add((EX.Person, RDF.type, OWL.Class))
+
+    report = run_reasoner_checks(g)
+
+    keys = [c.key for c in report.checks]
+    assert keys == ["ontology_consistency", "inconsistent_individuals", "unsatisfiable_classes"]
+    assert all(c.status == Status.OK for c in report.checks)
+
+
+def test_all_three_facets_always_present_when_unsatisfiable_class_only():
+    g = Graph()
+    g.add((EX.ontology, RDF.type, OWL.Ontology))
+    g.add((EX.Cat, RDF.type, OWL.Class))
+    g.add((EX.Dog, RDF.type, OWL.Class))
+    g.add((EX.Cat, OWL.disjointWith, EX.Dog))
+    g.add((EX.ImpossiblePet, RDF.type, OWL.Class))
+    g.add((EX.ImpossiblePet, RDFS.subClassOf, EX.Cat))
+    g.add((EX.ImpossiblePet, RDFS.subClassOf, EX.Dog))
+
+    report = run_reasoner_checks(g)
+
+    keys = {c.key: c.status for c in report.checks}
+    assert {"ontology_consistency", "inconsistent_individuals", "unsatisfiable_classes"} <= set(keys)
+    assert keys["inconsistent_individuals"] == Status.OK
+    assert keys["unsatisfiable_classes"] == Status.WARN
+    assert keys["ontology_consistency"] == Status.WARN
+
+
 def test_disjoint_types_make_individual_inconsistent():
     g = Graph()
     g.add((EX.ontology, RDF.type, OWL.Ontology))

@@ -91,6 +91,22 @@ def test_api_validate_returns_all_check_sections(client):
     assert data["iri_strategy"]["status"] in ("ok", "warn", "skip")
 
 
+def test_api_validate_excludes_own_namespace_from_term_validation(client):
+    """The ontology's own namespace stays in the namespace-resolution list (2.1)
+    but its terms are not run through external term validation (2.3): they're
+    already covered by the internal term inventory."""
+    with SAMPLE.open("rb") as fh:
+        r = client.post(
+            "/api/validate",
+            files={"file": ("sample.ttl", fh, "text/turtle")},
+        )
+    assert r.status_code == 200, r.text
+    data = r.json()
+
+    own_ns = next(ns for ns in data["namespaces"] if ns["uri"].startswith("https://lod-4tu.tudelft.nl/dataset"))
+    assert own_ns["terms"] == []
+
+
 def test_api_validate_parse_error_returns_422(client):
     r = client.post(
         "/api/validate",

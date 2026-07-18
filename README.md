@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-143%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-151%20passing-brightgreen.svg)](#tests)
 [![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 
 <!-- Once deployed, add a live link here:
@@ -261,7 +261,7 @@ Turtle (`.ttl`), RDF/XML (`.rdf`, `.owl`), JSON-LD (`.jsonld`), N-Triples (`.nt`
 pytest tests/ -v
 ```
 
-143 tests cover every automated check on both good and bad inputs, the HTML
+151 tests cover every automated check on both good and bad inputs, the HTML
 report rendering, the FastAPI routes via `TestClient`, and a pinned end-to-end
 smoke test on [`html/ontologies/broken.ttl`](html/ontologies/broken.ttl) that
 fails loudly if any single check ever stops detecting issues. The clean

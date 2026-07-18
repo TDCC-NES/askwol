@@ -15,6 +15,7 @@ from askwol.imports_check import check_imports
 from askwol.internal_terms import check_internal_terms
 from askwol.iri_scheme import check_iri_scheme
 from askwol.iri_strategy import check_iri_strategy
+from askwol.iri_utils import ontology_namespaces
 from askwol.lang_tags import check_lang_tags
 from askwol.metadata_validator import validate_ontology_metadata
 from askwol.non_ontology_terms import check_non_ontology_terms
@@ -98,17 +99,20 @@ async def _run_check(
     # Only resolve and report namespaces that have subject-position terms
     active_ns = {pfx: uri for pfx, uri in parsed.namespaces.items()
                  if parsed.terms_by_namespace.get(pfx)}
+    own_ns = ontology_namespaces(parsed.graph)
 
     # 2. Resolve namespaces
     ns_checks = await resolve_all_namespaces(active_ns, cache, timeout=timeout)
     ns_check_map = {c.uri: c for c in ns_checks}
 
-    # 3. Validate terms per namespace
+    # 3. Validate terms per namespace (skip the ontology's own namespace: its
+    # terms are already covered by the internal-terms/term-inventory checks,
+    # not "externally reused" terms).
     for prefix, uri in active_ns.items():
         ns_check = ns_check_map[uri]
         local_names = parsed.terms_by_namespace.get(prefix, set())
 
-        term_checks = validate_terms(prefix, uri, local_names, cache)
+        term_checks = [] if uri in own_ns else validate_terms(prefix, uri, local_names, cache)
 
         report.namespaces.append(
             NamespaceReport(

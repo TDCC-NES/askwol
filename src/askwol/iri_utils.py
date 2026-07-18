@@ -9,6 +9,9 @@ external-vocabulary allowlist only has to be updated in one place.
 
 from __future__ import annotations
 
+from rdflib import Graph, URIRef
+from rdflib.namespace import OWL, RDF
+
 # Well-known vocabularies that are reused, not defined, by an ontology.
 # Terms from these namespaces are excluded from "own namespace" checks
 # (definition docs, internal terms, term inventory, ...) even when there
@@ -54,3 +57,24 @@ def local_name(uri: str) -> str:
 def is_external(uri: str) -> bool:
     """True if a URI belongs to one of the well-known EXTERNAL_NAMESPACES."""
     return any(uri.startswith(ns) for ns in EXTERNAL_NAMESPACES)
+
+
+def ontology_namespaces(graph: Graph) -> set[str]:
+    """Return the namespace(s) declared as this ontology's own (subject of owl:Ontology).
+
+    The ontology IRI itself is commonly used as the namespace directly, or as the
+    namespace minus its trailing "#"/"/" separator (e.g. subject
+    "http://example.org/onto" with terms under "http://example.org/onto#"). Both
+    forms, plus the namespace derived by stripping a local name, are returned so
+    callers can match against however the namespace is actually declared.
+    """
+    namespaces: set[str] = set()
+    for subject in graph.subjects(RDF.type, OWL.Ontology):
+        if not isinstance(subject, URIRef):
+            continue
+        uri = str(subject)
+        namespaces.add(uri)
+        namespaces.add(uri + "#")
+        namespaces.add(uri + "/")
+        namespaces.add(namespace_of(uri))
+    return namespaces

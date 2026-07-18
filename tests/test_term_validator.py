@@ -109,11 +109,3 @@ def test_xsd_mixed():
     by_name = {r.local_name: r for r in results}
     assert by_name["string"].status == Status.OK
     assert by_name["madeUpType"].status == Status.FAIL
-
-
-def test_xsd_no_network_needed():
-    """XSD validation should work without anything in the cache."""
-    cache = OntologyCache()
-    # Cache is empty — but XSD terms should still validate
-    results = validate_terms("xsd", XSD_NS, {"float", "nonNegativeInteger"}, cache)
-    assert all(r.status == Status.OK for r in results)

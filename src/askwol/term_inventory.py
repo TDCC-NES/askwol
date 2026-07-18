@@ -19,7 +19,7 @@ from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import OWL, RDF, RDFS, XSD
 
 from askwol.deprecation import deprecation_marker
-from askwol.iri_utils import is_external as _is_external, local_name as _local_name, namespace_of as _namespace_of
+from askwol.iri_utils import is_external as _is_external, local_name as _local_name, ontology_namespaces as _ontology_namespaces
 from askwol.models import (
     DatatypeReport,
     DatatypeUsage,
@@ -83,14 +83,6 @@ _OTHER_DATATYPES = {
     "http://www.w3.org/2002/07/owl#real",
     "http://www.w3.org/2002/07/owl#rational",
 }
-
-
-def _ontology_namespaces(graph: Graph) -> set[str]:
-    return {
-        _namespace_of(str(subject))
-        for subject in graph.subjects(RDF.type, OWL.Ontology)
-        if isinstance(subject, URIRef)
-    }
 
 
 def _primary_category(types: set[URIRef]) -> str:

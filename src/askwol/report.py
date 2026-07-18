@@ -88,6 +88,122 @@ def report_as_markdown(report: ValidationReport) -> str:
         w("> **Issues were found**  -  see details below.")
         w("")
 
+    # Imports
+    imp = report.imports
+    if imp is not None:
+        w("## Imports")
+        w("")
+        w("Every `owl:imports` target declared in the ontology header is fetched over HTTP "
+          "and parsed as RDF, the same way a reasoner would follow it.")
+        w("")
+        if imp.broken:
+            w(f"> {len(imp.broken)} of {len(imp.checks)} declared import(s) do not resolve")
+        elif imp.checks:
+            w(f"> {len(imp.checks)} declared import(s), all resolve")
+        else:
+            w("> no `owl:imports` declared")
+        w("")
+        if imp.checks:
+            w("| Import | Status | Detail |")
+            w("|--------|--------|--------|")
+            for c in imp.checks:
+                res = c.resolution
+                status_label = "ok" if res.status == Status.OK else "fail"
+                bits = []
+                if res.http_status:
+                    bits.append(f"HTTP {res.http_status}")
+                if res.content_type:
+                    bits.append(res.content_type)
+                if res.is_valid_rdf is not None:
+                    bits.append("valid RDF" if res.is_valid_rdf else "invalid RDF")
+                if res.error:
+                    bits.append(res.error)
+                w(f"| {c.iri} | {status_label} | {', '.join(bits)} |")
+            w("")
+
+    # IRI strategy (hash vs slash) for the ontology's own defined terms
+    iri = report.iri_strategy
+    if iri is not None and iri.status != Status.SKIP:
+        w("## IRI strategy")
+        w("")
+        w("A consistent IRI pattern for the ontology's own terms: either every term sits under a "
+          "fragment (`http://example.org/ont#Term`, hash) or every term is its own slash path "
+          "(`http://example.org/ont/Term`, slash). Mixing both within one ontology confuses "
+          "consumers and tooling.")
+        w("")
+        if iri.status == Status.WARN:
+            w(f"> **Mixed**: {iri.hash_count} hash-style and {iri.slash_count} slash-style terms in the same ontology.")
+            w("")
+            if iri.hash_examples:
+                w("<details>")
+                w(f"<summary>Hash style examples ({iri.hash_count})</summary>")
+                w("")
+                for ex in iri.hash_examples:
+                    w(f"- `{ex}`")
+                w("")
+                w("</details>")
+                w("")
+            if iri.slash_examples:
+                w("<details>")
+                w(f"<summary>Slash style examples ({iri.slash_count})</summary>")
+                w("")
+                for ex in iri.slash_examples:
+                    w(f"- `{ex}`")
+                w("")
+                w("</details>")
+                w("")
+        else:
+            count = iri.hash_count if iri.strategy == "hash" else iri.slash_count
+            w(f"> **{iri.strategy.capitalize()} pattern** used consistently across all {count} defined term(s).")
+            w("")
+            examples = iri.hash_examples if iri.strategy == "hash" else iri.slash_examples
+            if examples:
+                w("<details>")
+                w(f"<summary>Show examples ({len(examples)})</summary>")
+                w("")
+                for ex in examples:
+                    w(f"- `{ex}`")
+                w("")
+                w("</details>")
+                w("")
+
+    # IRI scheme consistency (http vs https) per host
+    sch = report.iri_scheme
+    if sch is not None and sch.status != Status.SKIP:
+        w("## IRI scheme (http vs https)")
+        w("")
+        w("In RDF, `http://example.org/X` and `https://example.org/X` are **different IRIs**. "
+          "Within one ontology, each host should appear under exactly one scheme.")
+        w("")
+        if sch.status == Status.WARN:
+            w(f"> **{len(sch.conflicts)}** host(s) are referenced under both `http://` and `https://` in the same ontology.")
+            w("")
+            w("<details>")
+            w(f"<summary>Show conflicting hosts ({len(sch.conflicts)})</summary>")
+            w("")
+            w("| Host | http:// count | https:// count |")
+            w("|------|---------------|----------------|")
+            for c in sch.conflicts:
+                w(f"| `{c.host}` | {c.http_count} | {c.https_count} |")
+            w("")
+            w("</details>")
+            w("")
+        else:
+            w(f"> **{sch.total_hosts}** host(s) referenced, each under a single scheme "
+              f"({sch.http_only_hosts} http://, {sch.https_only_hosts} https://).")
+            w("")
+        if sch.hosts:
+            w("<details>")
+            w(f"<summary>Show hosts ({len(sch.hosts)})</summary>")
+            w("")
+            w("| Host | Scheme | Count |")
+            w("|------|--------|-------|")
+            for h in sch.hosts:
+                w(f"| `{h.host}` | {h.scheme}:// | {h.count} |")
+            w("")
+            w("</details>")
+            w("")
+
     # Group namespaces by status for clarity
     if ok_ns:
         w("## Namespaces with valid RDF")
@@ -103,34 +219,6 @@ def report_as_markdown(report: ValidationReport) -> str:
             w(f"| `{ns.prefix}` | {ns.uri} | {total} | {check} |")
         w("")
 
-        # Show any FAIL terms from these namespaces
-        failed_in_ok = [(ns, t) for ns in ok_ns for t in ns.terms if t.status == Status.FAIL]
-        if failed_in_ok:
-            w("### Terms not found in their vocabulary")
-            w("")
-            w("These terms are used in your ontology but **do not exist** in the remote vocabulary. This might indicate a typo or a made-up term.")
-            w("")
-            w("| Term | Prefix | Full URI |")
-            w("|------|--------|----------|")
-            for ns, t in failed_in_ok:
-                w(f"| `{t.local_name}` | `{ns.prefix}` | {t.term_uri} |")
-            w("")
-
-        # Show any WARN (deprecated upstream) terms from these namespaces
-        deprecated_in_ok = [(ns, t) for ns in ok_ns for t in ns.terms if t.status == Status.WARN]
-        if deprecated_in_ok:
-            w("### Terms deprecated upstream")
-            w("")
-            w("These terms exist in the remote vocabulary, but that vocabulary marks them deprecated: "
-              "the OWL 2 `owl:deprecated` annotation, the older `owl:DeprecatedClass`/`owl:DeprecatedProperty` "
-              "typing, or a `vs:term_status` of deprecated or archaic. Consider migrating to the replacement term.")
-            w("")
-            w("| Term | Prefix | Marker | Full URI |")
-            w("|------|--------|--------|----------|")
-            for ns, t in deprecated_in_ok:
-                w(f"| `{t.local_name}` | `{ns.prefix}` | {t.deprecated} | {t.term_uri} |")
-            w("")
-
     if html_ns:
         w("## Namespaces returning HTML")
         w("")
@@ -145,19 +233,6 @@ def report_as_markdown(report: ValidationReport) -> str:
             w(f"| `{ns.prefix}` | {ns.uri} | {ns.total_terms} | `{ct}` |")
         w("")
 
-        # List the unverifiable terms
-        html_terms = [(ns, t) for ns in html_ns for t in ns.terms]
-        if html_terms:
-            w("<details>")
-            w(f"<summary>Show {len(html_terms)} unverified terms from HTML namespaces</summary>")
-            w("")
-            for ns in html_ns:
-                if ns.terms:
-                    w(f"**`{ns.prefix}:`** " + ", ".join(f"`{t.local_name}`" for t in ns.terms))
-                    w("")
-            w("</details>")
-            w("")
-
     if fail_ns:
         w("## Unreachable namespaces")
         w("")
@@ -171,16 +246,76 @@ def report_as_markdown(report: ValidationReport) -> str:
             w(f"| `{ns.prefix}` | {ns.uri} | {err} |")
         w("")
 
-        # List terms from unreachable namespaces
-        fail_terms_list = [(ns, t) for ns in fail_ns for t in ns.terms]
-        if fail_terms_list:
+    # External term definitions: per-term verification against the remote vocabulary
+    if report.namespaces:
+        w("## External term definitions")
+        w("")
+        w("Every term you reuse from an external vocabulary must actually be defined in that vocabulary. "
+          "askwol looks each one up in the resolved namespace; a term that is missing there is usually a "
+          "typo or made-up reuse of an established prefix. A term that exists but is marked deprecated there "
+          "(`owl:deprecated`, `owl:DeprecatedClass`/`owl:DeprecatedProperty`, or a `vs:term_status` of "
+          "\"deprecated\"/\"archaic\") is flagged so you don't build on a term the source vocabulary is phasing out.")
+        w("")
+        term_summary_bits = [f"{ok_terms} confirmed"]
+        if fail_terms:
+            term_summary_bits.append(f"{fail_terms} not found")
+        if warn_terms:
+            term_summary_bits.append(f"{warn_terms} deprecated upstream")
+        if skip_terms:
+            term_summary_bits.append(f"{skip_terms} skipped (namespace unavailable)")
+        w(f"> {', '.join(term_summary_bits)} of {report.total_terms} total.")
+        w("")
+
+        failed_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.FAIL]
+        deprecated_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.WARN]
+        skipped_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.SKIP]
+        ok_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.OK]
+
+        if failed_terms_flat:
             w("<details>")
-            w(f"<summary>Show {len(fail_terms_list)} terms from unreachable namespaces</summary>")
+            w(f"<summary>Terms not found in their vocabulary ({len(failed_terms_flat)})</summary>")
             w("")
-            for ns in fail_ns:
-                if ns.terms:
-                    w(f"**`{ns.prefix}:`** " + ", ".join(f"`{t.local_name}`" for t in ns.terms))
-                    w("")
+            w("| Term | Prefix | Full URI |")
+            w("|------|--------|----------|")
+            for ns, t in failed_terms_flat:
+                w(f"| `{t.local_name}` | `{ns.prefix}` | {t.term_uri} |")
+            w("")
+            w("</details>")
+            w("")
+
+        if deprecated_terms_flat:
+            w("<details>")
+            w(f"<summary>Deprecated upstream ({len(deprecated_terms_flat)})</summary>")
+            w("")
+            w("| Term | Prefix | Marker | Full URI |")
+            w("|------|--------|--------|----------|")
+            for ns, t in deprecated_terms_flat:
+                w(f"| `{t.local_name}` | `{ns.prefix}` | {t.deprecated} | {t.term_uri} |")
+            w("")
+            w("</details>")
+            w("")
+
+        if skipped_terms_flat:
+            w("<details>")
+            w(f"<summary>Terms not checkable, namespace unavailable ({len(skipped_terms_flat)})</summary>")
+            w("")
+            w("| Term | Prefix |")
+            w("|------|--------|")
+            for ns, t in skipped_terms_flat:
+                w(f"| `{t.local_name}` | `{ns.prefix}` |")
+            w("")
+            w("</details>")
+            w("")
+
+        if ok_terms_flat:
+            w("<details>")
+            w(f"<summary>Confirmed terms ({len(ok_terms_flat)})</summary>")
+            w("")
+            w("| Term | Prefix |")
+            w("|------|--------|")
+            for ns, t in ok_terms_flat:
+                w(f"| `{t.local_name}` | `{ns.prefix}` |")
+            w("")
             w("</details>")
             w("")
 
@@ -259,7 +394,13 @@ def report_as_markdown(report: ValidationReport) -> str:
         w("| Term | Category | Naming |")
         w("|------|----------|--------|")
         for e in sorted(inv.entries, key=lambda x: (x.category, x.display_name.lower())):
-            w(f"| `{e.display_name}` | {e.category} | {'ok' if e.naming_ok else 'check'} |")
+            if e.deprecated:
+                naming = f"deprecated ({e.deprecated}), not checked"
+            elif e.naming_ok:
+                naming = "ok"
+            else:
+                naming = "check"
+            w(f"| `{e.display_name}` | {e.category} | {naming} |")
         w("")
         w("</details>")
         w("")
@@ -275,13 +416,21 @@ def report_as_markdown(report: ValidationReport) -> str:
         w(f"> {dr.with_domain}/{dr.total_properties} have a domain, "
           f"{dr.with_range}/{dr.total_properties} have a range, {len(dr.issues)} issue(s)")
         w("")
+        w("<details>")
+        summary = f"Show all properties ({dr.total_properties})"
         if dr.issues:
-            w("| Property | Category | Issue |")
-            w("|----------|----------|-------|")
-            for c in dr.issues:
-                msg = (c.message or "").replace("<code>", "`").replace("</code>", "`")
-                w(f"| `{c.display_name}` | {c.category} | {msg} |")
-            w("")
+            summary += f" &middot; {len(dr.issues)} to review"
+        w(f"<summary>{summary}</summary>")
+        w("")
+        w("| Property | Category | Domain | Range | Issue |")
+        w("|----------|----------|--------|-------|-------|")
+        for c in sorted(dr.checks, key=lambda x: (x.category, x.display_name.lower())):
+            category = c.category + (f" (deprecated: {c.deprecated})" if c.deprecated else "")
+            msg = (c.message or "").replace("<code>", "`").replace("</code>", "`") if c.status != Status.OK else ""
+            w(f"| `{c.display_name}` | {category} | {'yes' if c.has_domain else 'no'} | {'yes' if c.has_range else 'no'} | {msg} |")
+        w("")
+        w("</details>")
+        w("")
 
     # Datatypes
     dt = report.datatypes
@@ -299,6 +448,16 @@ def report_as_markdown(report: ValidationReport) -> str:
             for u in dt.unrecognized:
                 w(f"| `{u.display_name}` | {u.count} |")
             w("")
+        w("<details>")
+        w(f"<summary>Show all datatypes ({dt.total_datatypes})</summary>")
+        w("")
+        w("| Datatype | Uses | Where |")
+        w("|----------|------|-------|")
+        for u in sorted(dt.usages, key=lambda x: x.display_name.lower()):
+            w(f"| {'ok' if u.recognized else 'unrecognized'} `{u.display_name}` | {u.count} | {', '.join(u.sources)} |")
+        w("")
+        w("</details>")
+        w("")
 
     # Labels and comments
     docs = report.definition_docs
@@ -353,7 +512,7 @@ def report_as_markdown(report: ValidationReport) -> str:
 
     # Language tag consistency
     lt = report.lang_tags
-    if lt and lt.issues:
+    if lt and lt.status == Status.WARN and lt.issues:
         w("## Language tag consistency")
         w("")
         w(f"Languages used: {', '.join(f'`{l}`' for l in lt.languages_used)}")
@@ -374,6 +533,11 @@ def report_as_markdown(report: ValidationReport) -> str:
             has = ", ".join(issue.languages_found) if issue.languages_found else " - "
             expected = ", ".join(issue.languages_expected)
             w(f"| `{issue.subject}` | `{issue.property}` | {issue.detail} | {has} | {expected} |")
+        w("")
+    elif lt and lt.status == Status.WARN:
+        w("## Language tag consistency")
+        w("")
+        w("> **Warning:** labels or definitions are present, but none of them carry a language tag (e.g. `\"Person\"@en`).")
         w("")
 
     # Non-ontology terms
@@ -556,12 +720,15 @@ def _overview_line(report: ValidationReport, anchor: str) -> tuple[str, str] | N
         return "ok", f"{docs.total_definitions}/{docs.total_definitions} have a comment"
     if anchor == "language-tags":
         lt = report.lang_tags
-        if lt and lt.languages_used:
+        if not lt or lt.status == Status.SKIP:
+            return "info", "not applicable"
+        if lt.status == Status.WARN and lt.issues:
             langs = ", ".join(lt.languages_used)
-            if lt.issues:
-                return "warn", f"{langs}, {len(lt.issues)} issue(s)"
-            return "ok", f"{langs}, consistent"
-        return "info", "no language tags used"
+            return "warn", f"{langs}, {len(lt.issues)} issue(s)"
+        if lt.status == Status.WARN:
+            return "warn", "labels/definitions present but none carry a language tag"
+        langs = ", ".join(lt.languages_used)
+        return "ok", f"{langs}, consistent"
     if anchor == "reasoner":
         reasoner = report.reasoner
         if not reasoner or not reasoner.checks:
@@ -631,6 +798,59 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     # Clustered checks overview, mirroring the web report and markdown output.
     _print_overview(report, console)
 
+    # Imports
+    imp = report.imports
+    if imp is not None and imp.checks:
+        console.print()
+        if imp.broken:
+            console.print(f"[red]\u2717 Imports  -  {len(imp.broken)} of {len(imp.checks)} do not resolve[/red]")
+        else:
+            console.print(f"[green]\u2713 Imports  -  {len(imp.checks)} declared, all resolve[/green]")
+        imp_table = Table(title="Imports", show_lines=True)
+        imp_table.add_column("Import")
+        imp_table.add_column("Status", justify="center")
+        imp_table.add_column("Detail")
+        for c in imp.checks:
+            res = c.resolution
+            bits = []
+            if res.http_status:
+                bits.append(f"HTTP {res.http_status}")
+            if res.content_type:
+                bits.append(res.content_type)
+            if res.is_valid_rdf is not None:
+                bits.append("valid RDF" if res.is_valid_rdf else "invalid RDF")
+            if res.error:
+                bits.append(res.error)
+            imp_table.add_row(c.iri, _status_badge(res.status), ", ".join(bits))
+        console.print(imp_table)
+
+    # IRI strategy (hash vs slash) for the ontology's own defined terms
+    iri = report.iri_strategy
+    if iri is not None and iri.status != Status.SKIP:
+        console.print()
+        if iri.status == Status.WARN:
+            console.print(f"[yellow]\u26A0 IRI strategy  -  mixed: {iri.hash_count} hash + {iri.slash_count} slash[/yellow]")
+            if iri.hash_examples:
+                console.print(f"  [dim]hash:[/dim] {', '.join(iri.hash_examples)}")
+            if iri.slash_examples:
+                console.print(f"  [dim]slash:[/dim] {', '.join(iri.slash_examples)}")
+        else:
+            count = iri.hash_count if iri.strategy == "hash" else iri.slash_count
+            console.print(f"[green]\u2713 IRI strategy  -  {iri.strategy} style, {count} term(s)[/green]")
+
+    # IRI scheme consistency (http vs https) per host
+    sch = report.iri_scheme
+    if sch is not None and sch.status != Status.SKIP:
+        console.print()
+        if sch.status == Status.WARN:
+            console.print(f"[yellow]\u26A0 IRI scheme  -  {len(sch.conflicts)} host(s) on both http and https[/yellow]")
+            for c in sch.conflicts:
+                console.print(f"  [dim]{c.host}:[/dim] {c.http_count} http, {c.https_count} https")
+        else:
+            console.print(f"[green]\u2713 IRI scheme  -  {sch.total_hosts} host(s), single scheme each[/green]")
+            if sch.hosts:
+                console.print("  [dim]hosts:[/dim] " + ", ".join(f"{h.host} ({h.scheme})" for h in sch.hosts))
+
     # Namespace resolution table
     ns_table = Table(title="Namespace Resolution", show_lines=True)
     ns_table.add_column("Prefix", style="cyan")
@@ -676,6 +896,40 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
 
     if skip_terms:
         console.print(f"[dim]{len(skip_terms)} terms could not be checked[/dim] (namespace unavailable)")
+
+    # Internal term definitions: referenced own-namespace terms must be defined
+    it = report.internal_terms
+    if it and it.status != Status.SKIP and it.undefined:
+        console.print()
+        console.print(f"[red]\u2717 Internal term definitions  -  {len(it.undefined)} referenced but never defined[/red]")
+        it_table = Table(title="Undefined internal terms", show_lines=True)
+        it_table.add_column("Term", style="red bold")
+        it_table.add_column("Full IRI")
+        for issue in it.undefined:
+            it_table.add_row(issue.display_name, issue.term)
+        console.print(it_table)
+
+    # Deprecated internal terms (own-namespace terms carrying a deprecation marker)
+    inv_for_deprecated = report.term_inventory
+    deprecated_entries = [e for e in inv_for_deprecated.entries if e.deprecated] if inv_for_deprecated else []
+    if deprecated_entries:
+        console.print()
+        console.print(f"[yellow]\u26A0 {len(deprecated_entries)} internal term(s) marked deprecated:[/yellow]")
+        for e in deprecated_entries:
+            console.print(f"  [dim]{e.display_name}[/dim] ({e.deprecated})")
+
+    # Non-ontology terms: the ontology's own namespace should define only schema
+    sk = report.non_ontology_terms
+    if sk and sk.status != Status.SKIP and sk.terms:
+        console.print()
+        console.print(f"[yellow]\u26A0 Non-ontology terms  -  {len(sk.terms)} non-schema term(s) in the ontology's own namespace[/yellow]")
+        sk_table = Table(title="Non-ontology terms", show_lines=True)
+        sk_table.add_column("Term")
+        sk_table.add_column("What it is")
+        sk_table.add_column("Full IRI")
+        for issue in sk.terms:
+            sk_table.add_row(issue.display_name, issue.type_label, issue.term)
+        console.print(sk_table)
 
     # Unused prefixes
     if report.unused_prefixes:
@@ -747,7 +1001,7 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
 
     # Language tag consistency
     lt = report.lang_tags
-    if lt and lt.issues:
+    if lt and lt.status == Status.WARN and lt.issues:
         console.print()
         console.print(f"[yellow]⚠ Language tags  -  {len(lt.issues)} consistency issue{'s' if len(lt.issues) != 1 else ''}[/yellow]")
         if lt.languages_used:
@@ -763,6 +1017,29 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
             expected = ", ".join(issue.languages_expected)
             lang_table.add_row(issue.subject, issue.property, issue.detail, has, expected)
         console.print(lang_table)
+    elif lt and lt.status == Status.WARN:
+        console.print()
+        console.print("[yellow]⚠ Language tags  -  labels/definitions present but none carry a language tag[/yellow]")
+
+    # Reasoner checks
+    reasoner = report.reasoner
+    if reasoner and reasoner.checks:
+        console.print()
+        reas_ok = reasoner.consistent and not reasoner.unsatisfiable_classes
+        if reas_ok:
+            console.print("[green]\u2713 Reasoner checks  -  consistent[/green]")
+        else:
+            console.print(
+                f"[red]\u2717 Reasoner checks  -  {len(reasoner.inconsistent_individuals)} inconsistency(ies), "
+                f"{len(reasoner.unsatisfiable_classes)} unsatisfiable class(es)[/red]"
+            )
+        reasoner_table = Table(title="Reasoner checks", show_lines=True)
+        reasoner_table.add_column("Check")
+        reasoner_table.add_column("Status", justify="center")
+        reasoner_table.add_column("Detail")
+        for check in reasoner.checks:
+            reasoner_table.add_row(check.label, _status_badge(check.status), check.message or "")
+        console.print(reasoner_table)
 
     console.print()
 
