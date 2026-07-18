@@ -141,10 +141,12 @@ def test_non_ontology_terms_warns(parsed):
     report = check_non_ontology_terms(parsed.graph)
     assert report.status == Status.WARN
     flagged = {t.display_name for t in report.terms}
-    # A SKOS concept and named individuals defined in the ontology's own namespace.
+    # A SKOS concept defined in the ontology's own namespace is flagged.
     assert "Biology" in flagged
-    assert "alice" in flagged
-    assert "bob" in flagged
+    # Named individuals are not flagged: a small, fixed set of individuals
+    # alongside the schema is a common, legitimate modeling pattern.
+    assert "alice" not in flagged
+    assert "bob" not in flagged
 
 
 def test_term_inventory_flags_naming(parsed):

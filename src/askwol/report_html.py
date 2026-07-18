@@ -167,6 +167,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         "  .diagram-controls button:hover { background: #e8e8e8; }",
         "  .diagram h2 { margin: 0 0 0.5em 0; font-size: 1.1em; color: #555; }",
         "  .topnav { margin-bottom: 1em; font-size: 0.95em; color: #555; background: #f7f7f7; border: 1px solid #eee; border-radius: 8px; padding: 0.6em 0.9em; }",
+        "  .beta-badge { display: inline-block; font-size: 0.5em; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #8a6d1a; background: #fef3d7; border: 1px solid #e8d5a3; border-radius: 999px; padding: 0.2em 0.65em; vertical-align: middle; margin-left: 0.5em; }",
         "  .section { background: #f9f9f9; border: 1px solid #eee; border-radius: 8px; padding: 0.8em 1.2em; margin: 1em 0; }",
         "  .section h2 { margin: 0 0 0.2em 0; font-size: 1.1em; color: #444; border: none; padding: 0; }",
         "  .section .subtitle { font-size: 0.9em; color: #666; margin: 0.35em 0; }",
@@ -175,7 +176,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         "</style>",
         "</head><body>",
         '<p class="topnav"><strong>Navigation:</strong> <a href="./">Home</a> &middot; <a href="guide">Publishing guide</a> &middot; <a href="docs">API docs</a></p>',
-        f'<h1>Results for {source_html}</h1>',
+        f'<h1>Results for {source_html} <span class="beta-badge">Beta</span></h1>',
     ]
 
     if report.parse_errors:
@@ -996,7 +997,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<section class="section">')
         parts.append(_section_heading('domains-ranges', 'Domains &amp; ranges', dr_status, dr_label))
         parts.append(_guide_link('domains-ranges'))
-        parts.append('<p class="subtitle">Object and datatype properties should declare an <code>rdfs:domain</code> and <code>rdfs:range</code>. An object property should range over a <strong>class</strong>; a datatype property over a <strong>datatype</strong>. Domain and range are read directly; they are not inherited from super-properties here.</p>')
+        parts.append('<p class="subtitle">Object and datatype properties should declare an <code>rdfs:domain</code> and <code>rdfs:range</code>. An object property should range over a <strong>class</strong>; a datatype property over a <strong>datatype</strong>. This check looks only at domain and range declared directly on each property, not values inherited from super-properties.</p>')
         parts.append(_status_subtitle(dr_status,
             f'{dr.total_properties} propert{"y" if dr.total_properties == 1 else "ies"} '
             f'({dr.object_properties} object &middot; {dr.datatype_properties} datatype) &middot; '
@@ -1005,7 +1006,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         if dr.issues:
             summary += f' &middot; {len(dr.issues)} to review'
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">{summary}</summary>')
-        parts.append('<table><tr><th>Property</th><th>Category</th><th>Domain</th><th>Range</th><th>Issue</th></tr>')
+        parts.append('<table><tr><th>Property</th><th>Category</th><th>Domain</th><th>Range</th><th>Status</th></tr>')
         for c in sorted(dr.checks, key=lambda x: (x.category, x.display_name.lower())):
             t_iri = escape(c.term)
             dmark = ('<span style="color:#2e7d32">&#x2713;</span>' if c.has_domain
@@ -1067,10 +1068,10 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<section class="section">')
         parts.append(_section_heading('non-ontology-terms', 'Non-ontology terms', sk_status, sk_label))
         parts.append(_guide_link('non-ontology-terms'))
-        parts.append('<p class="subtitle">An OWL ontology should define schema: classes, properties, and datatypes. Individuals, <code>skos:Concept</code> instances, and other instance data belong in a separate data resource or concept scheme. A term in the ontology&rsquo;s own namespace that carries a type but no schema type is flagged; external terms and the ontology header are ignored.</p>')
+        parts.append('<p class="subtitle">An OWL ontology should define schema: classes, properties, and datatypes. A <code>skos:Concept</code> scheme is subject-matter data, not schema, so a <code>skos:Concept</code> defined in the ontology&rsquo;s own namespace is flagged. Named individuals are not flagged here: many ontologies deliberately define a small, fixed set of individuals alongside their schema (e.g. days of week, units of measure), which is a common, legitimate pattern rather than accidental instance data.</p>')
         if sk.terms:
-            parts.append(_status_subtitle('warn', f'{len(sk.terms)} non-schema term{"s" if len(sk.terms) != 1 else ""} defined in the ontology&rsquo;s own namespace'))
-            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Terms to move into a separate resource ({len(sk.terms)})</summary>')
+            parts.append(_status_subtitle('warn', f'{len(sk.terms)} skos:Concept instance{"s" if len(sk.terms) != 1 else ""} defined in the ontology&rsquo;s own namespace'))
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Terms to move into a separate concept scheme ({len(sk.terms)})</summary>')
             parts.append('<table><tr><th>Term</th><th>What it is</th><th>Full IRI</th></tr>')
             for issue in sk.terms:
                 t_iri = escape(issue.term)
@@ -1081,7 +1082,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 )
             parts.append('</table></details>')
         else:
-            parts.append(_status_subtitle('ok', 'The ontology&rsquo;s own namespace defines only schema terms (classes, properties, and datatypes).'))
+            parts.append(_status_subtitle('ok', 'The ontology&rsquo;s own namespace defines no skos:Concept instances.'))
         parts.append('</section>')
     else:
         _skipped_section('non-ontology-terms', 'Non-ontology terms',
@@ -1155,71 +1156,17 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append(_guide_link('language-tags'))
         parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) should use language tags consistently across all subjects.</p>')
         parts.append(_status_subtitle('warn', headline or f'{n_issues} consistency issue{"s" if n_issues != 1 else ""}'))
-        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show details by property ({n_issues})</summary>')
-
-        # Build a quick lookup from property name to its summary
-        prop_summary_map = {ps.property: ps for ps in (lt.property_summaries or [])}
-
-        # Group issues by property, then by issue_type, then split named vs blank-node.
-        by_prop: dict[str, list] = {}
-        for issue in lt.issues:
-            by_prop.setdefault(issue.property, []).append(issue)
-
-        for prop, issues in sorted(by_prop.items()):
-            ps = prop_summary_map.get(prop)
-            parts.append(f'<h3 style="margin:1.2em 0 0.3em;font-size:1em;"><code>{escape(prop)}</code></h3>')
-
-            if ps:
-                bad = ps.total_subjects - ps.consistent_subjects
-                langs_str = ", ".join(f"<code>{escape(l)}</code>" for l in ps.languages)
-                parts.append(
-                    f'<p style="font-size:0.9em;color:#444;margin:0.2em 0;">'
-                    f'<strong>{bad} of {ps.total_subjects}</strong> values of <code>{escape(prop)}</code> '
-                    f'are missing a language tag. ({ps.consistent_subjects} already use {langs_str}.)'
-                    f'</p>'
-                )
-
-            # Group within the property by issue type
-            by_type: dict[str, list] = {}
-            for i in issues:
-                by_type.setdefault(i.issue_type, []).append(i)
-
-            for itype, group in by_type.items():
-                named = [i for i in group if not i.is_blank_node]
-                bnodes = [i for i in group if i.is_blank_node]
-                expected_here = sorted({l for i in group for l in i.languages_expected})
-                expected_html = ", ".join(f"<code>{escape(l)}</code>" for l in expected_here)
-
-                if itype == "missing_tag":
-                    explanation = f"Untagged values - add the language tag {expected_html}:"
-                else:
-                    explanation = f"Values that are missing a translation in {expected_html}:"
-
-                if named:
-                    parts.append(f'<p style="font-size:0.9em;margin:0.6em 0 0.2em;">{explanation}</p>')
-                    parts.append('<ul style="margin:0.2em 0 0.4em 1.2em;padding:0;font-size:0.9em;">')
-                    for i in named:
-                        if itype == "missing_language":
-                            # Bold-highlight what's missing for this subject.
-                            missing = [l for l in i.languages_expected if l not in i.languages_found]
-                            missing_html = ", ".join(f"<strong><code>{escape(l)}</code></strong>" for l in missing)
-                            parts.append(f'<li><code>{escape(i.subject)}</code> - missing {missing_html}</li>')
-                        elif i.languages_found:
-                            # missing_tag with some tags already present
-                            has = ", ".join(f"<code>{escape(l)}</code>" for l in i.languages_found)
-                            parts.append(f'<li><code>{escape(i.subject)}</code> - has an untagged value, plus another already tagged {has}</li>')
-                        else:
-                            parts.append(f'<li><code>{escape(i.subject)}</code></li>')
-                    parts.append('</ul>')
-
-                if bnodes:
-                    parts.append(
-                        f'<p style="font-size:0.85em;color:#666;margin:0.2em 0 0.6em;">'
-                        f'Plus <strong>{len(bnodes)}</strong> anonymous node{"s" if len(bnodes) != 1 else ""} '
-                        f'(e.g. OWL restrictions or SHACL shapes) with the same problem.'
-                        f'</p>'
-                    )
-        parts.append('</details>')
+        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show all issues ({n_issues})</summary>')
+        parts.append('<table><tr><th>Subject</th><th>Property</th><th>Issue</th><th>Has</th><th>Expected</th></tr>')
+        for i in lt.issues:
+            subject = '<em>(blank node)</em>' if i.is_blank_node else f'<code>{escape(i.subject)}</code>'
+            has = ", ".join(f'<code>{escape(l)}</code>' for l in i.languages_found) or '&mdash;'
+            expected = ", ".join(f'<code>{escape(l)}</code>' for l in i.languages_expected)
+            parts.append(
+                f'<tr><td>{subject}</td><td><code>{escape(i.property)}</code></td>'
+                f'<td>{escape(i.detail)}</td><td>{has}</td><td>{expected}</td></tr>'
+            )
+        parts.append('</table></details>')
     elif lt and lt.status == Status.OK:
         lang_str = ', '.join(lt.languages_used)
         parts.append(_section_heading('language-tags', 'Language tag consistency', 'ok', 'consistent'))
@@ -1265,6 +1212,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('</table></details>')
         parts.append('</section>')
 
+    parts.append('<p class="footer">askwol is in beta - some checks may be incomplete or produce false positives. Found a bug or have an idea? <a href="https://github.com/TDCC-NES/askwol/issues" target="_blank" rel="noopener">Open an issue</a> or email <a href="mailto:nes@tdcc.nl">nes@tdcc.nl</a>.</p>')
     parts.append('<p class="footer"><strong>External links:</strong> <a href="https://tdcc.nl/nes-ontology-engineers/" target="_blank" rel="noopener">TDCC-NES ontology engineers</a> &middot; <a href="https://www.w3.org/OWL/" target="_blank" rel="noopener">W3C OWL</a> &middot; <a href="https://www.w3.org/TR/owl2-primer/" target="_blank" rel="noopener">OWL 2 Primer</a></p>')
     if mermaid:
         # Classic (non-module) script so "Copy Mermaid" works even if the

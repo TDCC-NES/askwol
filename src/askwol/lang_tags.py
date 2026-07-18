@@ -34,7 +34,6 @@ def _shorten(uri: str, ns_map: dict[str, str]) -> str:
     """Shorten a URI to prefix:local using the graph's namespace map."""
     for pfx, ns_uri in ns_map.items():
         if uri == ns_uri:
-            # URI is the namespace itself (e.g. the ontology IRI)
             return f"<{uri}>"
         if uri.startswith(ns_uri):
             local = uri[len(ns_uri):]
@@ -58,7 +57,6 @@ def check_lang_tags(graph: Graph, ns_map: dict[str, str]) -> LangTagReport:
     """
     # property URI -> subject (URI string or bnode id) -> set of language tags
     prop_data: dict[str, dict[str, set[str | None]]] = defaultdict(lambda: defaultdict(set))
-    # remember which subjects were blank nodes
     bnode_subjects: set[str] = set()
     # memoize deprecation lookups; a deprecated term is exempt from this check
     deprecated_cache: dict[URIRef, bool] = {}

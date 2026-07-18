@@ -4,12 +4,10 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-151%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-167%20passing-brightgreen.svg)](#tests)
 [![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 
-<!-- Once deployed, add a live link here:
 👉 **Try it live:** https://lod-4tu.tudelft.nl/askwol/
--->
 
 <p align="center">
   <img src="docs/screenshot.png" alt="askwol web UI screenshot" width="720">
@@ -50,7 +48,7 @@ An interactive **class diagram** of your ontology, plus a single HTML report (or
 - **3.2 Term inventory & naming** - categorizes every internal term (class, object property, datatype property, datatype, individual) and checks capitalization: classes start uppercase, properties lowercase. Coded identifiers (an uppercase letter directly followed by a digit, e.g. CIDOC CRM's `P2_has_type` or Wikidata's `P19`) are exempt, as is any term marked deprecated.
 - **3.3 Domains & ranges** - object and datatype properties should declare a domain and a range. Object properties range over classes; datatype properties over datatypes. Deprecated properties are exempt.
 - **3.4 Datatypes** - datatypes used as property ranges and literal datatypes should be recognized XSD built-ins, `rdfs:Literal`, `rdf:langString`, or a locally declared `rdfs:Datatype`. Catches typos like `xsd:stirng`.
-- **3.5 Non-ontology terms** - an OWL ontology defines schema (classes, properties, datatypes). Individuals, `skos:Concept` instances, and other instance data belong in a separate resource. Works from a whitelist of schema constructs.
+- **3.5 Non-ontology terms** - an OWL ontology defines schema (classes, properties, datatypes). A `skos:Concept` scheme is subject-matter data and belongs in a separate resource. Named individuals are not flagged: many ontologies deliberately define a small, fixed set of individuals alongside their schema (e.g. OWL-Time's days of week), which is a common, legitimate pattern rather than accidental instance data.
 
 **4. Term documentation**
 
@@ -261,7 +259,7 @@ Turtle (`.ttl`), RDF/XML (`.rdf`, `.owl`), JSON-LD (`.jsonld`), N-Triples (`.nt`
 pytest tests/ -v
 ```
 
-151 tests cover every automated check on both good and bad inputs, the HTML
+160 tests cover every automated check on both good and bad inputs, the HTML
 report rendering, the FastAPI routes via `TestClient`, and a pinned end-to-end
 smoke test on [`html/ontologies/broken.ttl`](html/ontologies/broken.ttl) that
 fails loudly if any single check ever stops detecting issues. The clean

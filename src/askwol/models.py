@@ -198,10 +198,10 @@ class InternalTermReference(BaseModel):
 
 
 class NonOntologyTermIssue(BaseModel):
-    """One term in the ontology's own namespace that is not part of the schema.
+    """A skos:Concept defined in the ontology's own namespace.
 
-    ``type_label`` describes what it is (for example "SKOS concept" or
-    "instance of Person").
+    ``type_label`` is always "SKOS concept"; kept as a field for display
+    consistency with other issue tables.
     """
 
     term: str
@@ -210,13 +210,14 @@ class NonOntologyTermIssue(BaseModel):
 
 
 class NonOntologyTermsReport(BaseModel):
-    """Terms defined in the ontology's own namespace that are not OWL schema.
+    """skos:Concept instances defined in the ontology's own namespace.
 
     An OWL ontology should define schema: classes, properties, and datatypes.
-    Individuals, SKOS concepts, and other instance data belong in a separate
-    resource. This check works from a whitelist of schema constructs; anything
-    in the ontology's own namespace that carries a type but no schema type is
-    flagged. External terms and the ontology header itself are ignored.
+    A SKOS concept scheme is subject-matter data, not schema, so it is
+    flagged when mixed into the same namespace. Named individuals are
+    deliberately not flagged: many ontologies define a small, fixed set of
+    individuals alongside their schema (e.g. OWL-Time's days of week), which
+    is a common, legitimate pattern rather than accidental instance data.
     """
 
     total_flagged: int = 0

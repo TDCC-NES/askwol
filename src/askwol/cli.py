@@ -60,40 +60,19 @@ async def _run_check(
         if pfx not in used_prefixes:
             report.unused_prefixes.append(UnusedPrefix(prefix=pfx, uri=uri))
 
-    # Language tag consistency
     report.lang_tags = check_lang_tags(parsed.graph, parsed.namespaces)
-
-    # Ontology-level metadata
     report.ontology_metadata = validate_ontology_metadata(parsed.graph)
-
-    # Label and comment documentation
     report.definition_docs = check_definition_documentation(parsed.graph)
-
-    # Internal terms referenced in the ontology's own namespace must be defined
     report.internal_terms = check_internal_terms(parsed.graph)
-
-    # Categorize the ontology's own terms and check naming conventions
     report.term_inventory = check_term_inventory(parsed.graph)
-
-    # Domains and ranges of object and datatype properties
     report.domains_ranges = check_domains_ranges(parsed.graph)
-
-    # Datatypes used across the ontology
     report.datatypes = check_datatypes(parsed.graph)
-
-    # Reasoner checks (current ontology only; imports are not followed)
+    # Reasoner checks: current ontology only, imports are not followed.
     report.reasoner = run_reasoner_checks(parsed.graph)
-
-    # Declared owl:imports targets must actually resolve
     report.imports = await check_imports(parsed.graph, cache, timeout=timeout)
-
-    # IRI strategy (hash vs slash) for the ontology's own terms
+    # "Strategy" = hash vs. slash IRIs; "scheme" = http vs. https.
     report.iri_strategy = check_iri_strategy(parsed.graph)
-
-    # IRI scheme consistency (http vs https) per host
     report.iri_scheme = check_iri_scheme(parsed.graph, parsed.namespaces)
-
-    # Terms in the ontology's own namespace that are not OWL schema
     report.non_ontology_terms = check_non_ontology_terms(parsed.graph)
 
     # Only resolve and report namespaces that have subject-position terms

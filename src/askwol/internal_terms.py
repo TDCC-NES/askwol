@@ -1,25 +1,27 @@
 """Check that terms in the ontology's own namespace are actually defined.
 
-Scoping (which namespace is "the ontology's own") and the actual
-defined-vs-referenced check both live in shapes/internal_terms.ttl, run
-through pyshacl. This module only guards the two SKIP conditions, which have
-no focus node for a SHACL shape to report against.
+"The ontology's own namespace" is derived from the subject(s) of
+owl:Ontology (iri_utils.ontology_namespaces), the same single source of
+truth used by term_inventory.py, definition_docs.py, non_ontology_terms.py,
+and reasoner_checks.py - not from wherever a definitional rdf:type happens
+to appear. An ontology that re-declares a reused term as, say,
+``rdfs:label a owl:AnnotationProperty`` (common boilerplate; PROV-O, FOAF,
+and many others do this) does not thereby "own" the whole RDFS/OWL
+namespace, so referencing other RDFS/OWL terms elsewhere must not be
+flagged as "undefined internal terms".
 """
 
 from __future__ import annotations
 
-from rdflib import Graph
-from rdflib.namespace import OWL, RDF, RDFS
+from rdflib import Graph, URIRef
+from rdflib.namespace import DCTERMS, OWL, RDF, RDFS
 
-from askwol.iri_utils import local_name as _local_name
+from askwol.iri_utils import local_name as _local_name, ontology_namespaces as _ontology_namespaces
 from askwol.models import InternalTermIssue, InternalTermReference, InternalTermsReport, Status
-from askwol.shacl_runner import run_shapes, run_target
-
-_SHAPES_FILE = "internal_terms.ttl"
 
 # rdf:type values that mark a subject as a term the ontology defines itself;
-# used only to decide whether *any* term is defined at all (see
-# shapes/internal_terms.ttl for the identical list used in the real check).
+# used only to decide whether *any* term is defined at all (i.e. whether this
+# check is worth running).
 _DEFINITIONAL_TYPES = {
     RDFS.Class,
     OWL.Class,
@@ -38,6 +40,23 @@ _DEFINITIONAL_TYPES = {
     OWL.NamedIndividual,
 }
 
+# owl:Ontology header properties whose IRI-valued objects are opaque
+# version identifiers, not terms - they are never expected to appear as
+# rdf:type subjects, so referencing one must not be flagged as "undefined".
+# E.g. OWL-Time's own header has both
+# owl:priorVersion <http://www.w3.org/2006/time#2006> and
+# owl:versionIRI <http://www.w3.org/2006/time#2016>: "2006"/"2016" are
+# symbolic version markers, not classes/properties/individuals. GeoSPARQL's
+# header similarly has dcterms:replaces <.../geosparql/1.0>, pointing at its
+# own prior version.
+_VERSION_PROPERTIES = (
+    OWL.versionIRI,
+    OWL.priorVersion,
+    OWL.backwardCompatibleWith,
+    OWL.incompatibleWith,
+    DCTERMS.replaces,
+    DCTERMS.isReplacedBy,
+)
 
 
 def check_internal_terms(graph: Graph) -> InternalTermsReport:
@@ -60,11 +79,39 @@ def check_internal_terms(graph: Graph) -> InternalTermsReport:
             message="no terms are defined in the ontology's own namespace",
         )
 
-    referenced = run_target(graph, _SHAPES_FILE)
+    # Parent-path fallback deliberately excluded (see ontology_namespaces'
+    # docstring): a slash ontology IRI like https://host/dataset would
+    # otherwise claim the entire host, misclassifying unrelated IRIs such as
+    # an owl:versionIRI document or a sibling resource under the same host.
+    own_ns = _ontology_namespaces(graph, include_parent_path=False)
+    ontology_iris = {str(s) for s in graph.subjects(RDF.type, OWL.Ontology) if isinstance(s, URIRef)}
+    version_iris = {
+        str(o)
+        for prop in _VERSION_PROPERTIES
+        for o in graph.objects(None, prop)
+        if isinstance(o, URIRef)
+    }
+
+    referenced: set[str] = set()
+    for _s, p, o in graph:
+        for node in (p, o):
+            if not isinstance(node, URIRef):
+                continue
+            uri = str(node)
+            if uri in ontology_iris or uri in version_iris:
+                continue
+            # A bare namespace IRI (empty local name) is the vocabulary
+            # itself, not a term in it - e.g. `:someTerm rdfs:isDefinedBy :`
+            # is a common RDFS idiom pointing back at the ontology's own
+            # namespace, and must not be flagged as an undefined term.
+            if not _local_name(uri):
+                continue
+            if any(uri.startswith(ns) for ns in own_ns):
+                referenced.add(uri)
+
     undefined_uris = sorted(
-        result.focus_node
-        for result in run_shapes(graph, _SHAPES_FILE)
-        if result.name == "InternalTermDefined"
+        uri for uri in referenced
+        if next(graph.triples((URIRef(uri), None, None)), None) is None
     )
     undefined_set = set(undefined_uris)
     undefined = [

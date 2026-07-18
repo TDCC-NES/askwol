@@ -58,6 +58,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
   code { background: #f3f4f6; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; }
   a { color: var(--accent); }
   .topnav { margin-bottom: 1.2em; font-size: 0.95em; color: #4b5563; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 8px; padding: 0.6em 0.9em; }
+  .beta-badge { display: inline-block; font-size: 0.5em; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #8a6d1a; background: #fef3d7; border: 1px solid #e8d5a3; border-radius: 999px; padding: 0.2em 0.65em; vertical-align: middle; margin-left: 0.5em; }
 
   /* Card form */
   .card { margin: 1.2em 0; padding: 1.5em; background: #fff; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
@@ -100,7 +101,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
     <a href="guide">Publishing guide</a> &middot;
     <a href="docs">API docs</a>
   </p>
-  <h1><span class="owl" aria-hidden="true">&#x1F989;</span> Ask Wol</h1>
+  <h1><span class="owl" aria-hidden="true">&#x1F989;</span> Ask Wol <span class="beta-badge">Beta</span></h1>
   <p>Your friendly owl for instant <a href="https://www.w3.org/OWL/">OWL</a>
   ontology reviews: a visual class diagram, namespace and term checks,
   metadata and documentation review, and a clean-up report.</p>
@@ -277,7 +278,8 @@ UPLOAD_HTML = """<!DOCTYPE html>
     <p>
       <i>askwol</i> is free and open source under the
       <a href="https://github.com/TDCC-NES/askwol/blob/main/LICENSE">MIT licence</a>.
-      Found a bug or have an idea? Open an issue on
+      It is currently in <strong>beta</strong>: some checks may be incomplete
+      or produce false positives. Found a bug or have an idea? Open an issue on
       <a href="https://github.com/TDCC-NES/askwol">GitHub</a> or reach us at
       <a href="mailto:nes@tdcc.nl">nes@tdcc.nl</a>.
     </p>
@@ -659,7 +661,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   in your own namespace that is referenced but never defined is flagged.
   External vocabulary terms are covered by the
   <a href="#external-terms">External term definitions</a> check instead.
-  Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/internal_terms.ttl" target="_blank" rel="noopener">SHACL shapes</a>.</div>
+  Re-declaring a reused term (e.g. <code>rdfs:label a
+  owl:AnnotationProperty</code>, common boilerplate) does not make askwol
+  treat that term&rsquo;s whole vocabulary as yours to define.</div>
 """,
     },
     {
@@ -793,29 +797,30 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "group": "check",
         "category": "structure",
         "anchor": "non-ontology-terms",
-        "title": "Keep the ontology to schema, not instance data",
+        "title": "Keep concept schemes separate from the schema",
         "toc_label": "Non-ontology terms",
         "body": """\
   <p><span class="tag practice">TDCC guideline</span> An OWL ontology is the
   <em>schema</em>: it defines classes, properties, and datatypes (the
-  terminology). OWL does not forbid mixing individual
-  <strong>instances</strong> (the ABox) or subject-matter
+  terminology). OWL does not forbid mixing subject-matter
   <strong>concepts</strong> (the members of a controlled vocabulary or
   thesaurus) into the same file as the schema (the TBox); this guide
-  recommends keeping them apart, in a separate data resource or a
+  recommends keeping them apart, in a separate
   <a href="https://www.w3.org/TR/skos-reference/#Concept" target="_blank" rel="noopener">SKOS</a>
   concept scheme, so schema and data can each evolve and be reused
   independently.</p>
   <pre>&lt;#Dataset&gt; a owl:Class .            # schema, belongs here
 &lt;#biology&gt; a skos:Concept .         # concept, belongs in a SKOS scheme
-&lt;#dataset-001&gt; a &lt;#Dataset&gt; .       # instance, belongs in a data file</pre>
-  <div class="tip">askwol works from a <strong>whitelist</strong>: a term in your
-  own namespace is fine when it is typed as a class, a property, or a datatype
-  (or is the ontology header). Anything else that carries a type but no schema
-  type (a <code>skos:Concept</code>, a named individual, stray instance data) is
-  flagged so you can move it out. External terms are ignored. Keeping the
-  schema and the data apart lets each evolve, and be reused, independently.
-  Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/non_ontology_terms.ttl" target="_blank" rel="noopener">SHACL shapes</a>.</div>
+&lt;#Monday&gt; a &lt;#DayOfWeek&gt; .        # named individual, fine to keep here</pre>
+  <div class="tip">askwol only flags <code>skos:Concept</code> instances defined
+  in your own namespace; a full-blown concept scheme has usually outgrown the
+  schema file and is better managed on its own. Named individuals are left
+  alone: many ontologies deliberately define a small, fixed set of individuals
+  alongside their schema (days of week, units of measure, and similar
+  controlled vocabularies, as OWL-Time does), which is a common, legitimate
+  modeling pattern rather than accidental instance data, so flagging every
+  individual would be more noise than signal. External terms are ignored
+  either way. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/non_ontology_terms.ttl" target="_blank" rel="noopener">SHACL shapes</a>.</div>
 """,
     },
     {
@@ -990,9 +995,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     <li>Missing ontology metadata (title, creator, license, version, and more)</li>
   </ul>
   <div class="tip">askwol also runs lightweight reasoner checks on the
-  <em>current ontology only</em>. It does <strong>not</strong> follow
-  <code>owl:imports</code> here, and it does not need dummy instances to spot
-  obvious contradictions and unsatisfiable classes.</div>
+  <em>current ontology only</em> (it does <strong>not</strong> follow
+  <code>owl:imports</code>), catching obvious contradictions and
+  unsatisfiable classes before you publish.</div>
   <div class="tip">Integrate validation into your CI pipeline:
   <code>askwol check my-ontology.ttl</code></div>
 """,
