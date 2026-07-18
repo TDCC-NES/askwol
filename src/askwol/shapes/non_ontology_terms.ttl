@@ -2,20 +2,24 @@
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 
-# A term in the ontology's own namespace is fine when at least one of its
-# rdf:type values is a recognized schema construct (class, property,
-# datatype, or the ontology header itself). Untyped terms are covered by the
-# internal-terms check instead, and external terms are out of scope here, so
-# the target requires at least one rdf:type and an owl:Ontology declaration.
+# Only skos:Concept instances defined in the ontology's own namespace are
+# flagged here: a concept scheme is subject-matter data, not schema, so it
+# belongs in a separate resource. Named individuals (owl:NamedIndividual) are
+# deliberately not flagged: many ontologies define a small, fixed set of
+# individuals alongside their schema (e.g. OWL-Time's days of week and time
+# units), which is a common, legitimate modeling pattern rather than
+# accidental instance data left in a schema file.
 <https://w3id.org/askwol/shapes/NonOntologyTermsShape>
     a sh:NodeShape ;
     sh:target [
         a sh:SPARQLTarget ;
         sh:select """
             PREFIX owl: <http://www.w3.org/2002/07/owl#>
+            PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
             SELECT DISTINCT ?this WHERE {
-                ?this a ?anyType .
+                ?this a skos:Concept .
                 FILTER(isIRI(?this))
                 ?ont a owl:Ontology .
                 BIND(REPLACE(STR(?ont), "^(.*[/#])[^/#]*$", "$1") AS ?ontologyNs)
@@ -25,24 +29,13 @@
     ] ;
     sh:sparql [
         a sh:SPARQLConstraint ;
-        sh:name "SchemaWhitelist" ;
+        sh:name "ConceptInSchema" ;
         sh:severity sh:Warning ;
-        sh:message "Not a recognized OWL/RDFS schema construct. Individuals, skos:Concept instances, and other instance data belong in a separate data resource or concept scheme." ;
+        sh:message "A skos:Concept defined in the ontology's own namespace. Concepts belong in a separate SKOS concept scheme, not mixed into the schema file." ;
         sh:select """
-            PREFIX owl: <http://www.w3.org/2002/07/owl#>
-            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
             SELECT $this WHERE {
-                FILTER NOT EXISTS {
-                    $this a ?schemaType .
-                    FILTER(?schemaType IN (
-                        owl:Class, rdfs:Class, owl:ObjectProperty, owl:DatatypeProperty,
-                        owl:AnnotationProperty, rdf:Property, owl:FunctionalProperty,
-                        owl:InverseFunctionalProperty, owl:TransitiveProperty, owl:SymmetricProperty,
-                        owl:AsymmetricProperty, owl:ReflexiveProperty, owl:IrreflexiveProperty,
-                        rdfs:Datatype, owl:Ontology
-                    ))
-                }
+                $this a skos:Concept .
             }
         """ ;
     ] .

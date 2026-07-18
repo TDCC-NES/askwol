@@ -35,8 +35,13 @@ def check_iri_strategy(graph: Graph) -> IRIStrategyReport:
     if not ontology_iris:
         return IRIStrategyReport(status=Status.SKIP, message="no owl:Ontology declaration found")
 
-    ontology_iri = ontology_iris[0]
-    stem = _strip(ontology_iri)
+    # A file can declare more than one owl:Ontology subject (e.g. the W3C
+    # PROV family bundles prov, prov-o, prov-dc, ... into one document).
+    # Union every declared IRI's hash AND slash sibling - using only the
+    # first (alphabetically) would wrongly hide terms defined under the others.
+    stems = {_strip(iri) for iri in ontology_iris}
+    hash_ns = {stem + "#" for stem in stems}
+    slash_ns = {stem + "/" for stem in stems}
 
     # Collect every URI that is declared as a class/property/individual.
     defined: set[str] = set()
@@ -48,26 +53,15 @@ def check_iri_strategy(graph: Graph) -> IRIStrategyReport:
     hash_terms: list[str] = []
     slash_terms: list[str] = []
     for uri in defined:
-        if not (uri.startswith(stem + "#") or uri.startswith(stem + "/")):
-            continue
-        suffix = uri[len(stem):]
-        # suffix starts with '#' or '/'. Only count when there is a non-empty
-        # local name after the separator.
-        sep, local = suffix[0], suffix[1:]
-        if not local:
-            continue
-        # If the local name itself contains another '/', the term is nested
-        # one level deeper - still classify by the separator immediately
-        # following the ontology stem.
-        if sep == "#":
+        if any(uri.startswith(ns) and len(uri) > len(ns) for ns in hash_ns):
             hash_terms.append(uri)
-        elif sep == "/":
+        elif any(uri.startswith(ns) and len(uri) > len(ns) for ns in slash_ns):
             slash_terms.append(uri)
 
     total = len(hash_terms) + len(slash_terms)
     if total == 0:
         return IRIStrategyReport(
-            ontology_iri=ontology_iri,
+            ontology_iri=ontology_iris[0],
             status=Status.SKIP,
             message="no internally defined terms found in the ontology's own namespace",
         )
@@ -92,7 +86,53 @@ def check_iri_strategy(graph: Graph) -> IRIStrategyReport:
         message = f"all {len(slash_terms)} defined terms use the slash pattern (<code>/Term</code>)"
 
     return IRIStrategyReport(
-        ontology_iri=ontology_iri,
+        ontology_iri=ontology_iris[0],
+        strategy=strategy,
+        hash_count=len(hash_terms),
+        slash_count=len(slash_terms),
+        hash_examples=hash_terms[:5],
+        slash_examples=slash_terms[:5],
+        status=status,
+        message=message,
+    )
+
+    hash_terms: list[str] = []
+    slash_terms: list[str] = []
+    for uri in defined:
+        if any(uri.startswith(ns) and len(uri) > len(ns) for ns in hash_ns):
+            hash_terms.append(uri)
+        elif any(uri.startswith(ns) and len(uri) > len(ns) for ns in slash_ns):
+            slash_terms.append(uri)
+
+    total = len(hash_terms) + len(slash_terms)
+    if total == 0:
+        return IRIStrategyReport(
+            ontology_iri=ontology_iris[0],
+            status=Status.SKIP,
+            message="no internally defined terms found in the ontology's own namespace",
+        )
+
+    hash_terms.sort()
+    slash_terms.sort()
+
+    if hash_terms and slash_terms:
+        strategy = "mixed"
+        status = Status.WARN
+        message = (
+            f"{len(hash_terms)} hash-style and {len(slash_terms)} slash-style terms "
+            "are defined in the same namespace - pick one and stick to it"
+        )
+    elif hash_terms:
+        strategy = "hash"
+        status = Status.OK
+        message = f"all {len(hash_terms)} defined terms use the hash pattern (<code>#Term</code>)"
+    else:
+        strategy = "slash"
+        status = Status.OK
+        message = f"all {len(slash_terms)} defined terms use the slash pattern (<code>/Term</code>)"
+
+    return IRIStrategyReport(
+        ontology_iri=ontology_iris[0],
         strategy=strategy,
         hash_count=len(hash_terms),
         slash_count=len(slash_terms),

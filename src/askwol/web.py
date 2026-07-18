@@ -556,6 +556,7 @@ async def _validate_url(url: str) -> HTMLResponse:
                     )
                 chunks.append(chunk)
             content = b"".join(chunks)
+            final_url = str(resp.url)
     except httpx.HTTPError as exc:
         return HTMLResponse(f"<p>Could not fetch URL: {escape(str(exc))}</p>", status_code=422)
 
@@ -564,7 +565,7 @@ async def _validate_url(url: str) -> HTMLResponse:
         tmp.write(content)
         tmp_path = Path(tmp.name)
 
-    return await _run_validation(tmp_path, url)
+    return await _run_validation(tmp_path, url, base_uri=final_url)
 
 
 async def _validate_upload(file: UploadFile) -> HTMLResponse:
@@ -579,13 +580,13 @@ async def _validate_upload(file: UploadFile) -> HTMLResponse:
 
     return await _run_validation(tmp_path, file.filename or "upload")
 
-async def _run_validation(tmp_path: Path, source_name: str) -> HTMLResponse:
+async def _run_validation(tmp_path: Path, source_name: str, base_uri: str | None = None) -> HTMLResponse:
     report = ValidationReport(file=source_name)
     cache = _global_cache
     mermaid = ""
 
     try:
-        parsed = parse_ontology(tmp_path)
+        parsed = parse_ontology(tmp_path, base_uri=base_uri)
     except Exception as exc:
         report.parse_errors.append(str(exc))
         return HTMLResponse(_apply_prefix(render_report(report, mermaid)), status_code=422)
@@ -600,40 +601,19 @@ async def _run_validation(tmp_path: Path, source_name: str) -> HTMLResponse:
         if pfx not in used_prefixes:
             report.unused_prefixes.append(UnusedPrefix(prefix=pfx, uri=uri))
 
-    # Language tag consistency
     report.lang_tags = check_lang_tags(parsed.graph, parsed.namespaces)
-
-    # Ontology metadata completeness
     report.ontology_metadata = validate_ontology_metadata(parsed.graph)
-
-    # Internal definition documentation
     report.definition_docs = check_definition_documentation(parsed.graph)
-
-    # Internal terms referenced in the ontology's own namespace must be defined
     report.internal_terms = check_internal_terms(parsed.graph)
-
-    # Categorize the ontology's own terms and check naming conventions
     report.term_inventory = check_term_inventory(parsed.graph)
-
-    # Domains and ranges of object and datatype properties
     report.domains_ranges = check_domains_ranges(parsed.graph)
-
-    # Datatypes used across the ontology
     report.datatypes = check_datatypes(parsed.graph)
-
-    # Declared owl:imports targets must actually resolve
     report.imports = await check_imports(parsed.graph, cache)
-
-    # IRI strategy (hash vs slash) for the ontology's own terms
+    # "Strategy" = hash vs. slash IRIs; "scheme" = http vs. https.
     report.iri_strategy = check_iri_strategy(parsed.graph)
-
-    # IRI scheme consistency (http vs https) per host
     report.iri_scheme = check_iri_scheme(parsed.graph, parsed.namespaces)
-
-    # Reasoner checks (current ontology only; imports are not followed)
+    # Reasoner checks: current ontology only, imports are not followed.
     report.reasoner = run_reasoner_checks(parsed.graph)
-
-    # Terms in the ontology's own namespace that are not OWL schema
     report.non_ontology_terms = check_non_ontology_terms(parsed.graph)
 
     # Only resolve and report namespaces that have subject-position terms

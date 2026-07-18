@@ -59,7 +59,7 @@ def is_external(uri: str) -> bool:
     return any(uri.startswith(ns) for ns in EXTERNAL_NAMESPACES)
 
 
-def ontology_namespaces(graph: Graph) -> set[str]:
+def ontology_namespaces(graph: Graph, *, include_parent_path: bool = True) -> set[str]:
     """Return the namespace(s) declared as this ontology's own (subject of owl:Ontology).
 
     The ontology IRI itself is commonly used as the namespace directly, or as the
@@ -67,6 +67,16 @@ def ontology_namespaces(graph: Graph) -> set[str]:
     "http://example.org/onto" with terms under "http://example.org/onto#"). Both
     forms, plus the namespace derived by stripping a local name, are returned so
     callers can match against however the namespace is actually declared.
+
+    ``include_parent_path=False`` drops that last fallback (stripping the
+    ontology IRI's own trailing local name) when the IRI has no "#" of its
+    own. For a slash IRI like "https://host/dataset", that fallback resolves
+    to "https://host/" - the entire host - which is too broad for callers
+    that need to tell this ontology's own terms apart from unrelated
+    resources under the same host (e.g. internal_terms.py). It is still
+    applied when the IRI already contains "#", since truncating back to an
+    existing "#" only narrows to the ontology's own path segment, never
+    broadens past it.
     """
     namespaces: set[str] = set()
     for subject in graph.subjects(RDF.type, OWL.Ontology):
@@ -76,5 +86,6 @@ def ontology_namespaces(graph: Graph) -> set[str]:
         namespaces.add(uri)
         namespaces.add(uri + "#")
         namespaces.add(uri + "/")
-        namespaces.add(namespace_of(uri))
+        if include_parent_path or "#" in uri:
+            namespaces.add(namespace_of(uri))
     return namespaces

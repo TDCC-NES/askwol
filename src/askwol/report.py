@@ -546,10 +546,10 @@ def report_as_markdown(report: ValidationReport) -> str:
         w("## Non-ontology terms")
         w("")
         w("An OWL ontology should define schema: classes, properties, and "
-          "datatypes. Individuals, SKOS concepts, and other instance data "
-          "belong in a separate resource.")
+          "datatypes. A skos:Concept scheme is subject-matter data, not "
+          "schema, and belongs in a separate resource.")
         w("")
-        w(f"> {len(sk.terms)} non-schema term(s) defined in the ontology's own namespace")
+        w(f"> {len(sk.terms)} skos:Concept instance(s) defined in the ontology's own namespace")
         w("")
         w("| Term | What it is | Full IRI |")
         w("|------|------------|----------|")
@@ -922,7 +922,7 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     sk = report.non_ontology_terms
     if sk and sk.status != Status.SKIP and sk.terms:
         console.print()
-        console.print(f"[yellow]\u26A0 Non-ontology terms  -  {len(sk.terms)} non-schema term(s) in the ontology's own namespace[/yellow]")
+        console.print(f"[yellow]\u26A0 Non-ontology terms  -  {len(sk.terms)} skos:Concept instance(s) in the ontology's own namespace[/yellow]")
         sk_table = Table(title="Non-ontology terms", show_lines=True)
         sk_table.add_column("Term")
         sk_table.add_column("What it is")

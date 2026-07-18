@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from rdflib import Graph, URIRef, OWL, RDF
+from rdflib.namespace import DCTERMS
 
 
 @dataclass
@@ -22,11 +23,19 @@ class ParsedOntology:
     declared_prefixes: dict[str, str] = field(default_factory=dict)
 
 
-def parse_ontology(source: str | Path) -> ParsedOntology:
+def parse_ontology(source: str | Path, base_uri: str | None = None) -> ParsedOntology:
     """Parse an ontology file and extract its structure.
 
     Args:
         source: File path or URL to the ontology.
+        base_uri: The ontology's real, published URI, used to resolve any
+            relative IRIs it contains (e.g. ``<>`` or ``<#Term>``). Pass this
+            whenever ``source`` is a local temp file holding content that was
+            downloaded from a URL: without it, rdflib falls back to the temp
+            file's own ``file://`` path as the base, so relative IRIs resolve
+            to a bogus location instead of the ontology's real namespace.
+            Leave unset when ``source`` is a genuine local file with no
+            corresponding published URL (e.g. a user-uploaded file).
 
     Returns:
         ParsedOntology with extracted namespaces, terms, and imports.
@@ -36,7 +45,7 @@ def parse_ontology(source: str | Path) -> ParsedOntology:
     # Capture rdflib's built-in prefixes before parsing
     builtin_prefixes = {str(pfx) for pfx, _ in g.namespaces()}
 
-    g.parse(str(source))
+    g.parse(str(source), publicID=base_uri)
 
     # Build a lookup of ALL registered prefixes (including rdflib built-ins)
     all_prefixes: dict[str, str] = {
@@ -54,16 +63,16 @@ def parse_ontology(source: str | Path) -> ParsedOntology:
     for _, _, imported in g.triples((None, OWL.imports, None)):
         result.imports.append(str(imported))
 
-    # IRIs that identify the ontology document itself - its own IRI, its
-    # version IRIs, prior versions, and import targets - are not vocabulary
-    # terms. rdflib would otherwise split a slash IRI like <http://ex.org/ont>
-    # into namespace <http://ex.org/> plus a phantom local name "ont",
-    # surfacing a bogus namespace and term in the report.
+    # The ontology's own IRI, version markers, and import targets are not
+    # vocabulary terms - without this exclusion, rdflib would split a slash
+    # IRI like <http://ex.org/ont> into namespace <http://ex.org/> plus a
+    # phantom local name "ont".
     header_iris: set[str] = {
         str(s) for s in g.subjects(RDF.type, OWL.Ontology) if isinstance(s, URIRef)
     }
     for pred in (OWL.versionIRI, OWL.priorVersion, OWL.imports,
-                 OWL.backwardCompatibleWith, OWL.incompatibleWith):
+                 OWL.backwardCompatibleWith, OWL.incompatibleWith,
+                 DCTERMS.replaces, DCTERMS.isReplacedBy):
         for obj in g.objects(None, pred):
             if isinstance(obj, URIRef):
                 header_iris.add(str(obj))

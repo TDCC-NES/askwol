@@ -1,4 +1,4 @@
-"""Tests for the non-ontology-terms check (whitelist of schema constructs)."""
+"""Tests for the non-ontology-terms check (flags skos:Concept only)."""
 
 from rdflib import Graph
 
@@ -32,16 +32,27 @@ def test_internal_skos_concept_is_flagged():
     assert issue.type_label == "SKOS concept"
 
 
-def test_named_individual_is_flagged():
+def test_named_individual_is_not_flagged():
     g = _graph(BASE + "ex:Person a owl:Class .\nex:alice a ex:Person .\n")
     report = check_non_ontology_terms(g)
-    assert report.status == Status.WARN
-    names = {t.display_name for t in report.terms}
-    assert "alice" in names
-    # The class itself is legitimate schema and must not be flagged.
-    assert "Person" not in names
-    issue = next(t for t in report.terms if t.display_name == "alice")
-    assert issue.type_label == "instance of Person"
+    assert report.status == Status.OK
+    assert report.terms == []
+
+
+def test_controlled_vocabulary_individuals_are_not_flagged():
+    """Regression test: OWL-Time-style enumerations (days of week, time
+    units) defined as named individuals alongside their schema should not be
+    flagged, even though there are several of them under the same class."""
+    ttl = (
+        BASE
+        + "ex:DayOfWeek a owl:Class .\n"
+        + "ex:Monday a ex:DayOfWeek .\n"
+        + "ex:Tuesday a ex:DayOfWeek .\n"
+        + "ex:Wednesday a ex:DayOfWeek .\n"
+    )
+    report = check_non_ontology_terms(_graph(ttl))
+    assert report.status == Status.OK
+    assert report.terms == []
 
 
 def test_classes_and_properties_are_not_flagged():

@@ -46,10 +46,12 @@
 #                               declares no domain and no range)
 #   3.4 Datatypes             - FAIL (xsd:flaot and xsd:stirng are misspelled and
 #                               not recognized datatypes)
-#   3.5 Non-ontology terms    - WARN (:Biology is a skos:Concept and :alice/:bob
-#                               are named individuals defined in the ontology's
-#                               own namespace; instance data and concepts belong
-#                               in a separate resource)
+#   3.5 Non-ontology terms    - WARN (:Biology is a skos:Concept defined in
+#                               the ontology's own namespace and belongs in a
+#                               separate concept scheme; :alice/:bob are named
+#                               individuals, which are not flagged since a
+#                               small, fixed set of individuals alongside the
+#                               schema is a common, legitimate pattern)
 #   4.1 Labels                - FAIL (Orphan has no rdfs:label)
 #   4.2 Comments              - FAIL (Orphan and Organization have no
 #                               rdfs:comment)
