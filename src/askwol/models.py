@@ -96,6 +96,7 @@ class LangTagReport(BaseModel):
     languages_used: list[str] = Field(default_factory=list)
     property_summaries: list[LangTagPropertySummary] = Field(default_factory=list)
     issues: list[LangTagIssue] = Field(default_factory=list)
+    status: Status = Status.SKIP
 
 
 class MetadataCheck(BaseModel):
@@ -188,6 +189,14 @@ class InternalTermIssue(BaseModel):
     display_name: str
 
 
+class InternalTermReference(BaseModel):
+    """One term referenced in the ontology's own namespace, and whether it is defined."""
+
+    term: str
+    display_name: str
+    defined: bool
+
+
 class NonOntologyTermIssue(BaseModel):
     """One term in the ontology's own namespace that is not part of the schema.
 
@@ -228,6 +237,7 @@ class InternalTermsReport(BaseModel):
     total_referenced: int = 0
     defined: int = 0
     undefined: list[InternalTermIssue] = Field(default_factory=list)
+    referenced: list[InternalTermReference] = Field(default_factory=list)
     status: Status = Status.SKIP
     message: str | None = None
 
@@ -378,12 +388,22 @@ class IRISchemeConflict(BaseModel):
     https_examples: list[str] = Field(default_factory=list)
 
 
+class IRISchemeHost(BaseModel):
+    """One host referenced under a single, consistent scheme."""
+
+    host: str
+    scheme: str
+    count: int = 0
+    examples: list[str] = Field(default_factory=list)
+
+
 class IRISchemeReport(BaseModel):
     """Per-host http vs https scheme consistency across all IRIs used."""
 
     total_hosts: int = 0
     http_only_hosts: int = 0
     https_only_hosts: int = 0
+    hosts: list[IRISchemeHost] = Field(default_factory=list)
     conflicts: list[IRISchemeConflict] = Field(default_factory=list)
     status: Status = Status.SKIP
     message: str | None = None
@@ -448,7 +468,7 @@ class ValidationReport(BaseModel):
                 return True
         if self.unused_prefixes:
             return True
-        if self.lang_tags and self.lang_tags.issues:
+        if self.lang_tags and self.lang_tags.status == Status.WARN:
             return True
         if self.ontology_metadata and any(c.status != Status.OK for c in self.ontology_metadata.checks):
             return True

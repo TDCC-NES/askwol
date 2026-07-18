@@ -15,7 +15,7 @@ from collections import defaultdict
 
 from rdflib import Graph, URIRef
 
-from askwol.models import IRISchemeConflict, IRISchemeReport, Status
+from askwol.models import IRISchemeConflict, IRISchemeHost, IRISchemeReport, Status
 
 _HOST_RE = re.compile(r"^([^/#?]+)")
 
@@ -80,6 +80,21 @@ def check_iri_scheme(graph: Graph, namespaces: dict[str, str]) -> IRISchemeRepor
                 https_examples=sorted(schemes["https"])[:5],
             ))
 
+    # Single-scheme hosts, listed so the report can show what was checked,
+    # not just a count.
+    hosts: list[IRISchemeHost] = []
+    for host in sorted(by_host):
+        schemes = by_host[host]
+        if "http" in schemes and "https" in schemes:
+            continue
+        scheme = "http" if "http" in schemes else "https"
+        hosts.append(IRISchemeHost(
+            host=host,
+            scheme=scheme,
+            count=counts[host][scheme],
+            examples=sorted(schemes[scheme])[:5],
+        ))
+
     # Headline scheme breakdown for the OK case
     http_hosts = sum(1 for h, sc in by_host.items() if "http" in sc and "https" not in sc)
     https_hosts = sum(1 for h, sc in by_host.items() if "https" in sc and "http" not in sc)
@@ -90,6 +105,7 @@ def check_iri_scheme(graph: Graph, namespaces: dict[str, str]) -> IRISchemeRepor
             total_hosts=len(by_host),
             http_only_hosts=http_hosts,
             https_only_hosts=https_hosts,
+            hosts=hosts,
             conflicts=conflicts,
             message=f"{len(conflicts)} host(s) referenced under both http:// and https://",
         )
@@ -99,6 +115,7 @@ def check_iri_scheme(graph: Graph, namespaces: dict[str, str]) -> IRISchemeRepor
         total_hosts=len(by_host),
         http_only_hosts=http_hosts,
         https_only_hosts=https_hosts,
+        hosts=hosts,
         conflicts=[],
         message=f"{len(by_host)} host(s), each referenced under a single scheme",
     )

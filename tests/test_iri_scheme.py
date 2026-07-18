@@ -54,3 +54,23 @@ def test_host_comparison_is_case_insensitive():
     r = check_iri_scheme(g, {})
     assert r.status == Status.WARN
     assert r.conflicts[0].host == "example.org"
+
+
+def test_hosts_list_populated_for_non_conflicting_hosts():
+    g = Graph()
+    g.add((URIRef("https://example.org/A"), RDF.type, OWL.Class))
+    g.add((URIRef("http://other.org/B"), RDF.type, OWL.Class))
+    r = check_iri_scheme(g, {"ex": "https://example.org/", "ot": "http://other.org/"})
+    assert r.status == Status.OK
+    hosts = {h.host: h.scheme for h in r.hosts}
+    assert hosts.get("example.org") == "https"
+    assert hosts.get("other.org") == "http"
+
+
+def test_hosts_list_excludes_conflicting_hosts():
+    g = Graph()
+    g.add((URIRef("https://example.org/A"), RDF.type, OWL.Class))
+    g.add((URIRef("http://example.org/B"), RDF.type, OWL.Class))
+    r = check_iri_scheme(g, {})
+    assert r.status == Status.WARN
+    assert all(h.host != "example.org" for h in r.hosts)

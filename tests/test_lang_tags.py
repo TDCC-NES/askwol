@@ -4,6 +4,7 @@ from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import OWL, RDF, RDFS, SKOS
 
 from askwol.lang_tags import check_lang_tags
+from askwol.models import Status
 
 EX = Namespace("http://example.org/")
 
@@ -13,7 +14,7 @@ def _make_ns_map():
 
 
 def test_consistent_tags_no_issues():
-    """All subjects use the same language set — no issues."""
+    """All subjects use the same language set — no issues, status OK."""
     g = Graph()
     g.add((EX.A, RDF.type, OWL.Class))
     g.add((EX.A, RDFS.label, Literal("A", lang="en")))
@@ -25,6 +26,7 @@ def test_consistent_tags_no_issues():
     report = check_lang_tags(g, _make_ns_map())
     assert report.languages_used == ["en", "nl"]
     assert report.issues == []
+    assert report.status == Status.OK
 
 
 def test_missing_tag_detected():
@@ -38,6 +40,7 @@ def test_missing_tag_detected():
     issue = report.issues[0]
     assert issue.issue_type == "missing_tag"
     assert "ex:B" == issue.subject
+    assert report.status == Status.WARN
 
 
 def test_missing_language_detected():
@@ -55,14 +58,30 @@ def test_missing_language_detected():
     assert "nl" in issue.detail
 
 
-def test_no_tags_at_all_no_issues():
-    """If no language tags are used at all, that's fine — no issues."""
+def test_no_tags_at_all_is_warn():
+    """Labels are present but none carry a language tag: no itemized
+    per-subject issues (nothing inconsistent to point at), but the overall
+    status is WARN since language tags are recommended whenever labels are
+    used at all."""
     g = Graph()
     g.add((EX.A, RDFS.label, Literal("A")))
     g.add((EX.B, RDFS.label, Literal("B")))
 
     report = check_lang_tags(g, _make_ns_map())
     assert report.issues == []
+    assert report.languages_used == []
+    assert report.status == Status.WARN
+
+
+def test_no_labels_at_all_is_skip():
+    """No labels/comments/etc. anywhere: nothing to check, status stays SKIP."""
+    g = Graph()
+    g.add((EX.A, RDF.type, OWL.Class))
+
+    report = check_lang_tags(g, _make_ns_map())
+    assert report.properties_checked == 0
+    assert report.issues == []
+    assert report.status == Status.SKIP
 
 
 def test_deprecated_subject_is_exempt():

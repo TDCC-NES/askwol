@@ -907,6 +907,12 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     <code>@en</code> and <code>@nl</code> labels on most classes, every
     class should have both. A missing <code>@nl</code> on one subject
     is probably an oversight.</li>
+    <li><strong>No tags used anywhere.</strong> If your ontology has labels
+    or comments but none of them carry a language tag at all, askwol flags
+    this as a warning too. Plain strings are valid RDF, but untagged text is
+    harder to localise or filter by language. An ontology with no labels or
+    comments in the first place isn&rsquo;t flagged, there is nothing to
+    tag.</li>
   </ul>
   <div class="warn">SPARQL filters like
   <code>FILTER(LANG(?label) = "en")</code> return nothing for untagged

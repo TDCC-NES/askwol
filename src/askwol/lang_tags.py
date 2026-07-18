@@ -7,7 +7,7 @@ from collections import defaultdict
 from rdflib import BNode, Graph, Literal, URIRef
 
 from askwol.deprecation import is_deprecated
-from askwol.models import LangTagIssue, LangTagPropertySummary, LangTagReport
+from askwol.models import LangTagIssue, LangTagPropertySummary, LangTagReport, Status
 
 # Annotation properties where language tags are expected
 LABEL_PROPERTIES = {
@@ -157,4 +157,9 @@ def check_lang_tags(graph: Graph, ns_map: dict[str, str]) -> LangTagReport:
         languages_used=sorted(all_langs),
         property_summaries=property_summaries,
         issues=issues,
+        # Labels/comments are used, but either inconsistently (issues) or not
+        # tagged at all (no languages_used) - both are worth flagging. Fully
+        # consistent tagging is OK; no labels/comments to check at all keeps
+        # the default SKIP.
+        status=Status.WARN if (issues or not all_langs) else Status.OK,
     )

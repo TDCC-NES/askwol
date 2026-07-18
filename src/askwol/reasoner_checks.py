@@ -9,7 +9,7 @@ from rdflib.collection import Collection
 from rdflib.namespace import OWL, RDF, RDFS
 from owlrl import DeductiveClosure, OWLRL_Semantics
 
-from askwol.iri_utils import EXTERNAL_NAMESPACES, namespace_of as _namespace_of
+from askwol.iri_utils import EXTERNAL_NAMESPACES, ontology_namespaces as _ontology_namespaces
 from askwol.models import ReasonerCheck, ReasonerReport, Status
 
 CLASS_TYPES = {OWL.Class, RDFS.Class}
@@ -33,14 +33,6 @@ def _is_internal(uri: str, ontology_namespaces: set[str]) -> bool:
         # Own namespace wins even when it is a well-known vocabulary.
         return any(uri.startswith(ns) for ns in ontology_namespaces)
     return not any(uri.startswith(ns) for ns in EXTERNAL_NAMESPACES)
-
-
-def _ontology_namespaces(graph: Graph) -> set[str]:
-    return {
-        _namespace_of(str(subject))
-        for subject in graph.subjects(RDF.type, OWL.Ontology)
-        if isinstance(subject, URIRef)
-    }
 
 
 def _disjoint_pairs(graph: Graph) -> set[tuple[str, str]]:
@@ -126,44 +118,65 @@ def run_reasoner_checks(graph: Graph) -> ReasonerReport:
     # in the section subtitle), not a check result. Don't list it as a check.
     checks: list[ReasonerCheck] = []
 
+    # Facet 1: overall rollup verdict (the more severe of the two facets below).
+    if inconsistent_individuals:
+        overall_status = Status.FAIL
+        overall_message = (
+            "The current ontology has inconsistent named individual(s) - see "
+            "'Inconsistent individuals' below."
+        )
+    elif unsatisfiable_classes:
+        overall_status = Status.WARN
+        overall_message = (
+            "The current ontology has unsatisfiable named class(es) - see "
+            "'Unsatisfiable classes' below."
+        )
+    else:
+        overall_status = Status.OK
+        overall_message = (
+            "No logical contradictions or unsatisfiable classes found in the "
+            "current ontology."
+        )
+    checks.append(
+        ReasonerCheck(
+            key="ontology_consistency",
+            label="Ontology consistency",
+            status=overall_status,
+            message=overall_message,
+        )
+    )
+
+    # Facet 2: inconsistent individuals, always its own row.
     if inconsistent_individuals:
         checks.append(
             ReasonerCheck(
-                key="ontology_consistency",
-                label="Ontology consistency",
+                key="inconsistent_individuals",
+                label="Inconsistent individuals",
                 status=Status.FAIL,
-                message=f"Found inconsistent named individual(s): {', '.join(inconsistent_individuals)}.",
+                message=f"Found {len(inconsistent_individuals)} inconsistent named individual(s): {', '.join(inconsistent_individuals)}.",
             )
         )
-        for individual in inconsistent_individuals:
-            checks.append(
-                ReasonerCheck(
-                    key=f"inconsistent_individual:{individual}",
-                    label="Inconsistent individual",
-                    status=Status.FAIL,
-                    message=f"{individual} is typed in a contradictory way in the current ontology.",
-                )
-            )
     else:
         checks.append(
             ReasonerCheck(
-                key="ontology_consistency",
-                label="Ontology consistency",
+                key="inconsistent_individuals",
+                label="Inconsistent individuals",
                 status=Status.OK,
                 message="No logical contradictions found among named individuals in the current ontology.",
             )
         )
 
+    # Facet 3: unsatisfiable classes, always its own row (with a summary row
+    # even when unsatisfiable classes are found, for symmetry with facet 2).
     if unsatisfiable_classes:
-        for cls in unsatisfiable_classes:
-            checks.append(
-                ReasonerCheck(
-                    key=f"unsatisfiable_class:{cls}",
-                    label="Unsatisfiable class",
-                    status=Status.WARN,
-                    message=f"{cls} cannot consistently have instances in the current ontology.",
-                )
+        checks.append(
+            ReasonerCheck(
+                key="unsatisfiable_classes",
+                label="Unsatisfiable classes",
+                status=Status.WARN,
+                message=f"Found {len(unsatisfiable_classes)} unsatisfiable named class(es): {', '.join(unsatisfiable_classes)}.",
             )
+        )
     else:
         checks.append(
             ReasonerCheck(

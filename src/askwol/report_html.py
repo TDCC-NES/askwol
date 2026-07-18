@@ -232,10 +232,21 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
 
     def _row(anchor: str, mark: str, title: str, detail: str) -> str:
         # Whole row jumps to the matching section anchor when clicked.
+        # Scrolling is done explicitly (not just via location.hash) because
+        # setting the hash to its current value is a no-op in browsers - it
+        # would silently fail to (re)scroll if the user is already on that
+        # hash. <details> blocks are deliberately left as-is (collapsed
+        # stays collapsed) so clicking an overview row never force-expands
+        # content the user didn't ask to see.
         num = _CHECK_NUMBERS.get(anchor, "")
         prefix = f'<span class="num">{num}</span> ' if num else ""
+        onclick = (
+            f"const t=document.getElementById('{anchor}');"
+            "t.scrollIntoView();"
+            f"location.hash='{anchor}';"
+        )
         return (
-            f'<tr onclick="location.hash=\'{anchor}\'">'
+            f'<tr onclick="{onclick}">'
             f'<td>{mark} {prefix}<strong>{title}</strong></td>'
             f'<td>{detail}</td>'
             f'</tr>'
@@ -392,15 +403,18 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                              f'{len(report.unused_prefixes)} declared but never used')]
             return [_row('unused-prefixes', _ok, 'Unused prefixes', 'none')]
         if report_anchor == 'language-tags':
-            if lt and lt.languages_used:
+            if lt and lt.status == Status.OK:
+                lang_str = ', '.join(lt.languages_used)
+                return [_row('language-tags', _ok, 'Language tag consistency', f'{lang_str} &middot; consistent')]
+            if lt and lt.status == Status.WARN and lt.issues:
                 lang_str = ', '.join(lt.languages_used)
                 issue_count = len(lt.issues)
-                if issue_count:
-                    return [_row('language-tags', _warn, 'Language tag consistency',
-                                 f'{lang_str} &middot; {issue_count} issue{"s" if issue_count != 1 else ""}')]
-                return [_row('language-tags', _ok, 'Language tag consistency', f'{lang_str} &middot; consistent')]
-            return [_row('language-tags', _info, 'Language tag consistency',
-                         'no language tags used in labels/definitions')]
+                return [_row('language-tags', _warn, 'Language tag consistency',
+                             f'{lang_str} &middot; {issue_count} issue{"s" if issue_count != 1 else ""}')]
+            if lt and lt.status == Status.WARN:
+                return [_row('language-tags', _warn, 'Language tag consistency',
+                             'labels/definitions present but none carry a language tag')]
+            return [_row('language-tags', _info, 'Language tag consistency', 'not applicable')]
         if report_anchor == 'non-ontology-terms':
             sk = report.non_ontology_terms
             if not sk or sk.status == Status.SKIP:
@@ -731,6 +745,16 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 f'<strong>{sch.total_hosts}</strong> host(s) referenced, each under a single scheme '
                 f'({sch.http_only_hosts} <code>http://</code>, {sch.https_only_hosts} <code>https://</code>).',
             ))
+        if sch.hosts:
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show hosts ({len(sch.hosts)})</summary>')
+            parts.append('<table><tr><th>Host</th><th>Scheme</th><th>Count</th></tr>')
+            for h in sch.hosts:
+                parts.append(
+                    f'<tr><td><code>{escape(h.host)}</code></td>'
+                    f'<td><code>{escape(h.scheme)}://</code></td>'
+                    f'<td>{h.count}</td></tr>'
+                )
+            parts.append('</table></details>')
         parts.append('</section>')
 
     # --- Namespaces section: resolvability of each declared prefix ---
@@ -754,22 +778,27 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             conn_err = [ns for ns in failed_ns if not ns.resolution.http_status]
 
             if http_404:
-                parts.append(f'<h3>404 Not Found ({len(http_404)})</h3>')
+                parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">404 Not Found ({len(http_404)})</summary>')
                 for ns in http_404:
                     _render_ns_card(ns)
+                parts.append('</details>')
             if http_other:
+                parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Other HTTP errors ({len(http_other)})</summary>')
                 for ns in http_other:
                     parts.append(f'<h3>HTTP {ns.resolution.http_status}</h3>')
                     _render_ns_card(ns)
+                parts.append('</details>')
             if conn_err:
-                parts.append(f'<h3>Connection errors ({len(conn_err)})</h3>')
+                parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Connection errors ({len(conn_err)})</summary>')
                 for ns in conn_err:
                     _render_ns_card(ns)
+                parts.append('</details>')
 
         if warn_ns:
-            parts.append(f'<h3>Warnings ({len(warn_ns)})</h3>')
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Warnings ({len(warn_ns)})</summary>')
             for ns in warn_ns:
                 _render_ns_card(ns)
+            parts.append('</details>')
 
         if ok_ns_list:
             parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Resolved OK ({len(ok_ns_list)})</summary>')
@@ -900,6 +929,17 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                     f'<td><a href="{t_iri}" target="_blank" rel="noopener"><code>{t_iri}</code></a></td></tr>'
                 )
             parts.append('</table></details>')
+        if it.referenced:
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show all referenced terms ({len(it.referenced)})</summary>')
+            parts.append('<table><tr><th>Term</th><th>Status</th></tr>')
+            for ref in it.referenced:
+                t_iri = escape(ref.term)
+                status_html = _ok + ' defined' if ref.defined else _fail + ' undefined'
+                parts.append(
+                    f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener"><code>{escape(ref.display_name)}</code></a></td>'
+                    f'<td>{status_html}</td></tr>'
+                )
+            parts.append('</table></details>')
         parts.append('</section>')
     else:
         _skipped_section('internal-terms', 'Internal term definitions',
@@ -919,17 +959,10 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             f'<strong>{n}</strong> {escape(cat)}' for cat, n in inv.category_counts.items()
         )
         parts.append(_status_subtitle(inv_status, f'{inv.total_terms} internal term{"s" if inv.total_terms != 1 else ""}: {counts_html}'))
+        summary = f'Show all terms ({inv.total_terms})'
         if inv.naming_issues:
-            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Naming convention issues ({len(inv.naming_issues)})</summary>')
-            parts.append('<table><tr><th>Term</th><th>Category</th><th>Issue</th></tr>')
-            for e in inv.naming_issues:
-                t_iri = escape(e.term)
-                parts.append(
-                    f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener"><code>{escape(e.display_name)}</code></a></td>'
-                    f'<td>{escape(e.category)}</td><td>{escape(e.naming_message or "")}</td></tr>'
-                )
-            parts.append('</table></details>')
-        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show all terms ({inv.total_terms})</summary>')
+            summary += f' &middot; {len(inv.naming_issues)} to review'
+        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">{summary}</summary>')
         parts.append('<table><tr><th>Term</th><th>Category</th><th>Naming</th></tr>')
         for e in sorted(inv.entries, key=lambda x: (x.category, x.display_name.lower())):
             t_iri = escape(e.term)
@@ -938,7 +971,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             elif e.naming_ok:
                 mark = '<span style="color:#2e7d32;font-size:1.2em;line-height:1">&#x2713;</span>'
             else:
-                mark = '<span style="color:#c62828;font-size:1.2em;line-height:1">&#x2717;</span>'
+                mark = f'<span style="color:#c62828;font-size:1.2em;line-height:1">&#x2717;</span> {escape(e.naming_message or "")}'
             parts.append(
                 f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener"><code>{escape(e.display_name)}</code></a></td>'
                 f'<td>{escape(e.category)}</td><td>{mark}</td></tr>'
@@ -968,19 +1001,11 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             f'{dr.total_properties} propert{"y" if dr.total_properties == 1 else "ies"} '
             f'({dr.object_properties} object &middot; {dr.datatype_properties} datatype) &middot; '
             f'{dr.with_domain} with a domain &middot; {dr.with_range} with a range'))
+        summary = f'Show all properties ({dr.total_properties})'
         if dr.issues:
-            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Properties to review ({len(dr.issues)})</summary>')
-            parts.append('<table><tr><th>Property</th><th>Category</th><th>Issue</th></tr>')
-            for c in dr.issues:
-                t_iri = escape(c.term)
-                mark = _status_mark(c.status)
-                parts.append(
-                    f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener"><code>{escape(c.display_name)}</code></a></td>'
-                    f'<td>{escape(c.category)}</td><td>{mark} {c.message or ""}</td></tr>'
-                )
-            parts.append('</table></details>')
-        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show all properties ({dr.total_properties})</summary>')
-        parts.append('<table><tr><th>Property</th><th>Category</th><th>Domain</th><th>Range</th></tr>')
+            summary += f' &middot; {len(dr.issues)} to review'
+        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">{summary}</summary>')
+        parts.append('<table><tr><th>Property</th><th>Category</th><th>Domain</th><th>Range</th><th>Issue</th></tr>')
         for c in sorted(dr.checks, key=lambda x: (x.category, x.display_name.lower())):
             t_iri = escape(c.term)
             dmark = ('<span style="color:#2e7d32">&#x2713;</span>' if c.has_domain
@@ -990,9 +1015,10 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             category = escape(c.category)
             if c.deprecated:
                 category += f' <span title="Deprecated ({escape(c.deprecated)}); not checked" style="color:#999;">&#x2298;</span>'
+            issue = f'{_status_mark(c.status)} {escape(c.message or "")}' if c.status != Status.OK else _status_mark(c.status)
             parts.append(
                 f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener"><code>{escape(c.display_name)}</code></a></td>'
-                f'<td>{category}</td><td>{dmark}</td><td>{rmark}</td></tr>'
+                f'<td>{category}</td><td>{dmark}</td><td>{rmark}</td><td>{issue}</td></tr>'
             )
         parts.append('</table></details>')
         parts.append('</section>')
@@ -1011,25 +1037,20 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append(_guide_link('datatypes'))
         parts.append('<p class="subtitle">Datatypes used as property ranges and as literal datatypes should be recognized XSD built-ins (<code>xsd:string</code>, <code>xsd:integer</code>, &hellip;), <code>rdfs:Literal</code>, <code>rdf:langString</code>, or a datatype you declare with <code>rdfs:Datatype</code>. An unrecognized datatype is usually a typo.</p>')
         parts.append(_status_subtitle(dt_status, f'{dt.recognized}/{dt.total_datatypes} recognized &middot; {len(dt.unrecognized)} unrecognized'))
+        summary = f'Show all datatypes ({dt.total_datatypes})'
         if dt.unrecognized:
-            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Unrecognized datatypes ({len(dt.unrecognized)})</summary>')
-            parts.append('<table><tr><th>Datatype</th><th>Uses</th><th>Full IRI</th></tr>')
-            for u in dt.unrecognized:
-                t_iri = escape(u.datatype)
-                parts.append(
-                    f'<tr><td><code>{escape(u.display_name)}</code></td>'
-                    f'<td>{u.count}</td>'
-                    f'<td><a href="{t_iri}" target="_blank" rel="noopener"><code>{t_iri}</code></a></td></tr>'
-                )
-            parts.append('</table></details>')
-        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show all datatypes ({dt.total_datatypes})</summary>')
-        parts.append('<table><tr><th>Datatype</th><th>Uses</th><th>Where</th></tr>')
+            summary += f' &middot; {len(dt.unrecognized)} unrecognized'
+        parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">{summary}</summary>')
+        parts.append('<table><tr><th>Datatype</th><th>Uses</th><th>Where</th><th>Status</th></tr>')
         for u in sorted(dt.usages, key=lambda x: x.display_name.lower()):
-            mark = ('<span style="color:#2e7d32">&#x2713;</span>' if u.recognized
-                    else '<span style="color:#c62828">&#x2717;</span>')
+            t_iri = escape(u.datatype)
+            if u.recognized:
+                status = '<span style="color:#2e7d32;font-size:1.2em;line-height:1">&#x2713;</span>'
+            else:
+                status = f'<span style="color:#c62828;font-size:1.2em;line-height:1">&#x2717;</span> {escape(u.message or "")}'
             parts.append(
-                f'<tr><td>{mark} <code>{escape(u.display_name)}</code></td>'
-                f'<td>{u.count}</td><td>{escape(", ".join(u.sources))}</td></tr>'
+                f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener"><code>{escape(u.display_name)}</code></a></td>'
+                f'<td>{u.count}</td><td>{escape(", ".join(u.sources))}</td><td>{status}</td></tr>'
             )
         parts.append('</table></details>')
         parts.append('</section>')
@@ -1112,7 +1133,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     lt = report.lang_tags
     _open_cluster('language-tags')
     parts.append('<section class="section">')
-    if lt and lt.issues:
+    if lt and lt.status == Status.WARN and lt.issues:
         n_issues = len(lt.issues)
         n_missing_tag = sum(1 for i in lt.issues if i.issue_type == "missing_tag")
         n_missing_lang = sum(1 for i in lt.issues if i.issue_type == "missing_language")
@@ -1186,7 +1207,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                         elif i.languages_found:
                             # missing_tag with some tags already present
                             has = ", ".join(f"<code>{escape(l)}</code>" for l in i.languages_found)
-                            parts.append(f'<li><code>{escape(i.subject)}</code> (has {has})</li>')
+                            parts.append(f'<li><code>{escape(i.subject)}</code> - has an untagged value, plus another already tagged {has}</li>')
                         else:
                             parts.append(f'<li><code>{escape(i.subject)}</code></li>')
                     parts.append('</ul>')
@@ -1199,17 +1220,22 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                         f'</p>'
                     )
         parts.append('</details>')
-    elif lt and lt.languages_used:
+    elif lt and lt.status == Status.OK:
         lang_str = ', '.join(lt.languages_used)
         parts.append(_section_heading('language-tags', 'Language tag consistency', 'ok', 'consistent'))
         parts.append(_guide_link('language-tags'))
         parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) should use language tags consistently across all subjects.</p>')
         parts.append(_status_subtitle('ok', f'Labels and definitions use {lang_str} consistently across subjects.'))
-    else:
-        parts.append(_section_heading('language-tags', 'Language tag consistency', 'info', 'no tags used'))
+    elif lt and lt.status == Status.WARN:
+        parts.append(_section_heading('language-tags', 'Language tag consistency', 'warn', 'no language tags used'))
         parts.append(_guide_link('language-tags'))
         parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) should use language tags consistently across all subjects.</p>')
-        parts.append(_status_subtitle('info', 'No labels or definitions in this ontology carry language tags (e.g. <code>"Person"@en</code>). This is not an error, but adding language tags makes labels easier to localise.'))
+        parts.append(_status_subtitle('warn', 'None of the labels or definitions in this ontology carry a language tag (e.g. <code>"Person"@en</code>). Plain strings are valid RDF, but language tags make labels easier to localise and to filter by language.'))
+    else:
+        parts.append(_section_heading('language-tags', 'Language tag consistency', 'info', 'not applicable'))
+        parts.append(_guide_link('language-tags'))
+        parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) should use language tags consistently across all subjects.</p>')
+        parts.append(_status_subtitle('info', 'This ontology has no labels or definitions to check for language tags.'))
     parts.append('</section>')
 
     # Reasoner checks
