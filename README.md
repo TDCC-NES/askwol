@@ -78,7 +78,7 @@ Or for development:
 git clone https://github.com/TDCC-NES/askwol.git
 cd askwol
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate   # may differ depending on your shell
 pip install -e ".[dev]"   # Python 3.10+
 ```
 
@@ -104,14 +104,14 @@ Exit codes: `0` all pass, `1` issues found.
 ### Web UI
 
 ```bash
-PYTHONPATH=src .venv/bin/uvicorn askwol.web:app --reload --port 8000
+.venv/bin/uvicorn askwol.web:app --reload --port 8000
 ```
 
 Open http://127.0.0.1:8000/. Endpoints: `GET /` (upload form), `POST /validate` (HTML report), `POST /api/validate` (JSON), `GET /guide` (publishing guide), `GET /health`, `GET /docs` (Swagger / OpenAPI).
 
 ## Deployment (Docker)
 
-The repo ships with a `Dockerfile` and `docker-compose.yml` so the web app can be deployed on any Linux server with Docker.
+The repo ships with a `Dockerfile` and `docker-compose.yml` so that the web app can be deployed on any Linux server with Docker.
 
 ### Run locally
 
@@ -146,7 +146,7 @@ The override file is gitignored, so it never reaches the server.
 
 ### Deploy on a server
 
-Prerequisites: a Linux host with Docker, a domain pointing to it, and a reverse proxy (e.g. [Caddy](https://caddyserver.com/) or nginx) for HTTPS.
+Prerequisites: a Linux host with Docker, a domain pointing to it, and a reverse proxy such as [Caddy](https://caddyserver.com/),  [Apache mod_proxy](https://httpd.apache.org/docs/current/mod/mod_proxy.html), or [Nginx Reverse Proxy](https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/).
 
 ```bash
 # on the server
