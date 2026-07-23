@@ -18,6 +18,7 @@ from askwol.iri_strategy import check_iri_strategy
 from askwol.iri_utils import ontology_namespaces
 from askwol.lang_tags import check_lang_tags
 from askwol.metadata_validator import validate_ontology_metadata
+from askwol.license_check import check_license
 from askwol.non_ontology_terms import check_non_ontology_terms
 from askwol.reasoner_checks import run_reasoner_checks
 from askwol.models import NamespaceCheck, NamespaceReport, Status, UnusedPrefix, ValidationReport
@@ -62,6 +63,7 @@ async def _run_check(
 
     report.lang_tags = check_lang_tags(parsed.graph, parsed.namespaces)
     report.ontology_metadata = validate_ontology_metadata(parsed.graph)
+    report.license = check_license(parsed.graph)
     report.definition_docs = check_definition_documentation(parsed.graph)
     report.internal_terms = check_internal_terms(parsed.graph)
     report.term_inventory = check_term_inventory(parsed.graph)

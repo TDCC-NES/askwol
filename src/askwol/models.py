@@ -535,7 +535,7 @@ class ValidationReport(BaseModel):
             return True
         if self.iri_scheme and self.iri_scheme.status == Status.WARN:
             return True
-        if self.license and self.license.broken:
+        if self.license and self.license.status in (Status.FAIL, Status.WARN):
             return True
         if self.reasoner and (not self.reasoner.consistent or self.reasoner.unsatisfiable_classes):
             return True
