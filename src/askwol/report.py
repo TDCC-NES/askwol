@@ -652,14 +652,14 @@ def _overview_line(report: ValidationReport, anchor: str) -> tuple[str, str] | N
             return "warn", f"{len(sch.conflicts)} host(s) on both http and https"
         return "ok", f"{sch.total_hosts} host(s), single scheme each"
     if anchor == "license":
-        imp = report.license
-        if not imp:
+        lcns = report.license
+        if not lcns:
             return None
-        if imp.broken:
-            return "fail", f"open license not found at {imp.broken[0].iri}"
-        if not imp.checks:
-            return "ok", "no license declared"
-        return "ok", f"open license found at {imp.checks[0].iri}"
+        if lcns.status == S.FAIL:
+            return "fail", "no open license declared"
+        if lcns.status == S.WARN:
+            return "warn", "no recommended license declared"
+        return "ok", f"recommended license declared"
     if anchor == "namespaces":
         total = len(report.namespaces)
         if total == 0:
