@@ -215,7 +215,7 @@ def report_as_markdown(report: ValidationReport) -> str:
         if lcns.status != Status.OK:
             license_count = len(lcns.checks)
             plural = "s" if license_count > 1 else ""
-            w(f"> {license_count} license{plural} found"
+            w(f"> {license_count} license{plural} found")
             w("")
             w("<details>")
             w("")
