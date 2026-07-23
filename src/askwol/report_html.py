@@ -366,6 +366,8 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                          f'{len(imp.checks)} declared import(s), all resolve')]
         if report_anchor == 'license':
             lcns = report.license
+            if not lcns:
+                return []
             license_count = lcns.license_count
             if license_count == 0:
                 return [_row('license', _fail, 'License', 'no license declared')]
@@ -608,7 +610,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<section class="section">')
         parts.append(_section_heading('ontology-metadata', 'Ontology metadata', m_status, m_label))
         parts.append(_guide_link('ontology-metadata'))
-        parts.append('<p class="subtitle">The ontology header (title, creator, license, version, &hellip;) is checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/ontology_metadata.ttl" target="_blank" rel="noopener">SHACL shapes for the ontology header</a>.</p>')
+        parts.append('<p class="subtitle">The ontology header (title, creator, version, &hellip;) is checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/ontology_metadata.ttl" target="_blank" rel="noopener">SHACL shapes for the ontology header</a>.</p>')
         summary_bits = [f"{meta.passed_checks} present"]
         if missing_required:
             summary_bits.append(f"{len(missing_required)} required missing")
