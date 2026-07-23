@@ -23,6 +23,7 @@ from askwol.iri_scheme import check_iri_scheme
 from askwol.iri_strategy import check_iri_strategy
 from askwol.iri_utils import ontology_namespaces
 from askwol.lang_tags import check_lang_tags
+from askwol.license_check import check_license
 from askwol.mermaid_diagram import build_mermaid
 from askwol.metadata_validator import validate_ontology_metadata
 from askwol.models import NamespaceReport, UnusedPrefix, ValidationReport
@@ -612,6 +613,7 @@ async def _run_validation(tmp_path: Path, source_name: str, base_uri: str | None
     # "Strategy" = hash vs. slash IRIs; "scheme" = http vs. https.
     report.iri_strategy = check_iri_strategy(parsed.graph)
     report.iri_scheme = check_iri_scheme(parsed.graph, parsed.namespaces)
+    report.license = check_license(parsed.graph)
     # Reasoner checks: current ontology only, imports are not followed.
     report.reasoner = run_reasoner_checks(parsed.graph)
     report.non_ontology_terms = check_non_ontology_terms(parsed.graph)
@@ -733,6 +735,7 @@ async def validate_api(
     report.imports = await check_imports(parsed.graph, cache)
     report.iri_strategy = check_iri_strategy(parsed.graph)
     report.iri_scheme = check_iri_scheme(parsed.graph, parsed.namespaces)
+    report.license = check_license(parsed.graph)
     report.reasoner = run_reasoner_checks(parsed.graph)
     report.non_ontology_terms = check_non_ontology_terms(parsed.graph)
 

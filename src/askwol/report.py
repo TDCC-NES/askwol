@@ -204,6 +204,36 @@ def report_as_markdown(report: ValidationReport) -> str:
             w("</details>")
             w("")
 
+    # Open license compliance
+    lcns = report.license
+    if lcns is not None:
+        w("## Open license")
+        w("")
+        w("Every `dcterms:license` value declared in the ontology header is checked "
+            "against a list of open licenses following the Open Definition.")
+        w("")
+        if lcns.status != Status.OK:
+            license_count = len(lcns.checks)
+            plural = "s" if license_count > 1 else ""
+            w(f"> {license_count} license{plural} found"
+            w("")
+            w("<details>")
+            w("")
+            w("| License | License IRI | License Category |")
+            w("|---------|-------------|------------------|")
+            for c in lcns.checks:
+                license_category = "recommended" if c.is_recommended else ("open" if c.is_open else "non-open")
+                w(f"| {c.name} | {c.iri} | {license_category} |")
+            w("")
+            w("</details>")
+            w("")
+        else:
+            c = lcns.checks[0]
+            license_category = "recommended" if c.is_recommended else ("open" if c.is_open else "non-open")
+            w(f"> 1 {license_category} license"
+              f"({c.name}: `{c.iri}`)")
+            w("")
+
     # Group namespaces by status for clarity
     if ok_ns:
         w("## Namespaces with valid RDF")
@@ -621,6 +651,15 @@ def _overview_line(report: ValidationReport, anchor: str) -> tuple[str, str] | N
         if sch.status == S.WARN:
             return "warn", f"{len(sch.conflicts)} host(s) on both http and https"
         return "ok", f"{sch.total_hosts} host(s), single scheme each"
+    if anchor == "license":
+        imp = report.license
+        if not imp:
+            return None
+        if imp.broken:
+            return "fail", f"open license not found at {imp.broken[0].iri}"
+        if not imp.checks:
+            return "ok", "no license declared"
+        return "ok", f"open license found at {imp.checks[0].iri}"
     if anchor == "namespaces":
         total = len(report.namespaces)
         if total == 0:

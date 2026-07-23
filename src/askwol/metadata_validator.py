@@ -19,7 +19,6 @@ _SPECS: tuple[tuple[str, str, str, str, str], ...] = (
     ("title", "Title", "Title", "dcterms:title or rdfs:label", "required"),
     ("description", "Description", "Description", "dcterms:description or rdfs:comment", "required"),
     ("creator", "Creator", "Creator", "dcterms:creator", "required"),
-    ("license", "License", "License", "dcterms:license", "required"),
     ("version", "Version", "Version", "owl:versionInfo or owl:versionIRI", "required"),
     ("created", "Created date", "Created date", "dcterms:created or dcterms:issued", "recommended"),
     ("modified", "Modified date", "Modified date", "dcterms:modified", "recommended"),
