@@ -99,6 +99,51 @@ class LangTagReport(BaseModel):
     status: Status = Status.SKIP
 
 
+class LicenseCheck(BaseModel):
+    """Ontology license check."""
+
+    iri: str
+    name: str
+    is_open: bool
+    is_recommended: bool
+    status: Status
+    #message: str | None = None
+
+
+class LicenseReport(BaseModel):
+    """Summary of ontology license compliance."""
+
+    checks: list[LicenseCheck] = Field(default_factory=list)
+
+    @property
+    def status(self) -> str:
+        if len(self.checks) == 0:
+            return Status.FAIL
+        elif len([c for c in self.checks if c.status == Status.FAIL]) > 0:
+            return Status.FAIL
+        elif len([c for c in self.checks if c.status == Status.WARN]) > 0:
+            return Status.WARN
+        elif len(self.checks) > 1:
+            return Status.WARN
+        return Status.OK
+
+    @property
+    def recommended_licenses(self) -> list:
+        return [c for c in self.checks if c.status == Status.OK]
+
+    @property
+    def open_licenses(self) -> list:
+        return [c for c in self.checks if c.status == Status.WARN]
+
+    @property
+    def non_open_licenses(self) -> list:
+        return [c for c in self.checks if c.status == Status.FAIL]
+
+    @property
+    def license_count(self) -> int:
+        return len(self.checks)
+
+
 class MetadataCheck(BaseModel):
     """One ontology metadata check derived from the SHACL shapes."""
 
@@ -448,6 +493,7 @@ class ValidationReport(BaseModel):
     imports: ImportsReport | None = None
     iri_strategy: IRIStrategyReport | None = None
     iri_scheme: IRISchemeReport | None = None
+    license: LicenseReport | None = None
     reasoner: ReasonerReport | None = None
 
     @property
@@ -488,6 +534,8 @@ class ValidationReport(BaseModel):
         if self.iri_strategy and self.iri_strategy.status == Status.WARN:
             return True
         if self.iri_scheme and self.iri_scheme.status == Status.WARN:
+            return True
+        if self.license and self.license.broken:
             return True
         if self.reasoner and (not self.reasoner.consistent or self.reasoner.unsatisfiable_classes):
             return True

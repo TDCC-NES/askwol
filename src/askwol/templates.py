@@ -351,53 +351,6 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   </ul>
   <div class="tip">Fill in these metadata so that both humans and machines
   can understand the provenance and reuse conditions of your ontology.</div>
-
-  <h3 id="licensing">Licensing</h3>
-
-  <p><span class="tag practice">TDCC guideline</span> Your ontology should be released under an <strong>open license</strong>, and we recommend using the DCMI property <code>dcterms:license</code> for this purpose. To fulfill the principles of Linked Open Data, the adopted license needs to meet the <a href=https://opendefinition.org target="_blank" rel="noopener">Open Definition</a>, that is, “anyone can freely access, use, modify, and share [the ontology] for any purpose (subject, at most, to requirements that preserve provenance and openness).”</p>
-  
-  <p>A license is considered to be open if it is equivalent to the <strong>public domain</strong> or, at most, adds <strong>attribution</strong> or <strong>share-alike</strong> restrictions. A license with non-commercial or no-derivatives clauses is not open. To encourage maximum reuse of your ontology, we recommend adopting one of the two <a href=https://creativecommons.org/cc-licenses/ target="_blank" rel="noopener">Creative Commons</a> licenses listed below.</p>
-  <ol>
-    <li>
-      <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener">Creative Commons Zero (CC0)</a> (public domain); IRI: <code>https://creativecommons.org/publicdomain/zero/1.0/</code>
-    </li>
-    <li>
-      <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">Creative Commons Attribution (CC BY)</a> (requires attribution); IRI: <code>https://creativecommons.org/licenses/by/4.0/</code>
-    </li>
-  </ol>
-
- askwol also recognizes, but does not recommend, the following licenses which fit the open definition but are less suitable for ontologies for the reasons listed below.
-  <ul>
-    <li>
-      <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">Creative Commons Attribution ShareAlike (CC BY-SA)</a> (requires attribution, share-alike); IRI: <code>https://creativecommons.org/licenses/by-sa/4.0/</code>; too restrictive due to the share-alike.
-    </li>
-    <li>
-      <a href="http://opendatacommons.org/licenses/pddl/1.0/" target="_blank" rel="noopener">Open Data Commons Public Domain Dedication and License (PDDL)</a> (public domain); IRI: <code>http://opendatacommons.org/licenses/pddl/1.0/</code>; only covers data and not content.
-    </li>
-    <li>
-      <a href="https://opendatacommons.org/licenses/by/" target="_blank" rel="noopener">Open Data Commons Attribution License (ODC-By)</a> (requires attribution); IRI: <code>http://opendatacommons.org/licenses/by/1.0/</code>; only covers data and not content.
-    </li>
-    <li>
-      <a href="https://opendatacommons.org/licenses/odbl/" target="_blank" rel="noopener">Open Data Commons Open Database License (ODbL)</a> (requires attribution, share-alike); IRI: <code>http://opendatacommons.org/licenses/odbl/1.0/</code>; too restrictive due to the share-alike.
-    </li>
-    <li>
-      <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">Other licenses conformant with the Open Definition</a>; most of these are little used and incompatible with more widely adopted open licenses.
-    </li>
-    <li>
-      <a href="https://opensource.org/licenses" target="_blank" rel="noopener">Any license approved by the Open Source Initiative</a>; these are primarily meant for open source software rather than ontologies.
-    </li>
-  </ul>
-
-  <pre>&lt;https://example.org/my-ontology&gt; a owl:Ontology ;
-    dcterms:title "My Ontology"@en ;
-    dcterms:description "What this ontology is about."@en ;
-    dcterms:creator "Example Team" ;
-    dcterms:license &lt;https://creativecommons.org/publicdomain/zero/1.0/&gt; ;
-    dcterms:created "2026-04-20"^^xsd:date ;
-    dcterms:publisher "Example Institute" ;
-    owl:versionInfo "1.0" .</pre>
-  
-  <div class="tip">askwol will return an error if the ontology license is missing or not recognized as open. It will give a warning if the license is open but not well suited for ontologies.</div>
   
   <h3 id="versioning">Versioning</h3>
   <p>Version information is part of good ontology metadata.
@@ -568,6 +521,59 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <div class="tip"><strong>Rule of thumb:</strong> copy-paste the
   namespace IRI from the vocabulary&rsquo;s own ontology file. Don&rsquo;t
   retype it, don&rsquo;t &ldquo;upgrade&rdquo; the scheme.</div>
+""",
+    },
+        {
+        "group": "check",
+        "category": "basics",
+        "anchor": "license",
+        "title": "Adopt an open license",
+        "toc_label": "Open license",
+        "body": """\
+  <p><span class="tag practice">TDCC guideline</span> Your ontology should be released under an <strong>open license</strong>, and we recommend using the DCMI property <code>dcterms:license</code> for this purpose. To fulfill the principles of Linked Open Data, the adopted license needs to meet the <a href=https://opendefinition.org target="_blank" rel="noopener">Open Definition</a>, that is, “anyone can freely access, use, modify, and share [the ontology] for any purpose (subject, at most, to requirements that preserve provenance and openness).”</p>
+  
+  <p>A license is considered to be open if it is equivalent to the <strong>public domain</strong> or, at most, adds <strong>attribution</strong> or <strong>share-alike</strong> restrictions. A license with non-commercial or no-derivatives clauses is not open. To encourage maximum reuse of your ontology, we recommend adopting one of the two <a href=https://creativecommons.org/cc-licenses/ target="_blank" rel="noopener">Creative Commons</a> licenses listed below.</p>
+  <ol>
+    <li>
+      <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener">Creative Commons Zero (CC0)</a> (public domain); IRI: <code>https://creativecommons.org/publicdomain/zero/1.0/</code>
+    </li>
+    <li>
+      <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">Creative Commons Attribution (CC BY)</a> (requires attribution); IRI: <code>https://creativecommons.org/licenses/by/4.0/</code>
+    </li>
+  </ol>
+
+ askwol also recognizes, but does not recommend, the following licenses which fit the open definition but are less suitable for ontologies for the reasons listed below.
+  <ul>
+    <li>
+      <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">Creative Commons Attribution ShareAlike (CC BY-SA)</a> (requires attribution, share-alike); IRI: <code>https://creativecommons.org/licenses/by-sa/4.0/</code>; too restrictive due to the share-alike.
+    </li>
+    <li>
+      <a href="http://opendatacommons.org/licenses/pddl/1.0/" target="_blank" rel="noopener">Open Data Commons Public Domain Dedication and License (PDDL)</a> (public domain); IRI: <code>http://opendatacommons.org/licenses/pddl/1.0/</code>; only covers data and not content.
+    </li>
+    <li>
+      <a href="https://opendatacommons.org/licenses/by/" target="_blank" rel="noopener">Open Data Commons Attribution License (ODC-By)</a> (requires attribution); IRI: <code>http://opendatacommons.org/licenses/by/1.0/</code>; only covers data and not content.
+    </li>
+    <li>
+      <a href="https://opendatacommons.org/licenses/odbl/" target="_blank" rel="noopener">Open Data Commons Open Database License (ODbL)</a> (requires attribution, share-alike); IRI: <code>http://opendatacommons.org/licenses/odbl/1.0/</code>; too restrictive due to the share-alike.
+    </li>
+    <li>
+      <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">Other licenses conformant with the Open Definition</a>; most of these are little used and incompatible with more widely adopted open licenses.
+    </li>
+    <li>
+      <a href="https://opensource.org/licenses" target="_blank" rel="noopener">Any license approved by the Open Source Initiative</a>; these are primarily meant for open source software rather than ontologies.
+    </li>
+  </ul>
+
+  <pre>&lt;https://example.org/my-ontology&gt; a owl:Ontology ;
+    dcterms:title "My Ontology"@en ;
+    dcterms:description "What this ontology is about."@en ;
+    dcterms:creator "Example Team" ;
+    dcterms:license &lt;https://creativecommons.org/publicdomain/zero/1.0/&gt; ;
+    dcterms:created "2026-04-20"^^xsd:date ;
+    dcterms:publisher "Example Institute" ;
+    owl:versionInfo "1.0" .</pre>
+  
+  <div class="tip">askwol will return an error if the ontology license is missing or not recognized as open. It will give a warning if the license is open but not well suited for ontologies.</div>
 """,
     },
     {
