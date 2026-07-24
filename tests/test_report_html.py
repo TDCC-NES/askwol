@@ -22,6 +22,8 @@ from askwol.models import (
     IRISchemeReport,
     IRIStrategyReport,
     LangTagReport,
+    LicenseCheck,
+    LicenseReport,
     MetadataCheck,
     MetadataReport,
     NamespaceCheck,
@@ -71,6 +73,15 @@ def test_render_minimal_report_contains_all_section_anchors():
     report.imports = ImportsReport(status=Status.OK, message="ok")
     report.iri_strategy = IRIStrategyReport(status=Status.OK, strategy="hash", hash_count=3)
     report.iri_scheme = IRISchemeReport(status=Status.OK, total_hosts=1, http_only_hosts=0, https_only_hosts=1)
+    report.license = LicenseReport(
+        checks=[LicenseCheck(
+            iri="https://creativecommons.org/licenses/by/4.0/",
+            name="Creative Commons Attribution 4.0 International",
+            is_open=True,
+            is_recommended=True,
+            status=Status.OK,
+        )],
+    )
     report.internal_terms = InternalTermsReport(
         status=Status.FAIL,
         total_referenced=2,

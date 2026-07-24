@@ -204,6 +204,39 @@ def report_as_markdown(report: ValidationReport) -> str:
             w("</details>")
             w("")
 
+    # Open license compliance
+    lcns = report.license
+    if lcns is not None:
+        w("## Open license")
+        w("")
+        w("Every `dcterms:license` value declared in the ontology header is checked "
+            "against a list of open licenses following the Open Definition.")
+        w("")
+        if lcns.status != Status.OK:
+            license_count = len(lcns.checks)
+            if license_count == 0:
+                w("> No license declared.")
+                w("")
+            else:
+                plural = "s" if license_count > 1 else ""
+                w(f"> {license_count} license{plural} declared.")
+                w("")
+                w("<details>")
+                w("")
+                w("| License | License IRI | License Category |")
+                w("|---------|-------------|------------------|")
+                for c in lcns.checks:
+                    license_category = "recommended" if c.is_recommended else ("open" if c.is_open else "non-open")
+                    w(f"| {c.name} | {c.iri} | {license_category} |")
+                w("")
+                w("</details>")
+                w("")
+        else:
+            c = lcns.checks[0]
+            w(f"> 1 recommended license declared"
+              f" ({c.name}: `{c.iri}`).")
+            w("")
+
     # Group namespaces by status for clarity
     if ok_ns:
         w("## Namespaces with valid RDF")
@@ -621,6 +654,26 @@ def _overview_line(report: ValidationReport, anchor: str) -> tuple[str, str] | N
         if sch.status == S.WARN:
             return "warn", f"{len(sch.conflicts)} host(s) on both http and https"
         return "ok", f"{sch.total_hosts} host(s), single scheme each"
+    if anchor == "license":
+        lcns = report.license
+        if not lcns:
+            return None
+        license_count = len(lcns.checks)
+        recommended_count = len(lcns.recommended_licenses)
+        open_count = len(lcns.open_licenses)
+        non_open_count = len(lcns.non_open_licenses)
+        recommended_str = f'{recommended_count} recommended' if recommended_count else ''
+        open_str = f'{", " if recommended_count else ""}{open_count} open' if open_count else ''
+        non_open_str = f'{", " if recommended_count or open_count else ""}{non_open_count} non-open' if non_open_count else ''
+        plural = "s" if license_count > 1 else ""
+        if lcns.status == S.FAIL:
+            if not license_count:
+                return "fail", "no license declared"
+            else:
+                return "fail", f"{license_count} license{plural} declared, {recommended_str}{open_str}{non_open_str}"
+        if lcns.status == S.WARN:
+            return "warn", f"{license_count} license{plural} declared, {recommended_str}{open_str}{non_open_str}"
+        return "ok", "1 recommended license declared"
     if anchor == "namespaces":
         total = len(report.namespaces)
         if total == 0:
@@ -823,6 +876,40 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
                 bits.append(res.error)
             imp_table.add_row(c.iri, _status_badge(res.status), ", ".join(bits))
         console.print(imp_table)
+
+    # Open license compliance
+    lcns = report.license
+    if lcns is not None:
+        console.print()
+        license_table = Table(title="Licenses", show_lines=True)
+        license_table.add_column("IRI")
+        license_table.add_column("Name")
+        license_table.add_column("Status")
+        license_table.add_column("Category")
+        for c in lcns.checks:
+            license_category = "recommended" if c.is_recommended else ("open" if c.is_open else "non-open")
+            license_table.add_row(c.iri, c.name, _status_badge(c.status), license_category)
+        license_count = len(lcns.checks)
+        if lcns.status == Status.OK:
+            console.print(f"[green]\u2713 Open license  -  1 recommended license declared ({lcns.checks[0].name})[/green]")
+        else:
+            recommended_count = len(lcns.recommended_licenses)
+            open_count = len(lcns.open_licenses)
+            non_open_count = len(lcns.non_open_licenses)
+            recommended_str = f'{recommended_count} recommended' if recommended_count else ''
+            open_str = f'{", " if recommended_count else ""}{open_count} open' if open_count else ''
+            non_open_str = f'{", " if recommended_count or open_count else ""}{non_open_count} non-open' if non_open_count else ''
+            plural = "s" if license_count > 1 else ""
+            if lcns.status == Status.WARN:
+                console.print(f"[yellow]\u26A0 Open license  -  {license_count} license{plural} declared, {recommended_str}{open_str}{non_open_str}[/yellow]")
+            else:
+                if license_count == 0:
+                    console.print("[red]\u2717 Open license  -  no license declared[/red]")
+                else:
+                    console.print(f"[red]\u2717 Open license  -  {license_count} license{plural} declared, {recommended_str}{open_str}{non_open_str}[/red]")
+        if license_count > 0:
+            console.print()
+            console.print(license_table)
 
     # IRI strategy (hash vs slash) for the ontology's own defined terms
     iri = report.iri_strategy

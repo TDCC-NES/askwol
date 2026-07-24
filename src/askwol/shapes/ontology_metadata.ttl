@@ -33,15 +33,6 @@
     ] ;
 
     sh:property [
-        sh:name "License" ;
-        sh:path dcterms:license ;
-        sh:minCount 1 ;
-        sh:nodeKind sh:IRI ;
-        sh:severity sh:Violation ;
-        sh:message "Add a license IRI using dcterms:license." ;
-    ] ;
-
-    sh:property [
         sh:name "Version" ;
         sh:path [ sh:alternativePath ( owl:versionInfo owl:versionIRI ) ] ;
         sh:minCount 1 ;
