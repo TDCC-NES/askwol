@@ -219,3 +219,39 @@ async def test_cli_pipeline_populates_every_check(monkeypatch, foaf_stub):
     assert foaf_ns.resolution.status == Status.OK
     madeup = next(t for t in foaf_ns.terms if t.local_name == "MadeUpConcept")
     assert madeup.status == Status.FAIL
+
+
+@pytest.mark.asyncio
+async def test_cli_pipeline_skip_resolution_still_runs_local_checks():
+    """Regression guard: --skip-resolution must only skip network-bound work
+    (namespace resolution, imports, external term validation), not every
+    other check.
+
+    cli.py's _run_check() used to return immediately after building
+    placeholder SKIP namespace entries, silently skipping every local,
+    network-free check too (metadata, license, term structure, docs,
+    reasoner, IRI strategy/scheme, non-ontology terms).
+    """
+    from askwol.cli import _run_check
+
+    report = await _run_check(BROKEN, timeout=10.0, skip_resolution=True)
+
+    assert report.ontology_metadata is not None and report.ontology_metadata.failed_checks
+    assert report.license is not None and report.license.status == Status.FAIL
+    assert report.iri_strategy is not None and report.iri_strategy.status == Status.WARN
+    assert report.iri_scheme is not None and report.iri_scheme.status == Status.WARN
+    assert report.unused_prefixes
+    assert report.non_ontology_terms is not None and report.non_ontology_terms.status == Status.WARN
+    assert report.internal_terms is not None and report.internal_terms.status == Status.FAIL
+    assert report.term_inventory is not None and report.term_inventory.status == Status.FAIL
+    assert report.domains_ranges is not None and report.domains_ranges.status == Status.FAIL
+    assert report.datatypes is not None and report.datatypes.status == Status.FAIL
+    assert report.definition_docs is not None and report.definition_docs.issues
+    assert report.lang_tags is not None and report.lang_tags.issues
+    assert report.reasoner is not None and report.reasoner.consistent is False
+
+    # Network-bound work should be skipped outright, not silently wrong.
+    assert report.imports is None
+    assert report.namespaces
+    assert all(ns.resolution.status == Status.SKIP for ns in report.namespaces)
+    assert all(ns.terms == [] for ns in report.namespaces)

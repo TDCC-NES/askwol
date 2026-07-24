@@ -44,7 +44,6 @@ def test_missing_required_metadata_fails():
     assert report.failed_checks >= 4
     assert any(c.key == "title" and c.status == Status.FAIL for c in report.checks)
     assert any(c.key == "creator" and c.status == Status.FAIL for c in report.checks)
-    assert any(c.key == "license" and c.status == Status.FAIL for c in report.checks)
 
 
 def test_missing_recommended_metadata_warns_not_fails():
