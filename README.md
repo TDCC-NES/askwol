@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-167%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-181%20passing-brightgreen.svg)](#tests)
 [![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 
 👉 **Try it live:** https://lod-4tu.tudelft.nl/askwol/
@@ -31,10 +31,11 @@ An interactive **class diagram** of your ontology, plus a single HTML report (or
 
 **1. Ontology basics**
 
-- **1.1 Ontology metadata** - SHACL check on the ontology header: title, description, creator, license IRI, version are required; created/modified dates and publisher are recommended.
+- **1.1 Ontology metadata** - SHACL check on the ontology header: title, description, creator, version are required; created/modified dates and publisher are recommended.
 - **1.2 Imports** - every `owl:imports` target declared in the ontology header is fetched over HTTP and parsed as RDF, the same way a reasoner would follow it.
 - **1.3 IRI strategy** - the ontology's own defined terms should consistently use either hash (`#Term`) or slash (`/Term`), not both.
 - **1.4 IRI scheme** - each host should be referenced under a single URI scheme. `http://example.org/X` and `https://example.org/X` are different IRIs.
+- **1.5 Open license** - the ontology's declared `dcterms:license` (or `schema:license`) must be an open license per the [Open Definition](https://opendefinition.org); CC0 1.0 and CC BY 4.0 are recommended, other open licenses (e.g. CC BY-SA, ODC-By, ODbL) pass with a warning, and a missing or non-open license fails.
 
 **2. Namespaces & reuse**
 
@@ -259,7 +260,7 @@ Turtle (`.ttl`), RDF/XML (`.rdf`, `.owl`), JSON-LD (`.jsonld`), N-Triples (`.nt`
 pytest tests/ -v
 ```
 
-160 tests cover every automated check on both good and bad inputs, the HTML
+181 tests cover every automated check on both good and bad inputs, the HTML
 report rendering, the FastAPI routes via `TestClient`, and a pinned end-to-end
 smoke test on [`html/ontologies/broken.ttl`](html/ontologies/broken.ttl) that
 fails loudly if any single check ever stops detecting issues. The clean

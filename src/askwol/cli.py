@@ -44,6 +44,29 @@ async def _run_check(
         report.parse_errors.append(str(exc))
         return report
 
+    # Detect unused prefixes (declared but never used in any triple)
+    used_prefixes = set(parsed.namespaces.keys())
+    for pfx, uri in parsed.declared_prefixes.items():
+        if pfx not in used_prefixes:
+            report.unused_prefixes.append(UnusedPrefix(prefix=pfx, uri=uri))
+
+    # These checks only look at the locally parsed graph, no network access,
+    # so they always run, even with --skip-resolution.
+    report.lang_tags = check_lang_tags(parsed.graph, parsed.namespaces)
+    report.ontology_metadata = validate_ontology_metadata(parsed.graph)
+    report.license = check_license(parsed.graph)
+    report.definition_docs = check_definition_documentation(parsed.graph)
+    report.internal_terms = check_internal_terms(parsed.graph)
+    report.term_inventory = check_term_inventory(parsed.graph)
+    report.domains_ranges = check_domains_ranges(parsed.graph)
+    report.datatypes = check_datatypes(parsed.graph)
+    # Reasoner checks: current ontology only, imports are not followed.
+    report.reasoner = run_reasoner_checks(parsed.graph)
+    # "Strategy" = hash vs. slash IRIs; "scheme" = http vs. https.
+    report.iri_strategy = check_iri_strategy(parsed.graph)
+    report.iri_scheme = check_iri_scheme(parsed.graph, parsed.namespaces)
+    report.non_ontology_terms = check_non_ontology_terms(parsed.graph)
+
     if skip_resolution:
         for prefix, uri in parsed.namespaces.items():
             report.namespaces.append(
@@ -55,27 +78,7 @@ async def _run_check(
             )
         return report
 
-    # Detect unused prefixes (declared but never used in any triple)
-    used_prefixes = set(parsed.namespaces.keys())
-    for pfx, uri in parsed.declared_prefixes.items():
-        if pfx not in used_prefixes:
-            report.unused_prefixes.append(UnusedPrefix(prefix=pfx, uri=uri))
-
-    report.lang_tags = check_lang_tags(parsed.graph, parsed.namespaces)
-    report.ontology_metadata = validate_ontology_metadata(parsed.graph)
-    report.license = check_license(parsed.graph)
-    report.definition_docs = check_definition_documentation(parsed.graph)
-    report.internal_terms = check_internal_terms(parsed.graph)
-    report.term_inventory = check_term_inventory(parsed.graph)
-    report.domains_ranges = check_domains_ranges(parsed.graph)
-    report.datatypes = check_datatypes(parsed.graph)
-    # Reasoner checks: current ontology only, imports are not followed.
-    report.reasoner = run_reasoner_checks(parsed.graph)
     report.imports = await check_imports(parsed.graph, cache, timeout=timeout)
-    # "Strategy" = hash vs. slash IRIs; "scheme" = http vs. https.
-    report.iri_strategy = check_iri_strategy(parsed.graph)
-    report.iri_scheme = check_iri_scheme(parsed.graph, parsed.namespaces)
-    report.non_ontology_terms = check_non_ontology_terms(parsed.graph)
 
     # Only resolve and report namespaces that have subject-position terms
     active_ns = {pfx: uri for pfx, uri in parsed.namespaces.items()
