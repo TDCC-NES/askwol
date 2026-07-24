@@ -551,10 +551,10 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
       <a href="http://opendatacommons.org/licenses/pddl/1.0/" target="_blank" rel="noopener">Open Data Commons Public Domain Dedication and License (PDDL)</a> (public domain); IRI: <code>http://opendatacommons.org/licenses/pddl/1.0/</code>; only covers data and not content.
     </li>
     <li>
-      <a href="https://opendatacommons.org/licenses/by/" target="_blank" rel="noopener">Open Data Commons Attribution License (ODC-By)</a> (requires attribution); IRI: <code>http://opendatacommons.org/licenses/by/1.0/</code>; only covers data and not content.
+      <a href="http://opendatacommons.org/licenses/by/1.0/" target="_blank" rel="noopener">Open Data Commons Attribution License (ODC-By)</a> (requires attribution); IRI: <code>http://opendatacommons.org/licenses/by/1.0/</code>; only covers data and not content.
     </li>
     <li>
-      <a href="https://opendatacommons.org/licenses/odbl/" target="_blank" rel="noopener">Open Data Commons Open Database License (ODbL)</a> (requires attribution, share-alike); IRI: <code>http://opendatacommons.org/licenses/odbl/1.0/</code>; too restrictive due to the share-alike.
+      <a href="http://opendatacommons.org/licenses/odbl/1.0/" target="_blank" rel="noopener">Open Data Commons Open Database License (ODbL)</a> (requires attribution, share-alike); IRI: <code>http://opendatacommons.org/licenses/odbl/1.0/</code>; too restrictive due to the share-alike.
     </li>
     <li>
       <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">Other licenses conformant with the Open Definition</a>; most of these are little used and incompatible with more widely adopted open licenses.
@@ -573,7 +573,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     dcterms:publisher "Example Institute" ;
     owl:versionInfo "1.0" .</pre>
   
-  <div class="tip">askwol will return an error if the ontology license is missing or not recognized as open. It will give a warning if the license is open but not well suited for ontologies.</div>
+  <div class="tip">askwol checks each declared license against the Open Definition's <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of conformant licenses</a>. It will return an error if the ontology license is missing or not recognized as open. It will give a warning if the license is open but not well suited for ontologies, or if more than one license is declared (even if each one individually would be fine).</div>
 """,
     },
     {

@@ -812,7 +812,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<section class="section">')
         parts.append(_section_heading('license', 'Open license', i_status, i_label))
         parts.append(_guide_link('license'))
-        parts.append('<p class="subtitle">Each <code>dcterms:license</code> value declared in the ontology header is checked against a list of open licenses following the <a href="https://opendefinition.org" target="_blank" rel="noopener">Open Definition</a>. For the check to pass, there needs to be only one license and it needs to be one of the <a href="guide#license" target="_blank" rel="noopener">recommended ones</a>. If no license is declared or at least one of the declared licenses is not open, the check will fail. In all other cases, a warning will be returned.</p>')
+        parts.append('<p class="subtitle">Each <code>dcterms:license</code> value declared in the ontology header is checked against a <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of open licenses</a> following the <a href="https://opendefinition.org" target="_blank" rel="noopener">Open Definition</a>. For the check to pass, there needs to be only one license and it needs to be one of the <a href="guide#license" target="_blank" rel="noopener">recommended ones</a>. If no license is declared or at least one of the declared licenses is not open, the check will fail. In all other cases, a warning will be returned.</p>')
         license_count = len(lcns.checks)
         plural = "s" if license_count > 1 else ""
         if lcns.checks:
@@ -843,12 +843,11 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 parts.append('<div class="ns-body">')
                 parts.append(f'<p style="font-size:0.9em;color:#444;margin:0.2em 0;">License IRI: <a href="{c.iri}" target="_blank" rel="noopener"><code>{c.iri}</code></a></p>')
                 if c.status == Status.OK:
-                    parts.append(f'<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is one of the open licenses we recommend.</p>')
+                    parts.append('<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is one of the open licenses we recommend.</p>')
                 elif c.status == Status.WARN:
-                    # TODO: explain why this license is not recommended
-                    parts.append(f'<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is an open license but we do not recommed it.</p>')
+                    parts.append('<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is an open license but we do not recommend it.</p>')
                 else:
-                    parts.append(f'<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is not a known open license.</p>')
+                    parts.append('<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is not a known open license.</p>')
                 parts.append('</div></div>')
             parts.append('</details>')
         parts.append('</section>')
