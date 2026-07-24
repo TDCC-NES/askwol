@@ -10,7 +10,9 @@ cache, so the tests do not hit the network.
 
 from pathlib import Path
 
+import httpx
 import pytest
+import respx
 from fastapi.testclient import TestClient
 from rdflib import Graph
 
@@ -18,6 +20,12 @@ from askwol import web
 from askwol.cache import OntologyCache
 
 SAMPLE = Path(__file__).resolve().parent.parent / "html" / "ontologies" / "sample.ttl"
+
+
+async def _noop_request_hook(request):
+    """Stand-in for resolver.block_private_network_requests in URL-fetch tests:
+    the SSRF guard does a real DNS lookup, which the content-type gating tests
+    below don't need and shouldn't depend on."""
 
 
 @pytest.fixture
@@ -149,6 +157,69 @@ def test_html_validate_renders_report(client):
 def test_html_validate_requires_file_or_url(client):
     r = client.post("/validate")
     assert r.status_code == 400
+
+
+@respx.mock
+def test_html_validate_url_rejects_html_response(client, monkeypatch):
+    monkeypatch.setattr(web, "block_private_network_requests", _noop_request_hook)
+    respx.get("https://example.org/").mock(
+        return_value=httpx.Response(
+            200, content=b"<html><body>hi</body></html>", headers={"content-type": "text/html"}
+        )
+    )
+    r = client.post("/validate", data={"url": "https://example.org/"})
+    assert r.status_code == 415
+    assert "HTML page" in r.text
+
+
+@respx.mock
+def test_html_validate_url_rejects_unrecognized_content_type(client, monkeypatch):
+    """A server can redirect a namespace URI to a catalog/metadata endpoint that
+    returns a non-standard content type which still happens to be syntactically
+    valid RDF (e.g. OGC's Prez backend serving "text/anot+turtle" for
+    http://www.opengis.net/ont/geosparql). This isn't the ontology itself, so
+    it must be rejected rather than silently parsed as if it were."""
+    monkeypatch.setattr(web, "block_private_network_requests", _noop_request_hook)
+    respx.get("http://example.org/ont/geosparql").mock(
+        return_value=httpx.Response(
+            200,
+            content=b'@prefix ex: <http://example.org/> .\nex:a ex:b "not the real ontology" .',
+            headers={"content-type": "text/anot+turtle"},
+        )
+    )
+    r = client.post("/validate", data={"url": "http://example.org/ont/geosparql"})
+    assert r.status_code == 415
+    assert "text/anot+turtle" in r.text
+
+
+@respx.mock
+def test_html_validate_url_rejects_text_plain_without_recognized_extension(client, monkeypatch):
+    monkeypatch.setattr(web, "block_private_network_requests", _noop_request_hook)
+    respx.get("http://example.org/ont/geosparql").mock(
+        return_value=httpx.Response(
+            200, content=b"@prefix ex: <http://example.org/> .", headers={"content-type": "text/plain"}
+        )
+    )
+    r = client.post("/validate", data={"url": "http://example.org/ont/geosparql"})
+    assert r.status_code == 415
+
+
+@respx.mock
+def test_html_validate_url_accepts_text_plain_with_recognized_extension(client, monkeypatch):
+    """raw.githubusercontent.com-style hosts serve RDF as generic text/plain; the
+    URL's own file extension is still trusted in that specific case."""
+    monkeypatch.setattr(web, "block_private_network_requests", _noop_request_hook)
+    # SAMPLE declares owl:imports <http://www.w3.org/ns/dcat> and its own
+    # namespace (the ":" prefix) also goes through namespace resolution;
+    # pre-cache both so check_imports/resolve_all_namespaces don't need a
+    # real network fetch.
+    web._global_cache.put("http://www.w3.org/ns/dcat", Graph())
+    web._global_cache.put("https://lod-4tu.tudelft.nl/dataset#", Graph())
+    respx.get("https://raw.githubusercontent.com/example/sample.ttl").mock(
+        return_value=httpx.Response(200, content=SAMPLE.read_bytes(), headers={"content-type": "text/plain"})
+    )
+    r = client.post("/validate", data={"url": "https://raw.githubusercontent.com/example/sample.ttl"})
+    assert r.status_code == 200, r.text
 
 
 def test_api_validate_rate_limited(monkeypatch, client):
