@@ -182,6 +182,11 @@ UPLOAD_HTML = """<!DOCTYPE html>
     should be referenced under a single URI scheme.
     <code>http://example.org/X</code> and <code>https://example.org/X</code>
     are different IRIs.</li>
+    <li><span class="num">1.5</span> <strong>Open license</strong>: your
+    ontology&rsquo;s declared <code>dcterms:license</code> (or
+    <code>schema:license</code>) must meet the Open Definition. CC0 and CC BY
+    are recommended; other open licenses (e.g. CC BY-SA, ODC-By, ODbL) pass
+    with a warning; a missing or non-open license fails.</li>
   </ul>
 
   <h3 class="cluster-h">2. Namespaces &amp; reuse</h3>
