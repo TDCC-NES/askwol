@@ -80,7 +80,8 @@ app = FastAPI(
         "definitions (existence in remote vocabularies), internal term "
         "definitions (own-namespace terms are defined), label "
         "and comment documentation (SHACL), ontology metadata (SHACL), "
-        "language-tag consistency, unused prefix declarations, owl:imports "
+        "open license conformance (Open Definition), language-tag "
+        "consistency, unused prefix declarations, owl:imports "
         "resolution, IRI strategy consistency (hash vs slash), IRI scheme "
         "consistency (http vs https), and lightweight OWL RL reasoner checks "
         "(ontology consistency, inconsistent individuals, and unsatisfiable "
@@ -695,6 +696,7 @@ async def validate_api(
     - **Unused prefixes** - prefixes declared with `@prefix` but never used in a triple.
     - **Language-tag consistency** - labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) should use the same language tags across subjects.
     - **Ontology metadata** - SHACL check on the ontology header (title, creator, license, version, ...).
+    - **Open license** - the declared `dcterms:license` (or `schema:license`) must meet the [Open Definition](https://opendefinition.org); CC0 and CC BY are recommended, other open licenses pass with a warning, and a missing or non-open license fails.
     - **Imports** - every `owl:imports` target declared in the ontology header is fetched over HTTP and parsed as RDF.
     - **IRI strategy** - the ontology's own defined terms should consistently use either hash (`#Term`) or slash (`/Term`), not mix both.
     - **IRI scheme** - each host should be referenced under a single URI scheme (either `http://` or `https://`), never both.
