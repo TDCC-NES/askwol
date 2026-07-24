@@ -131,7 +131,7 @@ _STATUS_NOTES = {
     "200": "OK, validation succeeded",
     "400": "bad request, missing or unusable input",
     "401": "unauthorized stats access",
-    "415": "URL returned HTML instead of RDF",
+    "415": "URL didn't return recognized RDF content",
     "422": "ontology could not be parsed or fetched",
     "503": "usage tracking or stats disabled",
 }
@@ -498,6 +498,12 @@ async def validate(
     return response
 
 
+# Recognized ontology file extensions. Used only as a narrow escape hatch for
+# generic/absent Content-Type responses (see _validate_url below) - never as
+# the primary signal for what counts as RDF.
+RDF_FILE_EXTENSIONS = frozenset({".ttl", ".rdf", ".owl", ".rdfs", ".jsonld", ".nt", ".n3", ".xml"})
+
+
 async def _validate_url(url: str) -> HTMLResponse:
     parsed_url = urlparse(url)
     if parsed_url.scheme not in ("http", "https"):
@@ -536,12 +542,32 @@ async def _validate_url(url: str) -> HTMLResponse:
                 "text/n3": ".n3",
             }.get(ctype)
 
-            if ctype in ("text/html", "application/xhtml+xml"):
+            # This is direct user input ("validate this URL as my ontology"), so be
+            # strict about what counts as RDF: trust a recognized media type above,
+            # or a generic/absent Content-Type whose URL path ends in a known
+            # ontology file extension (the raw.githubusercontent.com case). Anything
+            # else is rejected outright rather than optimistically parsed - some
+            # servers redirect namespace URIs to catalog/metadata endpoints that
+            # return non-standard content types (e.g. "text/anot+turtle") which are
+            # syntactically valid RDF but aren't the ontology itself.
+            path_suffix = Path(parsed_url.path).suffix
+            trusted_by_extension = (
+                ctype in ("text/plain", "") and path_suffix.lower() in RDF_FILE_EXTENSIONS
+            )
+            if ctype_suffix is None and not trusted_by_extension:
+                if ctype in ("text/html", "application/xhtml+xml"):
+                    return HTMLResponse(
+                        f"<p>The URL <code>{escape(url)}</code> returned an HTML page "
+                        f"(<code>{escape(ctype)}</code>) instead of RDF. The server does not "
+                        f"support content negotiation for this namespace. Try a direct link "
+                        f"to the ontology file (e.g. <code>.ttl</code> or <code>.rdf</code>).</p>",
+                        status_code=415,
+                    )
                 return HTMLResponse(
-                    f"<p>The URL <code>{escape(url)}</code> returned an HTML page "
-                    f"(<code>{escape(ctype)}</code>) instead of RDF. The server does not "
-                    f"support content negotiation for this namespace. Try a direct link "
-                    f"to the ontology file (e.g. <code>.ttl</code> or <code>.rdf</code>).</p>",
+                    f"<p>The URL <code>{escape(url)}</code> returned "
+                    f"<code>{escape(ctype or '(no content-type)')}</code>, which isn't a "
+                    f"recognized RDF format. Try a direct link to the ontology file "
+                    f"(e.g. <code>.ttl</code> or <code>.rdf</code>).</p>",
                     status_code=415,
                 )
 
@@ -561,7 +587,7 @@ async def _validate_url(url: str) -> HTMLResponse:
     except httpx.HTTPError as exc:
         return HTMLResponse(f"<p>Could not fetch URL: {escape(str(exc))}</p>", status_code=422)
 
-    suffix = ctype_suffix or Path(parsed_url.path).suffix or ".ttl"
+    suffix = ctype_suffix or path_suffix or ".ttl"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(content)
         tmp_path = Path(tmp.name)
