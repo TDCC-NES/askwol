@@ -2,9 +2,10 @@
 
 These tests build synthetic `ValidationReport` objects and assert that
 `render_report` produces well-formed HTML containing the expected anchors,
-status markers, and per-check sections. They also guard the alignment
-between `CHECKS` and `GUIDE_SECTIONS` by importing the module - the
-import-time assert in `report_html.py` will fail loudly otherwise.
+status markers, and per-check sections. The alignment between `CHECKS` and
+`GUIDE_SECTIONS` (and the non-empty `description` requirement) is guarded by
+import-time asserts in `templates.py`, which every test run already exercises
+by importing the module - no dedicated test needed here.
 """
 
 from askwol.models import (
@@ -38,13 +39,6 @@ from askwol.models import (
     ValidationReport,
 )
 from askwol.report_html import CHECKS, render_report
-from askwol.templates import GUIDE_SECTIONS
-
-
-def test_checks_align_with_guide_sections():
-    """Guard the architectural assert in report_html.py."""
-    guide_check_anchors = [s["anchor"] for s in GUIDE_SECTIONS if s["group"] == "check"]
-    assert [c["guide_anchor"] for c in CHECKS] == guide_check_anchors
 
 
 def test_render_minimal_report_contains_all_section_anchors():

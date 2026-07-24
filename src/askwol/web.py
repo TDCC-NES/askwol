@@ -32,7 +32,7 @@ from askwol.reasoner_checks import run_reasoner_checks
 from askwol.report_html import render_report
 from askwol.resolver import block_private_network_requests, resolve_all_namespaces
 from askwol.non_ontology_terms import check_non_ontology_terms
-from askwol.templates import GUIDE_HTML, UPLOAD_HTML
+from askwol.templates import GUIDE_HTML, UPLOAD_HTML, render_checks_api_description
 from askwol.term_inventory import check_datatypes, check_domains_ranges, check_term_inventory
 from askwol.term_validator import validate_terms
 
@@ -83,9 +83,10 @@ app = FastAPI(
         "open license conformance (Open Definition), language-tag "
         "consistency, unused prefix declarations, owl:imports "
         "resolution, IRI strategy consistency (hash vs slash), IRI scheme "
-        "consistency (http vs https), and lightweight OWL RL reasoner checks "
-        "(ontology consistency, inconsistent individuals, and unsatisfiable "
-        "classes)."
+        "consistency (http vs https), term naming and inventory, domain/range "
+        "declarations, recognized datatypes, non-ontology terms, and "
+        "lightweight OWL RL reasoner checks (ontology consistency, "
+        "inconsistent individuals, and unsatisfiable classes)."
     ),
     version="0.1.0",
     root_path=ROOT_PATH,
@@ -674,6 +675,7 @@ async def _run_validation(tmp_path: Path, source_name: str, base_uri: str | None
     "/api/validate",
     response_model=ValidationReport,
     summary="Validate an ontology",
+    description=render_checks_api_description(),
     tags=["validation"],
     responses={
         422: {"description": "Parse error  -  the file could not be parsed as RDF"},
@@ -686,28 +688,8 @@ async def validate_api(
 ):
     """Upload an OWL ontology and get a full validation report as JSON.
 
-    The report includes:
-
-    - **Namespaces** - each declared prefix is fetched over HTTP and parsed as RDF where possible.
-    - **External term definitions** - every term reused from an external vocabulary is looked up in the resolved namespace to confirm it is defined there.
-    - **Internal term definitions** - terms in the ontology's own namespace that are referenced but never defined are flagged.
-    - **Labels** - SHACL check that internally defined classes and properties carry an `rdfs:label`. Reused external terms are ignored.
-    - **Comments** - SHACL check that internally defined classes and properties carry an `rdfs:comment`. Reused external terms are ignored.
-    - **Unused prefixes** - prefixes declared with `@prefix` but never used in a triple.
-    - **Language-tag consistency** - labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) should use the same language tags across subjects.
-    - **Ontology metadata** - SHACL check on the ontology header (title, creator, license, version, ...).
-    - **Open license** - the declared `dcterms:license` (or `schema:license`) must meet the [Open Definition](https://opendefinition.org); CC0 and CC BY are recommended, other open licenses pass with a warning, and a missing or non-open license fails.
-    - **Imports** - every `owl:imports` target declared in the ontology header is fetched over HTTP and parsed as RDF.
-    - **IRI strategy** - the ontology's own defined terms should consistently use either hash (`#Term`) or slash (`/Term`), not mix both.
-    - **IRI scheme** - each host should be referenced under a single URI scheme (either `http://` or `https://`), never both.
-    - **Reasoner checks** - lightweight OWL RL reasoning on the current ontology only (`owl:imports` are not followed), with three facets:
-        - *Ontology consistency* - the ontology as a whole has a model.
-        - *Inconsistent individuals* - specific named individuals that violate a class restriction (e.g. typed in two `owl:disjointWith` classes).
-        - *Unsatisfiable classes* - named classes whose definition forces them to be empty (equivalent to `owl:Nothing`).
-
-    Only terms that appear as subjects in triples are validated against
-    remote vocabularies. Terms used only as predicates or objects are
-    treated as well-known vocabulary.
+    See the route description for the full list of checks (single-sourced
+    from askwol.templates.CHECKS).
     """
     client_ip = request.client.host if request.client else None
     if _rate_limited(client_ip):

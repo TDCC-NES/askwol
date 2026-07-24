@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-185%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-184%20passing-brightgreen.svg)](#tests)
 [![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 
 👉 **Try it live:** https://lod-4tu.tudelft.nl/askwol/
@@ -27,42 +27,9 @@ So the name went WOL → OWL → and, for a tool that *asks* Owl for a wise seco
 
 ## What do you get?
 
-An interactive **class diagram** of your ontology, plus a single HTML report (or JSON via the API) with one section per automated check. The checks are grouped into five areas, and every section links to a matching entry in the built-in **publishing guide** at `/guide`, so a failing check always tells you *why* the convention exists.
+An interactive **class diagram** of your ontology, plus a single HTML report (or JSON via the API) with one section per automated check, grouped into five areas: ontology basics, namespaces & reuse, term structure, term documentation, and logic. Every section links to a matching entry in the built-in **publishing guide** at `/guide`, so a failing check always tells you *why* the convention exists.
 
-**1. Ontology basics**
-
-- **1.1 Ontology metadata** - SHACL check on the ontology header: title, description, creator, version are required; created/modified dates and publisher are recommended.
-- **1.2 Imports** - every `owl:imports` target declared in the ontology header is fetched over HTTP and parsed as RDF, the same way a reasoner would follow it.
-- **1.3 IRI strategy** - the ontology's own defined terms should consistently use either hash (`#Term`) or slash (`/Term`), not both.
-- **1.4 IRI scheme** - each host should be referenced under a single URI scheme. `http://example.org/X` and `https://example.org/X` are different IRIs.
-- **1.5 Open license** - the ontology's declared `dcterms:license` (or `schema:license`) must be an open license per the [Open Definition](https://opendefinition.org); CC0 1.0 and CC BY 4.0 are recommended, other open licenses (e.g. CC BY-SA, ODC-By, ODbL) pass with a warning, and a missing or non-open license fails.
-
-**2. Namespaces & reuse**
-
-- **2.1 Namespaces** - fetches each declared namespace URI, checks HTTP status, tries to parse as RDF (Turtle, RDF/XML, JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF links.
-- **2.2 Unused prefixes** - flags `@prefix` declarations that are never used in any triple.
-- **2.3 External term definitions** - verifies that terms reused from an external vocabulary are actually defined there. Catches typos like `owl:MadeUpClass` and made-up reuse of established prefixes. A term that exists but is marked deprecated upstream (`owl:deprecated`, `owl:DeprecatedClass`/`owl:DeprecatedProperty`, or a `vs:term_status` of "deprecated"/"archaic") is flagged as a warning.
-
-**3. Term structure**
-
-- **3.1 Internal term definitions** - flags terms in the ontology's own namespace that are referenced but never defined (never appear as a subject). Usually a typo or a forgotten declaration.
-- **3.2 Term inventory & naming** - categorizes every internal term (class, object property, datatype property, datatype, individual) and checks capitalization: classes start uppercase, properties lowercase. Coded identifiers (an uppercase letter directly followed by a digit, e.g. CIDOC CRM's `P2_has_type` or Wikidata's `P19`) are exempt, as is any term marked deprecated.
-- **3.3 Domains & ranges** - object and datatype properties should declare a domain and a range. Object properties range over classes; datatype properties over datatypes. Deprecated properties are exempt.
-- **3.4 Datatypes** - datatypes used as property ranges and literal datatypes should be recognized XSD built-ins, `rdfs:Literal`, `rdf:langString`, or a locally declared `rdfs:Datatype`. Catches typos like `xsd:stirng`.
-- **3.5 Non-ontology terms** - an OWL ontology defines schema (classes, properties, datatypes). A `skos:Concept` scheme is subject-matter data and belongs in a separate resource. Named individuals are not flagged: many ontologies deliberately define a small, fixed set of individuals alongside their schema (e.g. OWL-Time's days of week), which is a common, legitimate pattern rather than accidental instance data.
-
-**4. Term documentation**
-
-- **4.1 Labels** - SHACL check that every internally defined class and property carries an `rdfs:label`. Reused external terms, and terms marked deprecated, are ignored.
-- **4.2 Comments** - SHACL check that every internally defined class and property carries an `rdfs:comment`. Reused external terms, and terms marked deprecated, are ignored.
-- **4.3 Language tag consistency** - labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) should use the same language tags across subjects. Deprecated terms are exempt.
-
-**5. Logic**
-
-- **5.1 OWL RL reasoner checks** - lightweight reasoning on the current ontology (imports are not followed), with three distinct facets:
-    - **Ontology consistency** - the ontology as a whole has a model.
-    - **Inconsistent individuals** - specific named individuals that violate a class restriction (e.g. typed in two `owl:disjointWith` classes).
-    - **Unsatisfiable classes** - named classes whose definition forces them to be empty (equivalent to `owl:Nothing`).
+See the full, always-up-to-date list of checks on the [live app](https://lod-4tu.tudelft.nl/askwol/#what-do-you-get) or in the [publishing guide](https://lod-4tu.tudelft.nl/askwol/guide).
 
 ## Quick start
 
@@ -260,7 +227,7 @@ Turtle (`.ttl`), RDF/XML (`.rdf`, `.owl`), JSON-LD (`.jsonld`), N-Triples (`.nt`
 pytest tests/ -v
 ```
 
-185 tests cover every automated check on both good and bad inputs, the HTML
+184 tests cover every automated check on both good and bad inputs, the HTML
 report rendering, the FastAPI routes via `TestClient`, and a pinned end-to-end
 smoke test on [`html/ontologies/broken.ttl`](html/ontologies/broken.ttl) that
 fails loudly if any single check ever stops detecting issues. The clean
