@@ -5,21 +5,12 @@ from __future__ import annotations
 from html import escape
 
 from askwol.models import NamespaceReport, Status, ValidationReport
-from askwol.templates import CHECK_CATEGORIES, GUIDE_SECTIONS
+from askwol.templates import CHECK_CATEGORIES, CHECKS
 
-
-# Single source of truth: every automated check maps its report section anchor
-# to the matching modeling-guide section anchor (and vice versa). The summary
-# table, the per-section "Learn more" links, and the back-links shown in the
-# guide are all driven from this registry, so they cannot drift apart.
-# An assertion below enforces that the order and anchors here match the
-# check-group sections in GUIDE_SECTIONS.
-# Single source of truth: every automated check maps its report section anchor
-# to the matching modeling-guide section anchor (and vice versa). The summary
-# table, the per-section "Learn more" links, and the back-links shown in the
-# guide are all driven from this registry, so they cannot drift apart.
-# An assertion below enforces that the order and anchors here match the
-# check-group sections in GUIDE_SECTIONS.
+# CHECKS (title, description, anchors, category per check) is defined once in
+# askwol.templates and shared with the landing page, README.md, and the API
+# docs - re-exported here under its historical name so report.py and the
+# test suite can keep importing it from this module.
 #
 # Each check also carries a ``category`` that groups it into a cluster shown as
 # a labelled band in the overview, the results, and the guide. Clusters must be
@@ -27,59 +18,6 @@ from askwol.templates import CHECK_CATEGORIES, GUIDE_SECTIONS
 # (shared with the publishing guide via templates.CHECK_CATEGORIES).
 CATEGORIES = CHECK_CATEGORIES
 CATEGORY_LABELS: dict[str, str] = {c["key"]: c["label"] for c in CATEGORIES}
-
-CHECKS: list[dict[str, str]] = [
-    {"report_anchor": "ontology-metadata", "title": "Ontology metadata",          "guide_anchor": "metadata",         "category": "basics"},
-    {"report_anchor": "imports",           "title": "Imports",                    "guide_anchor": "imports",          "category": "basics"},
-    {"report_anchor": "iri-strategy",      "title": "IRI strategy",               "guide_anchor": "iri-strategy",     "category": "basics"},
-    {"report_anchor": "iri-scheme",        "title": "IRI scheme (http vs https)", "guide_anchor": "https-http",       "category": "basics"},
-    {"report_anchor": "license",           "title": "Open license",               "guide_anchor": "license",          "category": "basics"},
-    {"report_anchor": "namespaces",        "title": "Namespaces",                 "guide_anchor": "resolvable",       "category": "reuse"},
-    {"report_anchor": "unused-prefixes",   "title": "Unused prefixes",            "guide_anchor": "prefixes",         "category": "reuse"},
-    {"report_anchor": "external-terms",    "title": "External term definitions",  "guide_anchor": "external-terms",   "category": "reuse"},
-    {"report_anchor": "internal-terms",    "title": "Internal term definitions",  "guide_anchor": "internal-terms",   "category": "structure"},
-    {"report_anchor": "term-inventory",    "title": "Term inventory &amp; naming","guide_anchor": "term-inventory",   "category": "structure"},
-    {"report_anchor": "domains-ranges",    "title": "Domains &amp; ranges",       "guide_anchor": "domains-ranges",   "category": "structure"},
-    {"report_anchor": "datatypes",         "title": "Datatypes",                  "guide_anchor": "datatypes",        "category": "structure"},
-    {"report_anchor": "non-ontology-terms","title": "Non-ontology terms",         "guide_anchor": "non-ontology-terms","category": "structure"},
-    {"report_anchor": "labels",            "title": "Labels",                     "guide_anchor": "labels",           "category": "docs"},
-    {"report_anchor": "comments",          "title": "Comments",                   "guide_anchor": "comments",         "category": "docs"},
-    {"report_anchor": "language-tags",     "title": "Language tag consistency",   "guide_anchor": "lang-tags",        "category": "docs"},
-    {"report_anchor": "reasoner",          "title": "Reasoner checks",            "guide_anchor": "reasoner",         "category": "logic"},
-]
-
-# Enforce alignment between CHECKS and GUIDE_SECTIONS at import time. If they
-# ever drift (someone renames an anchor, reorders a section, etc.) the module
-# fails to load and the failure is caught by the test suite. This is the
-# architectural guarantee that the report and the guide stay in sync.
-_GUIDE_CHECK_ANCHORS = [s["anchor"] for s in GUIDE_SECTIONS if s["group"] == "check"]
-_CHECK_GUIDE_ANCHORS = [c["guide_anchor"] for c in CHECKS]
-assert _CHECK_GUIDE_ANCHORS == _GUIDE_CHECK_ANCHORS, (
-    "CHECKS and GUIDE_SECTIONS (group=check) must list the same anchors in "
-    f"the same order. CHECKS guide_anchors={_CHECK_GUIDE_ANCHORS}, "
-    f"GUIDE check anchors={_GUIDE_CHECK_ANCHORS}"
-)
-
-# The category assigned to each check must match between the report registry
-# and the guide, so the clusters stay identical across surfaces.
-_GUIDE_CHECK_CATEGORIES = [s.get("category") for s in GUIDE_SECTIONS if s["group"] == "check"]
-_CHECK_CATEGORIES = [c["category"] for c in CHECKS]
-assert _CHECK_CATEGORIES == _GUIDE_CHECK_CATEGORIES, (
-    "CHECKS and GUIDE_SECTIONS (group=check) must assign the same category to "
-    f"each check. CHECKS categories={_CHECK_CATEGORIES}, "
-    f"GUIDE categories={_GUIDE_CHECK_CATEGORIES}"
-)
-
-# Categories must be contiguous blocks and appear in CATEGORIES order.
-_CHECK_CATEGORY_ORDER = [c["category"] for c in CHECKS]
-_seen_categories: list[str] = []
-for _cat in _CHECK_CATEGORY_ORDER:
-    if not _seen_categories or _seen_categories[-1] != _cat:
-        _seen_categories.append(_cat)
-assert _seen_categories == [c["key"] for c in CATEGORIES], (
-    "CHECKS categories must form contiguous blocks in CATEGORIES order. "
-    f"Got block order {_seen_categories}, expected {[c['key'] for c in CATEGORIES]}"
-)
 
 # Convenience lookups derived from CHECKS
 _CHECK_BY_REPORT: dict[str, dict] = {c["report_anchor"]: c for c in CHECKS}
@@ -104,7 +42,6 @@ def _compute_check_numbers() -> dict[str, str]:
 
 
 _CHECK_NUMBERS: dict[str, str] = _compute_check_numbers()
-
 
 
 def _guide_link(report_anchor: str) -> str:

@@ -9,6 +9,9 @@ in the same order.
 
 from __future__ import annotations
 
+import re
+from html import escape, unescape
+
 
 UPLOAD_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -159,97 +162,13 @@ UPLOAD_HTML = """<!DOCTYPE html>
     });
   </script>
 
-  <h2>What do you get?</h2>
+  <h2 id="what-do-you-get">What do you get?</h2>
   <p>An interactive <strong>class diagram</strong> of your ontology, plus one
   HTML report (or JSON via the API) with a section per check. The checks are
   grouped into five areas, and each links to the matching entry in the
   <a href="guide">publishing guide</a>:</p>
 
-  <h3 class="cluster-h">1. Ontology basics</h3>
-  <ul class="checks-list">
-    <li><span class="num">1.1</span> <strong>Ontology metadata</strong>: a
-    SHACL check on the ontology header. Title, description, creator, license
-    IRI, and version are required; created/modified dates and publisher are
-    recommended.</li>
-    <li><span class="num">1.2</span> <strong>Imports</strong>: every
-    <code>owl:imports</code> target declared in the ontology header is
-    fetched over HTTP and parsed as RDF, the same way a reasoner would
-    follow it.</li>
-    <li><span class="num">1.3</span> <strong>IRI strategy</strong>: your
-    ontology&rsquo;s own defined terms should consistently use either hash
-    (<code>#Term</code>) or slash (<code>/Term</code>), not both.</li>
-    <li><span class="num">1.4</span> <strong>IRI scheme</strong>: each host
-    should be referenced under a single URI scheme.
-    <code>http://example.org/X</code> and <code>https://example.org/X</code>
-    are different IRIs.</li>
-    <li><span class="num">1.5</span> <strong>Open license</strong>: your
-    ontology&rsquo;s declared <code>dcterms:license</code> (or
-    <code>schema:license</code>) must meet the Open Definition. CC0 and CC BY
-    are recommended; other open licenses (e.g. CC BY-SA, ODC-By, ODbL) pass
-    with a warning; a missing or non-open license fails.</li>
-  </ul>
-
-  <h3 class="cluster-h">2. Namespaces &amp; reuse</h3>
-  <ul class="checks-list">
-    <li><span class="num">2.1</span> <strong>Namespaces</strong>: fetches each
-    declared namespace URI, checks HTTP status, and tries to parse it as RDF
-    (Turtle, RDF/XML, JSON-LD, N-Triples). Falls back to scanning HTML pages
-    for RDF links.</li>
-    <li><span class="num">2.2</span> <strong>Unused prefixes</strong>: flags
-    <code>@prefix</code> declarations that are never used in any triple.</li>
-    <li><span class="num">2.3</span> <strong>External term definitions</strong>:
-    verifies that terms your ontology reuses from an external vocabulary are
-    actually defined there. Catches typos like <code>owl:MadeUpClass</code>,
-    made-up reuse of established prefixes, and reused terms the source
-    vocabulary has marked deprecated.</li>
-  </ul>
-
-  <h3 class="cluster-h">3. Term structure</h3>
-  <ul class="checks-list">
-    <li><span class="num">3.1</span> <strong>Internal term definitions</strong>:
-    flags terms in your own namespace that are referenced but never defined,
-    usually a typo or a forgotten declaration.</li>
-    <li><span class="num">3.2</span> <strong>Term inventory &amp; naming</strong>:
-    categorizes every term you define (class, object or datatype property,
-    datatype, individual) and checks capitalization: classes start uppercase,
-    properties start lowercase.</li>
-    <li><span class="num">3.3</span> <strong>Domains &amp; ranges</strong>:
-    object and datatype properties should declare a domain and a range. Object
-    properties range over classes; datatype properties over datatypes.</li>
-    <li><span class="num">3.4</span> <strong>Datatypes</strong>: datatypes used
-    as ranges or literal types should be recognized (XSD built-ins,
-    <code>rdfs:Literal</code>, <code>rdf:langString</code>, or a datatype you
-    declare with <code>rdfs:Datatype</code>).</li>
-    <li><span class="num">3.5</span> <strong>Non-ontology terms</strong>: an OWL
-    ontology defines schema. Individuals, <code>skos:Concept</code> instances,
-    and other instance data belong in a separate data resource or concept
-    scheme.</li>
-  </ul>
-
-  <h3 class="cluster-h">4. Term documentation</h3>
-  <ul class="checks-list">
-    <li><span class="num">4.1</span> <strong>Labels</strong>: a SHACL check that
-    every internally defined class and property carries an
-    <code>rdfs:label</code>. Reused external terms and deprecated terms are
-    ignored.</li>
-    <li><span class="num">4.2</span> <strong>Comments</strong>: a SHACL check
-    that every internally defined class and property carries an
-    <code>rdfs:comment</code>. Reused external terms and deprecated terms are
-    ignored.</li>
-    <li><span class="num">4.3</span> <strong>Language tag consistency</strong>:
-    language-tagged properties like <code>rdfs:label</code>,
-    <code>rdfs:comment</code>, <code>skos:prefLabel</code>, and
-    <code>skos:definition</code> should use the same set of languages across
-    subjects. Catches missing translations and bare strings.</li>
-  </ul>
-
-  <h3 class="cluster-h">5. Logic</h3>
-  <ul class="checks-list">
-    <li><span class="num">5.1</span> <strong>Reasoner checks</strong>:
-    lightweight OWL RL reasoning on the current ontology (imports are not
-    followed), reported as three facets: <em>ontology consistency</em>,
-    <em>inconsistent individuals</em>, and <em>unsatisfiable classes</em>.</li>
-  </ul>
+  <!--CHECKS_OVERVIEW-->
 
   <p><strong>What you don&rsquo;t get:</strong> askwol checks syntax and
   structure, but not content or meaning, which is what ontologies are all
@@ -332,11 +251,12 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p><span class="tag spec">Spec</span> <code>rdf:type owl:Ontology</code> and
   <code>owl:versionIRI</code>/<code>owl:versionInfo</code> come from OWL 2;
   <code>dcterms:title</code>, <code>dcterms:description</code>,
-  <code>dcterms:creator</code>, <code>dcterms:license</code>,
-  <code>dcterms:created</code>, <code>dcterms:modified</code>, and
-  <code>dcterms:publisher</code> are defined by the
+  <code>dcterms:creator</code>, <code>dcterms:created</code>,
+  <code>dcterms:modified</code>, and <code>dcterms:publisher</code> are
+  defined by the
   <a href="https://www.dublincore.org/specifications/dublin-core/dcmi-terms/" target="_blank" rel="noopener">DCMI Metadata Terms</a>
-  vocabulary, not OWL itself.</p>
+  vocabulary, not OWL itself. Licensing gets its own dedicated check; see
+  <a href="#license">Open license</a> below.</p>
   <p><span class="tag practice">TDCC guideline</span> Neither spec says any
   of these properties is mandatory on an ontology header. The
   <strong>Required</strong> / <strong>Recommended</strong> split below, and
@@ -348,8 +268,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     <li><strong>Required:</strong> <code>rdf:type owl:Ontology</code>,
     <code>dcterms:title</code> (or <code>rdfs:label</code>),
     <code>dcterms:description</code> (or <code>rdfs:comment</code>),
-    <code>dcterms:creator</code>, <code>dcterms:license</code>, and
-    <code>owl:versionInfo</code> or <code>owl:versionIRI</code>.</li>
+    <code>dcterms:creator</code>, and <code>owl:versionInfo</code> or
+    <code>owl:versionIRI</code>.</li>
     <li><strong>Recommended:</strong> <code>dcterms:created</code>
     (or <code>dcterms:issued</code>), <code>dcterms:modified</code>,
     and <code>dcterms:publisher</code>.</li>
@@ -1034,7 +954,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     <li>Inconsistent language tags</li>
     <li>Missing <code>rdfs:label</code> or <code>rdfs:comment</code> on your own classes and properties</li>
     <li>Logical contradictions and unsatisfiable classes in the current ontology (without following imports)</li>
-    <li>Missing ontology metadata (title, creator, license, version, and more)</li>
+    <li>Missing ontology metadata (title, creator, version, and more)</li>
+    <li>A missing or non-open license</li>
   </ul>
   <div class="tip">askwol also runs lightweight reasoner checks on the
   <em>current ontology only</em> (it does <strong>not</strong> follow
@@ -1135,6 +1056,163 @@ def _compute_guide_numbers() -> dict[str, str]:
 _GUIDE_NUMBERS = _compute_guide_numbers()
 # Cluster number (1..5) per category key, shown on the cluster band.
 _CLUSTER_NUMBERS = {c["key"]: i + 1 for i, c in enumerate(CHECK_CATEGORIES)}
+
+
+# Every automated check, in canonical order. This is the single source of
+# truth shared by the report (report_html.py re-exports CHECKS), the landing
+# page's "What do you get?" list, and the /api/validate OpenAPI description -
+# so they cannot drift apart the way they did before. README.md deliberately
+# does not keep its own copy; it links to the live app and the guide instead.
+# `description` uses a tiny Markdown subset (`code` spans and *emphasis*):
+# _md_to_html renders it for the landing page, and it is used as-is for the
+# API docs, which already speak Markdown.
+CHECKS: list[dict[str, str]] = [
+    {"report_anchor": "ontology-metadata", "title": "Ontology metadata", "guide_anchor": "metadata", "category": "basics",
+     "description": "a SHACL check on the ontology header: title, description, creator, and version are required; created/modified dates and publisher are recommended."},
+    {"report_anchor": "imports", "title": "Imports", "guide_anchor": "imports", "category": "basics",
+     "description": "every `owl:imports` target declared in the ontology header is fetched over HTTP and parsed as RDF, the same way a reasoner would follow it."},
+    {"report_anchor": "iri-strategy", "title": "IRI strategy", "guide_anchor": "iri-strategy", "category": "basics",
+     "description": "the ontology's own defined terms should consistently use either hash (`#Term`) or slash (`/Term`), not both."},
+    {"report_anchor": "iri-scheme", "title": "IRI scheme", "guide_anchor": "https-http", "category": "basics",
+     "description": "each host should be referenced under a single URI scheme. `http://example.org/X` and `https://example.org/X` are different IRIs."},
+    {"report_anchor": "license", "title": "Open license", "guide_anchor": "license", "category": "basics",
+     "description": "the declared `dcterms:license` (or `schema:license`) must be an open license per the Open Definition; CC0 and CC BY are recommended, other open licenses (e.g. CC BY-SA, ODC-By, ODbL) pass with a warning, and a missing or non-open license fails."},
+    {"report_anchor": "namespaces", "title": "Namespaces", "guide_anchor": "resolvable", "category": "reuse",
+     "description": "fetches each declared namespace URI, checks HTTP status, and tries to parse it as RDF (Turtle, RDF/XML, JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF links."},
+    {"report_anchor": "unused-prefixes", "title": "Unused prefixes", "guide_anchor": "prefixes", "category": "reuse",
+     "description": "flags `@prefix` declarations that are never used in any triple."},
+    {"report_anchor": "external-terms", "title": "External term definitions", "guide_anchor": "external-terms", "category": "reuse",
+     "description": "verifies that terms reused from an external vocabulary are actually defined there. Catches typos like `owl:MadeUpClass` and made-up reuse of established prefixes. A term that exists but is marked deprecated upstream is flagged as a warning."},
+    {"report_anchor": "internal-terms", "title": "Internal term definitions", "guide_anchor": "internal-terms", "category": "structure",
+     "description": "flags terms in the ontology's own namespace that are referenced but never defined. Usually a typo or a forgotten declaration."},
+    {"report_anchor": "term-inventory", "title": "Term inventory & naming", "guide_anchor": "term-inventory", "category": "structure",
+     "description": "categorizes every internal term (class, object property, datatype property, datatype, individual) and checks capitalization: classes start uppercase, properties lowercase. Coded identifiers and deprecated terms are exempt."},
+    {"report_anchor": "domains-ranges", "title": "Domains & ranges", "guide_anchor": "domains-ranges", "category": "structure",
+     "description": "object and datatype properties should declare a domain and a range. Object properties range over classes; datatype properties over datatypes. Deprecated properties are exempt."},
+    {"report_anchor": "datatypes", "title": "Datatypes", "guide_anchor": "datatypes", "category": "structure",
+     "description": "datatypes used as property ranges and literal datatypes should be recognized XSD built-ins, `rdfs:Literal`, `rdf:langString`, or a locally declared `rdfs:Datatype`. Catches typos like `xsd:stirng`."},
+    {"report_anchor": "non-ontology-terms", "title": "Non-ontology terms", "guide_anchor": "non-ontology-terms", "category": "structure",
+     "description": "an OWL ontology defines schema (classes, properties, datatypes). A `skos:Concept` scheme is subject-matter data and belongs in a separate resource. Named individuals are not flagged."},
+    {"report_anchor": "labels", "title": "Labels", "guide_anchor": "labels", "category": "docs",
+     "description": "a SHACL check that every internally defined class and property carries an `rdfs:label`. Reused external terms, and terms marked deprecated, are ignored."},
+    {"report_anchor": "comments", "title": "Comments", "guide_anchor": "comments", "category": "docs",
+     "description": "a SHACL check that every internally defined class and property carries an `rdfs:comment`. Reused external terms, and terms marked deprecated, are ignored."},
+    {"report_anchor": "language-tags", "title": "Language tag consistency", "guide_anchor": "lang-tags", "category": "docs",
+     "description": "labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) should use the same language tags across subjects. Deprecated terms are exempt."},
+    {"report_anchor": "reasoner", "title": "Reasoner checks", "guide_anchor": "reasoner", "category": "logic",
+     "description": "lightweight OWL RL reasoning on the current ontology only (`owl:imports` are not followed), with three facets: *ontology consistency*, *inconsistent individuals*, and *unsatisfiable classes*."},
+]
+
+# Enforce alignment between CHECKS and GUIDE_SECTIONS at import time. If they
+# ever drift (someone renames an anchor, reorders a section, etc.) the module
+# fails to load and the failure is caught by the test suite. This is the
+# architectural guarantee that the report and the guide stay in sync.
+_GUIDE_CHECK_ANCHORS = [s["anchor"] for s in GUIDE_SECTIONS if s["group"] == "check"]
+_CHECK_GUIDE_ANCHORS = [c["guide_anchor"] for c in CHECKS]
+assert _CHECK_GUIDE_ANCHORS == _GUIDE_CHECK_ANCHORS, (
+    "CHECKS and GUIDE_SECTIONS (group=check) must list the same anchors in "
+    f"the same order. CHECKS guide_anchors={_CHECK_GUIDE_ANCHORS}, "
+    f"GUIDE check anchors={_GUIDE_CHECK_ANCHORS}"
+)
+
+# The category assigned to each check must match between the report registry
+# and the guide, so the clusters stay identical across surfaces.
+_GUIDE_CHECK_CATEGORIES = [s.get("category") for s in GUIDE_SECTIONS if s["group"] == "check"]
+_CHECK_CATEGORIES_LIST = [c["category"] for c in CHECKS]
+assert _CHECK_CATEGORIES_LIST == _GUIDE_CHECK_CATEGORIES, (
+    "CHECKS and GUIDE_SECTIONS (group=check) must assign the same category to "
+    f"each check. CHECKS categories={_CHECK_CATEGORIES_LIST}, "
+    f"GUIDE categories={_GUIDE_CHECK_CATEGORIES}"
+)
+
+# Categories must be contiguous blocks and appear in CHECK_CATEGORIES order.
+_seen_categories: list[str] = []
+for _cat in _CHECK_CATEGORIES_LIST:
+    if not _seen_categories or _seen_categories[-1] != _cat:
+        _seen_categories.append(_cat)
+assert _seen_categories == [c["key"] for c in CHECK_CATEGORIES], (
+    "CHECKS categories must form contiguous blocks in CHECK_CATEGORIES order. "
+    f"Got block order {_seen_categories}, expected {[c['key'] for c in CHECK_CATEGORIES]}"
+)
+
+# Every check must carry a non-empty description - it's the only place this
+# text is written, feeding both the landing page and the API docs. A new
+# check added without one would otherwise render a silent blank/missing
+# bullet instead of failing, so this makes forgetting it impossible: the
+# module fails to import (caught by the test suite) until it's filled in.
+_MISSING_DESCRIPTIONS = [c["report_anchor"] for c in CHECKS if not c.get("description", "").strip()]
+assert not _MISSING_DESCRIPTIONS, (
+    "Every entry in CHECKS must have a non-empty 'description' (shown on the "
+    f"landing page and in the API docs). Missing/empty for: {_MISSING_DESCRIPTIONS}"
+)
+
+
+def _md_to_html(text: str) -> str:
+    """Render a tiny Markdown subset (`code` spans and *emphasis*) as HTML,
+    escaping everything else. Lets a single CHECKS description double as
+    Markdown (README.md, API docs) and HTML (the landing page)."""
+    out: list[str] = []
+    pos = 0
+    for m in re.finditer(r"`([^`]+)`|\*([^*]+)\*", text):
+        out.append(escape(text[pos:m.start()], quote=False))
+        if m.group(1) is not None:
+            out.append(f"<code>{escape(m.group(1), quote=False)}</code>")
+        else:
+            out.append(f"<em>{escape(m.group(2), quote=False)}</em>")
+        pos = m.end()
+    out.append(escape(text[pos:], quote=False))
+    return "".join(out)
+
+
+def _render_checks_overview() -> str:
+    """Render the landing page's "What do you get?" checks list from CHECKS.
+
+    Single source with the report and the guide: grouping, numbering, and
+    per-check text all come from CHECKS, so this list cannot drift from what
+    askwol actually checks."""
+    parts: list[str] = []
+    current_cat = None
+    for check in CHECKS:
+        cat = check["category"]
+        if cat != current_cat:
+            if current_cat is not None:
+                parts.append("  </ul>")
+            label = next(c["label"] for c in CHECK_CATEGORIES if c["key"] == cat)
+            parts.append(f'  <h3 class="cluster-h">{_CLUSTER_NUMBERS[cat]}. {label}</h3>')
+            parts.append('  <ul class="checks-list">')
+            current_cat = cat
+        num = _GUIDE_NUMBERS[check["guide_anchor"]]
+        title = escape(check["title"], quote=False)
+        desc = _md_to_html(check["description"])
+        parts.append(f'    <li><span class="num">{num}</span> <strong>{title}</strong>: {desc}</li>')
+    parts.append("  </ul>")
+    return "\n".join(parts)
+
+
+def _check_bullets_markdown() -> str:
+    """Flat Markdown bullet list for every check, in CHECKS order (used for
+    the /api/validate description)."""
+    parts: list[str] = []
+    for check in CHECKS:
+        num = _GUIDE_NUMBERS[check["guide_anchor"]]
+        title = unescape(check["title"])
+        parts.append(f"- **{num} {title}** - {check['description']}")
+    return "\n".join(parts)
+
+
+def render_checks_api_description() -> str:
+    """Render the flat checks list as Markdown for the /api/validate route's
+    OpenAPI description."""
+    intro = "Upload an OWL ontology and get a full validation report as JSON.\n\nThe report includes:\n\n"
+    outro = (
+        "\n\nOnly terms that appear as subjects in triples are validated "
+        "against remote vocabularies. Terms used only as predicates or "
+        "objects are treated as well-known vocabulary."
+    )
+    return intro + _check_bullets_markdown() + outro
+
+
+UPLOAD_HTML = UPLOAD_HTML.replace("<!--CHECKS_OVERVIEW-->", _render_checks_overview())
 
 
 def _render_guide_toc() -> str:
