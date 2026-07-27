@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import tempfile
 import threading
@@ -54,6 +55,46 @@ RATE_LIMIT_MAX_REQUESTS = int(os.environ.get("ASKWOL_RATE_LIMIT", "20"))
 
 _rate_limit_lock = threading.Lock()
 _rate_limit_buckets: dict[str, tuple[float, int]] = {}
+
+
+def _is_trusted_proxy_peer(peer_ip: str | None) -> bool:
+    """True if peer_ip is loopback, private, or link-local - i.e. could
+    plausibly be our own reverse proxy rather than an arbitrary internet
+    host. Only such peers are trusted to supply an accurate
+    X-Forwarded-For header; anyone else could set that header to anything."""
+    if not peer_ip:
+        return False
+    try:
+        ip = ipaddress.ip_address(peer_ip)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private or ip.is_link_local
+
+
+def _client_ip(request: Request) -> str | None:
+    """Best-effort real client IP, for usage tracking and rate limiting.
+
+    `request.client.host` is the direct TCP peer. Behind the reverse proxy
+    documented in docker-compose.yml, that peer is always the proxy itself
+    (or the Docker gateway) - the same value for every visitor, which is
+    why every event ends up with the same ip_hash on the stats page. When
+    the peer is trusted (private/loopback), prefer the address the proxy
+    appended to X-Forwarded-For: the rightmost entry is the one our own
+    proxy added, while anything to its left could be forged by the
+    original client and is ignored.
+    """
+    peer_ip = request.client.host if request.client else None
+    if _is_trusted_proxy_peer(peer_ip):
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            candidate = forwarded.split(",")[-1].strip()
+            try:
+                ipaddress.ip_address(candidate)
+            except ValueError:
+                candidate = ""
+            if candidate:
+                return candidate
+    return peer_ip
 
 
 def _rate_limited(client_ip: str | None) -> bool:
@@ -465,7 +506,7 @@ async def validate(
 ):
     """Validate an ontology from file upload or URL."""
     started = time.perf_counter()
-    client_ip = request.client.host if request.client else None
+    client_ip = _client_ip(request)
     source: str | None = None
     kind = "validate"
 
@@ -691,7 +732,7 @@ async def validate_api(
     See the route description for the full list of checks (single-sourced
     from askwol.templates.CHECKS).
     """
-    client_ip = request.client.host if request.client else None
+    client_ip = _client_ip(request)
     if _rate_limited(client_ip):
         return JSONResponse(
             content={"detail": "Too many requests. Please wait a minute and try again."},
