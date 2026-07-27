@@ -16,13 +16,13 @@ _SHAPES_FILE = "ontology_metadata.ttl"
 # file's own violations correlate back to it.
 _SPECS: tuple[tuple[str, str, str, str, str], ...] = (
     ("ontology_declaration", "", "Ontology declaration", "rdf:type owl:Ontology", "required"),
-    ("title", "Title", "Title", "dcterms:title or rdfs:label", "required"),
-    ("description", "Description", "Description", "dcterms:description or rdfs:comment", "required"),
-    ("creator", "Creator", "Creator", "dcterms:creator", "required"),
+    ("title", "Title", "Title", "dcterms:title, rdfs:label, or dc:title", "required"),
+    ("description", "Description", "Description", "dcterms:description, rdfs:comment, or dc:description", "required"),
+    ("creator", "Creator", "Creator", "dcterms:creator or dc:creator", "required"),
     ("version", "Version", "Version", "owl:versionInfo or owl:versionIRI", "required"),
-    ("created", "Created date", "Created date", "dcterms:created or dcterms:issued", "recommended"),
-    ("modified", "Modified date", "Modified date", "dcterms:modified", "recommended"),
-    ("publisher", "Publisher", "Publisher", "dcterms:publisher", "recommended"),
+    ("created", "Created date", "Created date", "dcterms:created, dcterms:issued, or dc:date", "recommended"),
+    ("modified", "Modified date", "Modified date", "dcterms:modified or dc:date", "recommended"),
+    ("publisher", "Publisher", "Publisher", "dcterms:publisher or dc:publisher", "recommended"),
 )
 
 

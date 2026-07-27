@@ -3,6 +3,7 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
 
 <https://w3id.org/askwol/shapes/OntologyMetadataShape>
     a sh:NodeShape ;
@@ -10,26 +11,26 @@
 
     sh:property [
         sh:name "Title" ;
-        sh:path [ sh:alternativePath ( dcterms:title rdfs:label ) ] ;
+        sh:path [ sh:alternativePath ( dcterms:title rdfs:label dc:title ) ] ;
         sh:minCount 1 ;
         sh:severity sh:Violation ;
-        sh:message "Add a title for the ontology using dcterms:title or rdfs:label." ;
+        sh:message "Add a title for the ontology using dcterms:title, rdfs:label, or the legacy dc:title." ;
     ] ;
 
     sh:property [
         sh:name "Description" ;
-        sh:path [ sh:alternativePath ( dcterms:description rdfs:comment ) ] ;
+        sh:path [ sh:alternativePath ( dcterms:description rdfs:comment dc:description ) ] ;
         sh:minCount 1 ;
         sh:severity sh:Violation ;
-        sh:message "Add a description for the ontology using dcterms:description or rdfs:comment." ;
+        sh:message "Add a description for the ontology using dcterms:description, rdfs:comment, or the legacy dc:description." ;
     ] ;
 
     sh:property [
         sh:name "Creator" ;
-        sh:path dcterms:creator ;
+        sh:path [ sh:alternativePath ( dcterms:creator dc:creator ) ] ;
         sh:minCount 1 ;
         sh:severity sh:Violation ;
-        sh:message "Add at least one creator using dcterms:creator." ;
+        sh:message "Add at least one creator using dcterms:creator or the legacy dc:creator." ;
     ] ;
 
     sh:property [
@@ -42,24 +43,24 @@
 
     sh:property [
         sh:name "Created date" ;
-        sh:path [ sh:alternativePath ( dcterms:created dcterms:issued ) ] ;
+        sh:path [ sh:alternativePath ( dcterms:created dcterms:issued dc:date ) ] ;
         sh:minCount 1 ;
         sh:severity sh:Warning ;
-        sh:message "Consider adding a creation or issue date using dcterms:created or dcterms:issued." ;
+        sh:message "Consider adding a creation or issue date using dcterms:created, dcterms:issued, or the legacy dc:date." ;
     ] ;
 
     sh:property [
         sh:name "Modified date" ;
-        sh:path dcterms:modified ;
+        sh:path [ sh:alternativePath ( dcterms:modified dc:date ) ] ;
         sh:minCount 1 ;
         sh:severity sh:Warning ;
-        sh:message "Consider adding a modification date using dcterms:modified." ;
+        sh:message "Consider adding a modification date using dcterms:modified or the legacy dc:date." ;
     ] ;
 
     sh:property [
         sh:name "Publisher" ;
-        sh:path dcterms:publisher ;
+        sh:path [ sh:alternativePath ( dcterms:publisher dc:publisher ) ] ;
         sh:minCount 1 ;
         sh:severity sh:Warning ;
-        sh:message "Consider adding a publisher using dcterms:publisher." ;
+        sh:message "Consider adding a publisher using dcterms:publisher or the legacy dc:publisher." ;
     ] .

@@ -266,14 +266,20 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p>askwol evaluates <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/ontology_metadata.ttl" target="_blank" rel="noopener">SHACL shapes for the ontology header</a> and checks these properties:</p>
   <ul>
     <li><strong>Required:</strong> <code>rdf:type owl:Ontology</code>,
-    <code>dcterms:title</code> (or <code>rdfs:label</code>),
-    <code>dcterms:description</code> (or <code>rdfs:comment</code>),
-    <code>dcterms:creator</code>, and <code>owl:versionInfo</code> or
-    <code>owl:versionIRI</code>.</li>
+    <code>dcterms:title</code> (or <code>rdfs:label</code>, or the legacy
+    <code>dc:title</code>), <code>dcterms:description</code> (or
+    <code>rdfs:comment</code>, or the legacy <code>dc:description</code>),
+    <code>dcterms:creator</code> (or <code>dc:creator</code>), and
+    <code>owl:versionInfo</code> or <code>owl:versionIRI</code>.</li>
     <li><strong>Recommended:</strong> <code>dcterms:created</code>
-    (or <code>dcterms:issued</code>), <code>dcterms:modified</code>,
-    and <code>dcterms:publisher</code>.</li>
+    (or <code>dcterms:issued</code>, or <code>dc:date</code>),
+    <code>dcterms:modified</code> (or <code>dc:date</code>), and
+    <code>dcterms:publisher</code> (or <code>dc:publisher</code>).</li>
   </ul>
+  <p>Pre-2010 ontologies (e.g. FOAF, OWL-Time) often use the older
+  <a href="https://www.dublincore.org/specifications/dublin-core/dces/" target="_blank" rel="noopener">Dublin Core Elements</a>
+  (<code>dc:</code>) properties instead of DCMI Terms - askwol accepts
+  either, since they carry the same meaning.</p>
   <div class="tip">Fill in these metadata so that both humans and machines
   can understand the provenance and reuse conditions of your ontology.</div>
   
