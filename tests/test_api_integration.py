@@ -236,6 +236,59 @@ def test_api_validate_rate_limited(monkeypatch, client):
     assert "detail" in second.json()
 
 
+@pytest.mark.parametrize(
+    ("peer_ip", "expected"),
+    [
+        ("127.0.0.1", True),
+        ("::1", True),
+        ("172.18.0.1", True),  # typical Docker bridge gateway
+        ("192.168.1.5", True),
+        ("169.254.1.1", True),
+        ("8.8.8.8", False),  # public IP
+        ("not-an-ip", False),
+        (None, False),
+        ("", False),
+    ],
+)
+def test_is_trusted_proxy_peer_classifies_correctly(peer_ip, expected):
+    assert web._is_trusted_proxy_peer(peer_ip) is expected
+
+
+def test_client_ip_uses_forwarded_header_behind_trusted_proxy(monkeypatch):
+    """Reproduces the 'always the same hash on /stats' bug: behind the
+    documented reverse-proxy deployment, request.client.host is always the
+    proxy/Docker-gateway address, so every event got the same ip_hash. When
+    that peer is trusted (private/loopback), the rightmost X-Forwarded-For
+    entry (appended by our own proxy) should be used instead."""
+    recorded: dict[str, str | None] = {}
+
+    def fake_record(kind, *, source=None, status=None, duration_ms=None, ip=None):
+        recorded["ip"] = ip
+
+    monkeypatch.setattr(web.usage, "record", fake_record)
+    proxy_client = TestClient(web.app, client=("127.0.0.1", 54321))
+
+    proxy_client.post("/validate", headers={"X-Forwarded-For": "203.0.113.7"})
+    assert recorded["ip"] == "203.0.113.7"
+
+    # A spoofed left-most hop is ignored - only the entry our own trusted
+    # proxy appended (rightmost) is used.
+    proxy_client.post("/validate", headers={"X-Forwarded-For": "10.10.10.10, 203.0.113.9"})
+    assert recorded["ip"] == "203.0.113.9"
+
+
+def test_client_ip_ignores_forwarded_header_from_untrusted_peer(monkeypatch, client):
+    """A direct (non-proxied) client cannot spoof its IP via X-Forwarded-For."""
+    recorded: dict[str, str | None] = {}
+
+    def fake_record(kind, *, source=None, status=None, duration_ms=None, ip=None):
+        recorded["ip"] = ip
+
+    monkeypatch.setattr(web.usage, "record", fake_record)
+    client.post("/validate", headers={"X-Forwarded-For": "203.0.113.7"})
+    assert recorded["ip"] == "testclient"
+
+
 def test_usage_dashboard_requires_token(monkeypatch, client):
     monkeypatch.setenv("ASKWOL_STATS_TOKEN", "secret-token")
 
