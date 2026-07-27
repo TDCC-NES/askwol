@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-184%20passing-brightgreen.svg)](#tests)
+[![Tests](https://github.com/TDCC-NES/askwol/actions/workflows/tests.yml/badge.svg)](https://github.com/TDCC-NES/askwol/actions/workflows/tests.yml)
 [![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 
 👉 **Try it live:** https://lod-4tu.tudelft.nl/askwol/
@@ -227,9 +227,9 @@ Turtle (`.ttl`), RDF/XML (`.rdf`, `.owl`), JSON-LD (`.jsonld`), N-Triples (`.nt`
 pytest tests/ -v
 ```
 
-184 tests cover every automated check on both good and bad inputs, the HTML
-report rendering, the FastAPI routes via `TestClient`, and a pinned end-to-end
-smoke test on [`html/ontologies/broken.ttl`](html/ontologies/broken.ttl) that
+The test suite covers every automated check on both good and bad inputs, the
+HTML report rendering, the FastAPI routes via `TestClient`, and a pinned
+end-to-end smoke test on [`html/ontologies/broken.ttl`](html/ontologies/broken.ttl) that
 fails loudly if any single check ever stops detecting issues. The clean
 counterpart is [`html/ontologies/sample.ttl`](html/ontologies/sample.ttl).
 Drop either one into the upload form at http://localhost:8000/ to see the
