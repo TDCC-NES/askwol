@@ -1,27 +1,84 @@
-<html>
-	<head>
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>TDCC-NES</title>
+	<meta name="google-site-verification" content="8ypgVD7ncKb5Hl2PpSN6fmK1EbZEmWl_RjSXv0O9FOs">
+	<meta name="description" content="Making research data FAIR through ontology engineering, from TDCC-NES and 4TU.ResearchData.">
+	<meta property="og:title" content="TDCC-NES">
+	<meta property="og:description" content="Making research data FAIR through ontology engineering, from TDCC-NES and 4TU.ResearchData.">
 	<style>
-		@keyframes rainbow {
-    0%{background-position:0% 50%}
-    50%{background-position:100% 25%}
-    100%{background-position:0% 50%}
+		body {
+			font-family: 'Gill Sans', sans-serif;
+			text-align: center;
+		}
+		.logo-tdcc,
+		.logo-4tu {
+			display: block;
+			margin-left: auto;
+			margin-right: auto;
+		}
+		.logo-tdcc {
+			width: 26%;
+		}
+		.logo-4tu {
+			width: 30%;
+			margin-top: 2%;
+		}
+		.logo-tdcc img,
+		.logo-4tu img {
+			width: 100%;
+			display: block;
+		}
+		.card {
+			display: inline-block;
+			margin-top: 6%;
+			padding: 1.2em 2.2em;
+			border-radius: 20px;
+			border: 2px solid rgb(240, 144, 0);
+			background-color: #fff9f2;
+			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+		}
+		.card-title {
+			font-size: 150%;
+			margin: 0;
+		}
+		.card-title a,
+		.card-credit a {
+			text-decoration: none;
+		}
+		.card-title a {
+			color: rgb(24, 60, 120);
+			font-weight: bold;
+		}
+		.card-tagline {
+			font-size: 70%;
+			color: #666;
+			margin: 0.5em 0 0;
+		}
+		.card-credit {
+			font-size: 60%;
+			color: #999;
+			margin: 0.8em 0 0;
+		}
+		.card-credit a {
+			color: inherit;
+		}
 	</style>
-    <meta name="google-site-verification" content="8ypgVD7ncKb5Hl2PpSN6fmK1EbZEmWl_RjSXv0O9FOs" />
-    </head>
-        <body>
-	<a href="https://tdcc.nl/nes-ontology-engineers/">
-	<div style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
-			<img style="width:26%" src="https://tdcc.nl/wp-content/uploads/2023/02/TDCC-NES-Logo_RGB-2048x1725.png">
-	</div>
-	</a>
-	<div style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
-			<p style="font-size: 2.4vw; background-size: 800% 800%; font-family: sans-serif; text-fill-color: transparent; animation: rainbow 10s ease infinite; background-image: repeating-linear-gradient(45deg, rgb(81,34,127), rgb(6,176,222), rgb(251,147,2)); background-clip: text; color: transparent;">COMING SOON</p>
-			<img style="width:30%; padding-top:2%" src="https://data.4tu.nl/static/images/logo.png">
-
-			<p style="font-size:150%; font-family: 'Gill Sans', sans-serif; margin-top:5%"><b>pyLODE: </b><a href="/ontologies/sample.ttl">Sample Data</a> • <a href="/pylode/sample.html">Output</a></p>
-
-			<p style="font-size:150%; font-family: 'Gill Sans', sans-serif; margin-top:1%"><a href="/askwol">Ask Wol 🦉</a></p>
+</head>
+<body>
+	<header>
+		<a class="logo-tdcc" href="https://tdcc.nl/nes/"><img src="https://tdcc.nl/wp-content/uploads/2023/02/TDCC-NES-Logo_RGB-2048x1725.png" alt="TDCC-NES"></a>
+		<a class="logo-4tu" href="https://data.4tu.nl/"><img src="https://data.4tu.nl/static/images/logo.png" alt="4TU.ResearchData"></a>
+	</header>
+	<main>
+		<div class="card">
+			<p class="card-title"><a href="/askwol">🦉 Ask Wol</a></p>
+			<p class="card-tagline">OWL ontology checks and a publishing guide</p>
+			<p class="card-credit">by the <a href="https://tdcc.nl/nes-ontology-engineers/">TDCC-NES Ontology Engineers</a></p>
 		</div>
-        </body>
+	</main>
+</body>
 </html> 
 
