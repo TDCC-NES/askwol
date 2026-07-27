@@ -54,7 +54,7 @@ async def block_private_network_requests(request: httpx.Request) -> None:
         infos = await asyncio.wait_for(
             loop.run_in_executor(None, socket.getaddrinfo, host, None), timeout=5.0,
         )
-    except (OSError, TimeoutError):
+    except (OSError, TimeoutError, asyncio.TimeoutError):
         return  # DNS failure/slow DNS - let the real request fail naturally
     for info in infos:
         ip_str = info[4][0]
