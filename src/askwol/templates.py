@@ -279,7 +279,10 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p>Pre-2010 ontologies (e.g. FOAF, OWL-Time) often use the older
   <a href="https://www.dublincore.org/specifications/dublin-core/dces/" target="_blank" rel="noopener">Dublin Core Elements</a>
   (<code>dc:</code>) properties instead of DCMI Terms - askwol accepts
-  either, since they carry the same meaning.</p>
+  either, since they carry the same meaning. One nuance: Elements 1.1 has a
+  single, generic <code>dc:date</code> property with no separate
+  created/modified split, so askwol accepts it as satisfying either (or
+  both) of the two recommended date checks above.</p>
   <div class="tip">Fill in these metadata so that both humans and machines
   can understand the provenance and reuse conditions of your ontology.</div>
   
