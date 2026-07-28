@@ -565,7 +565,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "group": "check",
         "category": "reuse",
         "anchor": "external-terms",
-        "title": "External term definitions",
+        "title": "Make sure reused terms actually exist",
         "toc_label": "External term definitions",
         "body": """\
   <p><span class="tag practice">TDCC guideline</span> Don&rsquo;t reinvent
@@ -611,7 +611,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "group": "check",
         "category": "structure",
         "anchor": "internal-terms",
-        "title": "Internal term definitions",
+        "title": "Define every term you use in your own namespace",
         "toc_label": "Internal term definitions",
         "body": """\
   <p><span class="tag practice">TDCC guideline</span> Every term you use
@@ -798,7 +798,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "group": "check",
         "category": "docs",
         "anchor": "labels",
-        "title": "Labels",
+        "title": "Give every class and property a human-readable label",
         "toc_label": "Labels",
         "body": """\
   <p><span class="tag practice">TDCC guideline</span> Every class and
@@ -825,7 +825,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "group": "check",
         "category": "docs",
         "anchor": "comments",
-        "title": "Comments",
+        "title": "Give every class and property a clear description",
         "toc_label": "Comments",
         "body": """\
   <p><span class="tag practice">TDCC guideline</span> Every class and
@@ -948,7 +948,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     {
         "group": "practice",
         "anchor": "validate",
-        "title": "Validate early and often",
+        "title": "Run askwol during development, not just before release",
         "toc_label": "Validate early and often",
         "body": """\
   <p>Run <a href="./">askwol</a> on your ontology during development, not just
@@ -1103,9 +1103,9 @@ CHECKS: list[dict[str, str]] = [
     {"report_anchor": "non-ontology-terms", "title": "Non-ontology terms", "guide_anchor": "non-ontology-terms", "category": "structure",
      "description": "an OWL ontology defines schema (classes, properties, datatypes). A `skos:Concept` scheme is subject-matter data, not schema, and belongs in a separate resource. Named individuals are not flagged."},
     {"report_anchor": "labels", "title": "Labels", "guide_anchor": "labels", "category": "docs",
-     "description": "a SHACL check that every internally defined class and property carries an `rdfs:label`. Reused external terms are ignored."},
+     "description": "a SHACL check that every internally defined class and property carries an `rdfs:label`."},
     {"report_anchor": "comments", "title": "Comments", "guide_anchor": "comments", "category": "docs",
-     "description": "a SHACL check that every internally defined class and property carries an `rdfs:comment`. Reused external terms are ignored."},
+     "description": "a SHACL check that every internally defined class and property carries an `rdfs:comment`."},
     {"report_anchor": "language-tags", "title": "Language tag consistency", "guide_anchor": "lang-tags", "category": "docs",
      "description": "labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) on internally defined terms should use language tags consistently."},
     {"report_anchor": "reasoner", "title": "Reasoner checks", "guide_anchor": "reasoner", "category": "logic",
@@ -1333,9 +1333,9 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   h1 .owl {{ font-size: 1.4em; line-height: 1; }}
   h2 {{ color: #555; margin-top: 2em; border-bottom: 1px solid #eee; padding-bottom: 0.2em; }}
   h3 {{ color: #666; margin-top: 1.5em; }}
-  .cluster-band {{ color: #4a7c59; font-size: 1.7em; font-weight: 700; margin: 2.6em 0 0.5em; padding-bottom: 0.2em; border-bottom: 2px solid #cfe0d5; letter-spacing: -0.01em; }}
+  .cluster-band {{ color: #4a7c59; font-size: 0.82em; font-weight: 700; margin: 2.2em 0 0; padding-bottom: 0.2em; border-bottom: 2px solid #cfe0d5; letter-spacing: 0.06em; text-transform: uppercase; }}
   .check-heading {{ color: #333; font-size: 1.25em; font-weight: 600; margin-top: 1.8em; border: none; padding: 0; }}
-  .section-lead {{ color: #555; font-size: 1.05em; margin: 0.4em 0 1.1em; }}
+  .section-lead {{ color: #555; font-size: 1.05em; font-style: italic; margin: 0.4em 0 1.1em; }}
   a {{ color: #4a7c59; }}
   code {{ background: #f0f0f0; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; }}
   pre {{ background: #f7f7f7; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; line-height: 1.5; }}
@@ -1355,7 +1355,6 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   .toc .group-label {{ display: block; margin-top: 0.8em; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; font-weight: 600; }}
   .toc .group-label:first-child {{ margin-top: 0; }}
   .toc .cluster-label {{ display: block; margin: 0.7em 0 0.15em 0.2em; font-size: 0.98em; color: #4a7c59; font-weight: 700; }}
-  .cluster-band {{ margin: 2.2em 0 0; font-size: 0.82em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #4a7c59; }}
 </style>
 </head>
 <body>
