@@ -231,27 +231,74 @@ async def _read_upload_capped(file: UploadFile) -> bytes:
     return b"".join(chunks)
 
 
+def _render_pagination(
+    *,
+    page: int,
+    page_size: int,
+    total: int,
+    shown: int,
+    param: str,
+    other_pages: dict[str, int],
+    token: str | None,
+    prev_label: str = "&larr; Prev",
+    next_label: str = "Next &rarr;",
+) -> str:
+    """Render a prev/next bar for one table, preserving the other tables'
+    current page numbers (and the token) in the query string."""
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    first_index = (page - 1) * page_size + 1 if shown else 0
+    last_index = (page - 1) * page_size + shown
+
+    def href(target: int) -> str:
+        params = {**other_pages, param: target}
+        query = "&".join(f"{key}={quote(str(value))}" for key, value in params.items())
+        if token:
+            query += f"&token={quote(str(token))}"
+        return f"?{query}"
+
+    prev_link = (
+        f'<a class="page-btn" href="{href(page - 1)}">{prev_label}</a>'
+        if page > 1 else f'<span class="page-btn disabled">{prev_label}</span>'
+    )
+    next_link = (
+        f'<a class="page-btn" href="{href(page + 1)}">{next_label}</a>'
+        if page < total_pages else f'<span class="page-btn disabled">{next_label}</span>'
+    )
+    return (
+        f'<div class="pagination">{prev_link}'
+        f'<span class="page-info">Showing {_format_int(first_index)}&ndash;{_format_int(last_index)} '
+        f'of {_format_int(total)} &middot; page {_format_int(page)} of {_format_int(total_pages)}</span>'
+        f'{next_link}</div>'
+    )
+
+
 def _render_stats_page(data: dict[str, object]) -> str:
     total_events = int(data.get("total_events") or 0)
     unique_visitors = int(data.get("unique_visitors") or 0)
     avg_duration = data.get("avg_duration_ms")
     days = int(data.get("days") or 30)
+    token = data.get("token") or None
 
     by_day = list(data.get("by_day") or [])
     by_status = list(data.get("by_status") or [])
     top_sources = list(data.get("top_sources") or [])
     all_events = list(data.get("all_events") or [])
+
     page = int(data.get("page") or 1)
-    page_size = int(data.get("page_size") or 50)
+    page_size = int(data.get("page_size") or 25)
     total_entries = int(data.get("total_entries") or 0)
-    token = data.get("token") or None
-    total_pages = max(1, (total_entries + page_size - 1) // page_size)
-    first_index = (page - 1) * page_size + 1 if all_events else 0
-    last_index = (page - 1) * page_size + len(all_events)
+
+    status_page = int(data.get("status_page") or 1)
+    status_page_size = int(data.get("status_page_size") or 25)
+    status_total = int(data.get("status_total") or 0)
+
+    source_page = int(data.get("source_page") or 1)
+    source_page_size = int(data.get("source_page_size") or 25)
+    source_total = int(data.get("source_total") or 0)
 
     max_day = max((int(row["n"]) for row in by_day), default=0)
-    max_status = max((int(row["n"]) for row in by_status), default=0)
-    max_source = max((int(row["n"]) for row in top_sources), default=0)
+    max_status = int(data.get("status_max") or 0)
+    max_source = int(data.get("source_max") or 0)
 
     day_rows = []
     for row in by_day:
@@ -315,25 +362,20 @@ def _render_stats_page(data: dict[str, object]) -> str:
         )
     all_html = "".join(all_rows) or '<tr><td colspan="6" class="empty-cell">No database entries yet.</td></tr>'
 
-    def _page_href(target: int) -> str:
-        query = f"?page={target}"
-        if token:
-            query += f"&token={quote(str(token))}"
-        return query
-
-    prev_link = (
-        f'<a class="page-btn" href="{_page_href(page - 1)}">&larr; Newer</a>'
-        if page > 1 else '<span class="page-btn disabled">&larr; Newer</span>'
+    events_pagination = _render_pagination(
+        page=page, page_size=page_size, total=total_entries, shown=len(all_events),
+        param="page", other_pages={"source_page": source_page, "status_page": status_page},
+        token=token, prev_label="&larr; Newer", next_label="Older &rarr;",
     )
-    next_link = (
-        f'<a class="page-btn" href="{_page_href(page + 1)}">Older &rarr;</a>'
-        if page < total_pages else '<span class="page-btn disabled">Older &rarr;</span>'
+    source_pagination = _render_pagination(
+        page=source_page, page_size=source_page_size, total=source_total, shown=len(top_sources),
+        param="source_page", other_pages={"page": page, "status_page": status_page},
+        token=token,
     )
-    pagination_html = (
-        f'<div class="pagination">{prev_link}'
-        f'<span class="page-info">Showing {_format_int(first_index)}&ndash;{_format_int(last_index)} '
-        f'of {_format_int(total_entries)} &middot; page {_format_int(page)} of {_format_int(total_pages)}</span>'
-        f'{next_link}</div>'
+    status_pagination = _render_pagination(
+        page=status_page, page_size=status_page_size, total=status_total, shown=len(by_status),
+        param="status_page", other_pages={"page": page, "source_page": source_page},
+        token=token,
     )
 
     return _apply_prefix(f"""<!DOCTYPE html>
@@ -404,18 +446,6 @@ def _render_stats_page(data: dict[str, object]) -> str:
             <p class="lede">Read-only validation activity for the last {days} days.</p>
         </div>
         <div class="grid">
-            <section class="card panel" style="grid-column: span 12;">
-                <h2>All events</h2>
-                <p class="lede">Newest first. The visitor column is a salted hash of the IP address; the raw IP is never stored.</p>
-                <div class="table-wrap">
-                    <table>
-                        <thead><tr><th>Timestamp</th><th>Visitor</th><th>Kind</th><th>Status</th><th>Duration</th><th>Source</th></tr></thead>
-                        <tbody>{all_html}</tbody>
-                    </table>
-                </div>
-                {pagination_html}
-            </section>
-
             <section class="card summary" aria-label="Usage summary">
                 <div class="metric"><div class="label">Events</div><div class="value">{_format_int(total_events)}</div></div>
                 <div class="metric"><div class="label">Unique visitors</div><div class="value">{_format_int(unique_visitors)}</div></div>
@@ -427,24 +457,38 @@ def _render_stats_page(data: dict[str, object]) -> str:
                 {day_html}
             </section>
 
-            <section class="card panel" style="grid-column: span 6;">
-                <h2>By status</h2>
+            <section class="card panel" style="grid-column: span 12;">
+                <h2>All events</h2>
+                <p class="lede">Newest first. The visitor column is a salted hash of the IP address; the raw IP is never stored.</p>
                 <div class="table-wrap">
-                    <table class="ranked-table">
-                        <thead><tr><th class="status-col">Status</th><th>Notes</th><th class="num">Events</th><th class="share-col">Share</th></tr></thead>
-                        <tbody>{status_html}</tbody>
+                    <table>
+                        <thead><tr><th>Timestamp</th><th>Visitor</th><th>Kind</th><th>Status</th><th>Duration</th><th>Source</th></tr></thead>
+                        <tbody>{all_html}</tbody>
                     </table>
                 </div>
+                {events_pagination}
             </section>
 
             <section class="card panel" style="grid-column: span 6;">
-                <h2>Top sources (top 20)</h2>
+                <h2>Top sources <span class="hint">(all time)</span></h2>
                 <div class="table-wrap">
                     <table class="ranked-table">
                         <thead><tr><th>Source</th><th class="num">Events</th><th class="share-col">Share</th></tr></thead>
                         <tbody>{source_html}</tbody>
                     </table>
                 </div>
+                {source_pagination}
+            </section>
+
+            <section class="card panel" style="grid-column: span 6;">
+                <h2>By status <span class="hint">(all time)</span></h2>
+                <div class="table-wrap">
+                    <table class="ranked-table">
+                        <thead><tr><th class="status-col">Status</th><th>Notes</th><th class="num">Events</th><th class="share-col">Share</th></tr></thead>
+                        <tbody>{status_html}</tbody>
+                    </table>
+                </div>
+                {status_pagination}
             </section>
         </div>
     </div>
@@ -463,7 +507,13 @@ async def health():
 
 
 @app.get("/stats", response_class=HTMLResponse, include_in_schema=False)
-async def stats_page(request: Request, token: str | None = None, page: int = 1):
+async def stats_page(
+    request: Request,
+    token: str | None = None,
+    page: int = 1,
+    source_page: int = 1,
+    status_page: int = 1,
+):
     """Internal usage dashboard. Requires ASKWOL_STATS_TOKEN env var to match `?token=`."""
     expected = usage.stats_token()
     if not expected:
@@ -474,9 +524,17 @@ async def stats_page(request: Request, token: str | None = None, page: int = 1):
     if token != expected and not _is_local_request(request):
         return HTMLResponse("<p>unauthorized</p>", status_code=401)
 
-    page_size = 50
+    page_size = 25
     page = max(1, page)
-    data = usage.stats(days=30)
+    source_page = max(1, source_page)
+    status_page = max(1, status_page)
+    data = usage.stats(
+        days=30,
+        source_page=source_page,
+        source_page_size=page_size,
+        status_page=status_page,
+        status_page_size=page_size,
+    )
     data["total_entries"] = usage.events_count()
     data["all_events"] = usage.all_events(limit=page_size, offset=(page - 1) * page_size)
     data["page"] = page
@@ -486,7 +544,13 @@ async def stats_page(request: Request, token: str | None = None, page: int = 1):
 
 
 @app.get("/api/stats", include_in_schema=False)
-async def stats_endpoint(request: Request, token: str | None = None, page: int = 1):
+async def stats_endpoint(
+    request: Request,
+    token: str | None = None,
+    page: int = 1,
+    source_page: int = 1,
+    status_page: int = 1,
+):
     """Internal usage data. Requires ASKWOL_STATS_TOKEN env var to match `?token=`."""
     expected = usage.stats_token()
     if not expected:
@@ -496,9 +560,17 @@ async def stats_endpoint(request: Request, token: str | None = None, page: int =
         )
     if token != expected and not _is_local_request(request):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    page_size = 50
+    page_size = 25
     page = max(1, page)
-    payload = usage.stats(days=30)
+    source_page = max(1, source_page)
+    status_page = max(1, status_page)
+    payload = usage.stats(
+        days=30,
+        source_page=source_page,
+        source_page_size=page_size,
+        status_page=status_page,
+        status_page_size=page_size,
+    )
     payload["total_entries"] = usage.events_count()
     payload["page"] = page
     payload["page_size"] = page_size

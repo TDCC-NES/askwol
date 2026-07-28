@@ -116,11 +116,27 @@ def record(
         pass
 
 
-def stats(days: int = 30) -> dict[str, Any]:
-    """Return aggregated counts for the dashboard."""
+def stats(
+    days: int = 30,
+    *,
+    status_page: int = 1,
+    status_page_size: int = 25,
+    source_page: int = 1,
+    source_page_size: int = 25,
+) -> dict[str, Any]:
+    """Return aggregated counts for the dashboard.
+
+    `total_events`, `unique_visitors`, `by_day`, and `avg_duration_ms` are
+    scoped to the last `days` days. `by_status` and `top_sources` cover all
+    events ever recorded (not just the recent window) so long-lived sources
+    and statuses aren't hidden - each is paginated independently (ranked by
+    event count, descending) so the full list is reachable.
+    """
     if _DISABLED:
         return {"disabled": True}
     _init()
+    status_page = max(1, status_page)
+    source_page = max(1, source_page)
     with _connect() as conn:
         cutoff = f"-{int(days)} days"
         totals = conn.execute(
@@ -136,18 +152,35 @@ def stats(days: int = 30) -> dict[str, Any]:
             (cutoff,),
         ).fetchall()
 
+        status_total = conn.execute(
+            "SELECT COUNT(*) AS n FROM (SELECT COALESCE(status, '(none)') AS status "
+            "FROM events GROUP BY status)"
+        ).fetchone()
+        status_max = conn.execute(
+            "SELECT COUNT(*) AS n FROM events "
+            "GROUP BY COALESCE(status, '(none)') ORDER BY n DESC LIMIT 1"
+        ).fetchone()
         by_status = conn.execute(
             "SELECT COALESCE(status, '(none)') AS status, COUNT(*) AS n "
-            "FROM events WHERE ts >= datetime('now', ?) "
-            "GROUP BY status ORDER BY n DESC LIMIT 20",
-            (cutoff,),
+            "FROM events "
+            "GROUP BY status ORDER BY n DESC LIMIT ? OFFSET ?",
+            (status_page_size, (status_page - 1) * status_page_size),
         ).fetchall()
 
+        source_total = conn.execute(
+            "SELECT COUNT(*) AS n FROM (SELECT source FROM events "
+            "WHERE source IS NOT NULL GROUP BY source)"
+        ).fetchone()
+        source_max = conn.execute(
+            "SELECT COUNT(*) AS n FROM events "
+            "WHERE source IS NOT NULL "
+            "GROUP BY source ORDER BY n DESC LIMIT 1"
+        ).fetchone()
         top_sources = conn.execute(
             "SELECT source, COUNT(*) AS n FROM events "
-            "WHERE ts >= datetime('now', ?) AND source IS NOT NULL "
-            "GROUP BY source ORDER BY n DESC LIMIT 20",
-            (cutoff,),
+            "WHERE source IS NOT NULL "
+            "GROUP BY source ORDER BY n DESC LIMIT ? OFFSET ?",
+            (source_page_size, (source_page - 1) * source_page_size),
         ).fetchall()
 
         avg_duration = conn.execute(
@@ -163,7 +196,15 @@ def stats(days: int = 30) -> dict[str, Any]:
         "avg_duration_ms": int(avg_duration["ms"]) if avg_duration["ms"] else None,
         "by_day": [dict(r) for r in by_day],
         "by_status": [dict(r) for r in by_status],
+        "status_total": status_total["n"] or 0,
+        "status_max": status_max["n"] if status_max else 0,
+        "status_page": status_page,
+        "status_page_size": status_page_size,
         "top_sources": [dict(r) for r in top_sources],
+        "source_total": source_total["n"] or 0,
+        "source_max": source_max["n"] if source_max else 0,
+        "source_page": source_page,
+        "source_page_size": source_page_size,
     }
 
 
