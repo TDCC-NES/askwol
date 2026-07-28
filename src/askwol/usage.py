@@ -139,14 +139,14 @@ def stats(days: int = 30) -> dict[str, Any]:
         by_status = conn.execute(
             "SELECT COALESCE(status, '(none)') AS status, COUNT(*) AS n "
             "FROM events WHERE ts >= datetime('now', ?) "
-            "GROUP BY status ORDER BY n DESC",
+            "GROUP BY status ORDER BY n DESC LIMIT 20",
             (cutoff,),
         ).fetchall()
 
         top_sources = conn.execute(
             "SELECT source, COUNT(*) AS n FROM events "
             "WHERE ts >= datetime('now', ?) AND source IS NOT NULL "
-            "GROUP BY source ORDER BY n DESC LIMIT 25",
+            "GROUP BY source ORDER BY n DESC LIMIT 20",
             (cutoff,),
         ).fetchall()
 

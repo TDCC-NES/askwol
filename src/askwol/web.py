@@ -196,14 +196,15 @@ def _format_ts(ts: object) -> str:
 def _source_link(source: object) -> str:
     """Render a usage-log source as a link to the tested ontology when it is
     an http(s) URL; anything else (an uploaded filename, a placeholder like
-    "(no input)") is shown as plain text."""
+    "(no input)") is shown as plain text. Always carries the full value in a
+    title attribute since the cell itself may be truncated with an ellipsis."""
     text = str(source) if source is not None else ""
     if not text:
         return ""
+    escaped = escape(text)
     if urlparse(text).scheme in ("http", "https"):
-        escaped = escape(text)
-        return f'<a href="{escaped}" target="_blank" rel="noopener">{escaped}</a>'
-    return escape(text)
+        return f'<a href="{escaped}" title="{escaped}" target="_blank" rel="noopener">{escaped}</a>'
+    return f'<span title="{escaped}">{escaped}</span>'
 
 
 def _is_local_request(request: Request) -> bool:
@@ -361,7 +362,6 @@ def _render_stats_page(data: dict[str, object]) -> str:
     .metric {{ padding: 18px; border-radius: 14px; background: linear-gradient(180deg, #fff, #f9fbfa); border: 1px solid #e4ece8; }}
     .metric .label {{ color: var(--muted); font-size: 0.84rem; text-transform: uppercase; letter-spacing: 0.04em; }}
     .metric .value {{ margin-top: 8px; font-size: 2rem; font-weight: 800; color: var(--accent-strong); }}
-    .metric .sub {{ margin-top: 6px; color: var(--muted); font-size: 0.95rem; }}
     .panel {{ padding: 18px; }}
     .panel h2 {{ margin: 0 0 12px; font-size: 1.1rem; }}
     .bar-row {{ display: grid; gap: 10px; grid-template-columns: 110px 1fr 72px; align-items: center; padding: 6px 0; }}
@@ -371,12 +371,17 @@ def _render_stats_page(data: dict[str, object]) -> str:
     .bar-value, .num {{ text-align: right; font-variant-numeric: tabular-nums; }}
     table {{ width: 100%; border-collapse: collapse; }}
     th, td {{ padding: 10px 8px; border-top: 1px solid var(--border); text-align: left; vertical-align: top; }}
-    th {{ color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }}
+    th {{ color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
     .mini-bar {{ display: block; height: 10px; background: #edf2ef; border-radius: 999px; overflow: hidden; margin-top: 3px; }}
     .mini-bar span {{ display: block; height: 100%; min-width: 4px; background: linear-gradient(90deg, #7cae9e, var(--accent)); border-radius: 999px; }}
     .empty, .empty-cell {{ color: var(--muted); padding: 12px 0; }}
     .source {{ max-width: 520px; word-break: break-word; }}
     .table-wrap {{ overflow-x: auto; }}
+    .ranked-table {{ table-layout: fixed; }}
+    .ranked-table .source {{ max-width: none; }}
+    .ranked-table .status-col {{ width: 76px; }}
+    .ranked-table .num {{ width: 78px; }}
+    .ranked-table .share-col {{ width: 70px; }}
     .hint {{ color: var(--muted); font-size: 0.9em; }}
     .pagination {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-top: 14px; }}
     .page-btn {{ padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-soft, #f9fbfa); color: var(--accent); text-decoration: none; font-weight: 600; font-size: 0.9rem; }}
@@ -396,12 +401,12 @@ def _render_stats_page(data: dict[str, object]) -> str:
         <div class="hero">
             <span class="kicker">Internal dashboard</span>
             <h1>Ask Wol usage dashboard</h1>
-            <p class="lede">A read-only view of validation activity in the local usage database: recent events first, then overall volume and the most common response codes and sources for the last {days} days.</p>
+            <p class="lede">Read-only validation activity for the last {days} days.</p>
         </div>
         <div class="grid">
             <section class="card panel" style="grid-column: span 12;">
                 <h2>All events</h2>
-                <p class="lede">The complete history stored in the usage database, newest first. Sources that are ontology URLs link to the tested document. Hover a status code to see what it means. The visitor column is a salted hash of the IP address; the raw IP is never stored.</p>
+                <p class="lede">Newest first. The visitor column is a salted hash of the IP address; the raw IP is never stored.</p>
                 <div class="table-wrap">
                     <table>
                         <thead><tr><th>Timestamp</th><th>Visitor</th><th>Kind</th><th>Status</th><th>Duration</th><th>Source</th></tr></thead>
@@ -412,9 +417,9 @@ def _render_stats_page(data: dict[str, object]) -> str:
             </section>
 
             <section class="card summary" aria-label="Usage summary">
-                <div class="metric"><div class="label">Events</div><div class="value">{_format_int(total_events)}</div><div class="sub">Validation requests tracked in the window.</div></div>
-                <div class="metric"><div class="label">Unique visitors</div><div class="value">{_format_int(unique_visitors)}</div><div class="sub">Distinct hashed IPs seen in the window.</div></div>
-                <div class="metric"><div class="label">Average duration</div><div class="value">{escape(_format_duration(int(avg_duration) if avg_duration is not None else None))}</div><div class="sub">Average handler time across recorded events.</div></div>
+                <div class="metric"><div class="label">Events</div><div class="value">{_format_int(total_events)}</div></div>
+                <div class="metric"><div class="label">Unique visitors</div><div class="value">{_format_int(unique_visitors)}</div></div>
+                <div class="metric"><div class="label">Average duration</div><div class="value">{escape(_format_duration(int(avg_duration) if avg_duration is not None else None))}</div></div>
             </section>
 
             <section class="card panel" style="grid-column: span 12;">
@@ -425,18 +430,18 @@ def _render_stats_page(data: dict[str, object]) -> str:
             <section class="card panel" style="grid-column: span 6;">
                 <h2>By status</h2>
                 <div class="table-wrap">
-                    <table>
-                        <thead><tr><th>Status</th><th>Meaning</th><th class="num">Events</th><th>Share</th></tr></thead>
+                    <table class="ranked-table">
+                        <thead><tr><th class="status-col">Status</th><th>Notes</th><th class="num">Events</th><th class="share-col">Share</th></tr></thead>
                         <tbody>{status_html}</tbody>
                     </table>
                 </div>
             </section>
 
             <section class="card panel" style="grid-column: span 6;">
-                <h2>Top sources</h2>
+                <h2>Top sources (top 20)</h2>
                 <div class="table-wrap">
-                    <table>
-                        <thead><tr><th>Source</th><th class="num">Events</th><th>Share</th></tr></thead>
+                    <table class="ranked-table">
+                        <thead><tr><th>Source</th><th class="num">Events</th><th class="share-col">Share</th></tr></thead>
                         <tbody>{source_html}</tbody>
                     </table>
                 </div>
