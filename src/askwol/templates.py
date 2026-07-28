@@ -279,10 +279,10 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p>Pre-2010 ontologies (e.g. FOAF, OWL-Time) often use the older
   <a href="https://www.dublincore.org/specifications/dublin-core/dces/" target="_blank" rel="noopener">Dublin Core Elements</a>
   (<code>dc:</code>) properties instead of DCMI Terms - askwol accepts
-  either, since they carry the same meaning. One nuance: Elements 1.1 has a
-  single, generic <code>dc:date</code> property that does not distinguish
-  created from modified, so askwol accepts it as satisfying either (or
-  both) of the two recommended date checks above.</p>
+  either, since they carry the same meaning. One nuance: Elements 1.1's
+  single, generic <code>dc:date</code> property doesn't distinguish created
+  from modified, so askwol accepts it for either (or both) of the two
+  recommended date checks above.</p>
   <div class="tip">Fill in these metadata so that both humans and machines
   can understand the provenance and reuse conditions of your ontology.</div>
   
@@ -464,9 +464,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Adopt an open license",
         "toc_label": "Open license",
         "body": """\
-  <p><span class="tag practice">TDCC guideline</span> Your ontology should be released under an <strong>open license</strong>, and we recommend using the DCMI property <code>dcterms:license</code> for this purpose. To fulfill the principles of Linked Open Data, the adopted license needs to meet the <a href=https://opendefinition.org target="_blank" rel="noopener">Open Definition</a>, that is, “anyone can freely access, use, modify, and share [the ontology] for any purpose (subject, at most, to requirements that preserve provenance and openness).”</p>
-  
-  <p>A license is considered to be open if it is equivalent to the <strong>public domain</strong> or, at most, adds <strong>attribution</strong> or <strong>share-alike</strong> restrictions. A license with non-commercial or no-derivatives clauses is not open. To encourage maximum reuse of your ontology, we recommend adopting one of the two <a href=https://creativecommons.org/cc-licenses/ target="_blank" rel="noopener">Creative Commons</a> licenses listed below.</p>
+  <p><span class="tag practice">TDCC guideline</span> Your ontology should be released under an <strong>open license</strong>; we recommend the DCMI property <code>dcterms:license</code>. To meet the Linked Open Data principles, the license must satisfy the <a href=https://opendefinition.org target="_blank" rel="noopener">Open Definition</a>: “anyone can freely access, use, modify, and share [the ontology] for any purpose (subject, at most, to requirements that preserve provenance and openness).”</p>
+  <p>A license is open if it's equivalent to the <strong>public domain</strong>, or at most adds <strong>attribution</strong> or <strong>share-alike</strong> restrictions; non-commercial or no-derivatives clauses are not open. For maximum reuse, we recommend one of the two <a href=https://creativecommons.org/cc-licenses/ target="_blank" rel="noopener">Creative Commons</a> licenses below.</p>
   <ol>
     <li>
       <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener">Creative Commons Zero (CC0)</a> (public domain); IRI: <code>https://creativecommons.org/publicdomain/zero/1.0/</code>
@@ -787,14 +786,12 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
 &lt;#biology&gt; a skos:Concept .         # concept, belongs in a SKOS scheme
 &lt;#Monday&gt; a &lt;#DayOfWeek&gt; .        # named individual, fine to keep here</pre>
   <div class="tip">askwol only flags <code>skos:Concept</code> instances defined
-  in your own namespace; a full-blown concept scheme has usually outgrown the
-  schema file and is better managed on its own. Named individuals are left
-  alone: many ontologies deliberately define a small, fixed set of individuals
-  alongside their schema (days of week, units of measure, and similar
-  controlled vocabularies, as OWL-Time does), which is a common, legitimate
-  modeling pattern rather than accidental instance data, so flagging every
-  individual would be more noise than signal. External terms are ignored
-  either way. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/non_ontology_terms.ttl" target="_blank" rel="noopener">SHACL shapes</a>.</div>
+  in your own namespace; a full concept scheme has usually outgrown the schema
+  file and is better managed on its own. Named individuals are left alone:
+  many ontologies deliberately define a small, fixed set of them alongside
+  their schema (days of week, units of measure, as OWL-Time does), a
+  legitimate modeling pattern rather than accidental instance data. External
+  terms are ignored either way. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/non_ontology_terms.ttl" target="_blank" rel="noopener">SHACL shapes</a>.</div>
 """,
     },
     {
@@ -887,11 +884,10 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     class should have both. A missing <code>@nl</code> on one subject
     is probably an oversight.</li>
     <li><strong>No tags used anywhere.</strong> If your ontology has labels
-    or comments but none of them carry a language tag at all, askwol flags
-    this as a warning too. Plain strings are valid RDF, but untagged text is
-    harder to localise or filter by language. An ontology with no labels or
-    comments in the first place isn&rsquo;t flagged, there is nothing to
-    tag.</li>
+    or comments but none carry a language tag, askwol warns too: plain
+    strings are valid RDF, but untagged text is harder to localise or filter
+    by language. An ontology with no labels or comments at all isn&rsquo;t
+    flagged - there is nothing to tag.</li>
   </ul>
   <div class="warn">SPARQL filters like
   <code>FILTER(LANG(?label) = "en")</code> return nothing for untagged
@@ -1018,9 +1014,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "toc_label": "Documentation",
         "body": """\
   <p>Good <code>rdfs:label</code> and <code>rdfs:comment</code> annotations pay
-  off when you turn them into a browsable HTML page. A documentation generator
-  reads your Turtle file and produces a page humans can read, ready to serve
-  alongside the RDF via <a href="#server-config">content negotiation</a>.</p>
+  off once turned into a browsable HTML page: a documentation generator reads
+  your Turtle file and produces one, ready to serve alongside the RDF via
+  <a href="#server-config">content negotiation</a>.</p>
   <p><strong><a href="https://github.com/RDFLib/pyLODE" target="_blank" rel="noopener">pyLODE</a></strong>
   is a lightweight Python tool: a single command turns a Turtle file into one
   static HTML page that needs no server or JavaScript to view

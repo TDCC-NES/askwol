@@ -15,7 +15,7 @@
 
 ## Why askwol?
 
-The W3C originally planned to call their Web Ontology Language **WOL**. Tim Finin [proposed rearranging it to **OWL**](http://lists.w3.org/Archives/Public/www-webont-wg/2001Dec/0169.html) because *"owls are associated with wisdom."* Scrambling three letters is, of course, exactly what [Owl](https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)) from Milne's *Winnie-the-Pooh* is famous for. As Dave de Roure [first pointed out to the working group](https://lists.w3.org/Archives/Public/www-webont-wg/2002Sep/0301.html), Owl spells his own name **"Wol"**: *"wise though he was in many ways, able to read and write and spell his own name WOL, yet somehow went all to pieces over delicate words like MEASLES and BUTTEREDTOAST"* (Ch. 4, 1926).
+The W3C originally planned to call their Web Ontology Language **WOL**. Tim Finin [proposed rearranging it to **OWL**](http://lists.w3.org/Archives/Public/www-webont-wg/2001Dec/0169.html), since *"owls are associated with wisdom."* Fittingly, [Owl](https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)) from Milne's *Winnie-the-Pooh* [famously misspells his own name](https://lists.w3.org/Archives/Public/www-webont-wg/2002Sep/0301.html) as **"Wol."**
 
 So the name went WOL → OWL → and, for a tool that *asks* Owl for a wise second opinion on your ontology, back to **askwol**.
 
@@ -141,9 +141,6 @@ Caddy will obtain a Let's Encrypt certificate automatically. Updates:
 cd /opt/askwol && git pull && docker compose up -d --build --force-recreate
 ```
 
-`--force-recreate` guarantees the new image replaces the running container.
-Logs: `docker compose logs -f askwol`.
-
 #### Serving under a sub-path
 
 If askwol sits at the root of a domain (`https://askwol.example.com/`), nothing
@@ -151,8 +148,8 @@ extra is needed.
 
 If you serve it under a path prefix (e.g. `https://server/askwol/`), set
 `ASKWOL_ROOT_PATH` to that prefix. askwol then rewrites its internal navigation
-links to include the prefix (so Home, the publishing guide, the form, and the API
-docs all resolve correctly, without relying on JavaScript or a trailing slash).
+links to include the prefix, so every internal link resolves correctly without
+relying on JavaScript or a trailing slash.
 
 ```yaml
 # docker-compose.override.yml, or an .env file
@@ -170,8 +167,6 @@ server.example.com {
     }
 }
 ```
-
-Leave `ASKWOL_ROOT_PATH` empty for a root deployment.
 
 **Security notes:** askwol fetches arbitrary URLs (namespace resolution + URL upload). Outbound requests to private, loopback, and other internal IP ranges are blocked automatically (SSRF guard in [`resolver.py`](src/askwol/resolver.py)). Each client IP is capped at `ASKWOL_RATE_LIMIT` requests per minute (default 20; set to `0` to disable) on `/validate` and `/api/validate`. Uploads are capped at 20 MB in the app itself; also enforce a request-size limit on the reverse proxy as defense-in-depth.
 
@@ -227,13 +222,12 @@ Turtle (`.ttl`), RDF/XML (`.rdf`, `.owl`), JSON-LD (`.jsonld`), N-Triples (`.nt`
 pytest tests/ -v
 ```
 
-The test suite covers every automated check on both good and bad inputs, the
-HTML report rendering, the FastAPI routes via `TestClient`, and a pinned
-end-to-end smoke test on [`html/ontologies/broken.ttl`](html/ontologies/broken.ttl) that
-fails loudly if any single check ever stops detecting issues. The clean
-counterpart is [`html/ontologies/sample.ttl`](html/ontologies/sample.ttl).
-Drop either one into the upload form at http://localhost:8000/ to see the
-report end to end.
+The test suite covers every check on good and bad inputs, HTML report
+rendering, and the FastAPI routes via `TestClient`, plus a pinned smoke test
+on [`html/ontologies/broken.ttl`](html/ontologies/broken.ttl) that fails if any
+check ever stops detecting issues (clean counterpart:
+[`html/ontologies/sample.ttl`](html/ontologies/sample.ttl)). Drop either into
+the upload form at http://localhost:8000/ to see a full report.
 
 ## License
 
