@@ -280,8 +280,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <a href="https://www.dublincore.org/specifications/dublin-core/dces/" target="_blank" rel="noopener">Dublin Core Elements</a>
   (<code>dc:</code>) properties instead of DCMI Terms - askwol accepts
   either, since they carry the same meaning. One nuance: Elements 1.1 has a
-  single, generic <code>dc:date</code> property with no separate
-  created/modified split, so askwol accepts it as satisfying either (or
+  single, generic <code>dc:date</code> property that does not distinguish
+  created from modified, so askwol accepts it as satisfying either (or
   both) of the two recommended date checks above.</p>
   <div class="tip">Fill in these metadata so that both humans and machines
   can understand the provenance and reuse conditions of your ontology.</div>
@@ -338,9 +338,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   addition; OWL 2 does not require import targets to be checked at
   authoring time.</p>
   <div class="tip">A broken import (a dead link, a renamed URL, a server
-  that no longer serves RDF) silently degrades reasoning for anyone who
-  loads your ontology. Nothing reports the failure back to you unless a
-  tool checks it explicitly.</div>
+  that no longer serves RDF) degrades reasoning for anyone who loads your
+  ontology, with nothing reporting the failure unless a tool checks it
+  explicitly.</div>
   <div class="tip">askwol only checks that declared imports resolve; it
   never merges their content into the checks that run on your ontology.
   Every other check, including the reasoner, runs on your ontology document
@@ -428,8 +428,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   IRI string, per
   <a href="https://www.rfc-editor.org/rfc/rfc3987" target="_blank" rel="noopener">RFC 3987</a>,
   and OWL never treats two IRIs as the same resource unless you assert
-  <code>owl:sameAs</code> yourself. Mixing schemes silently breaks joins that
-  rely on exact IRI matches, including SPARQL and any tool that does string
+  <code>owl:sameAs</code> yourself. Mixing schemes breaks joins that rely on
+  exact IRI matches, including SPARQL and any tool that does string
   comparison on URIs.</p>
 
   <h3>The legacy problem</h3>
@@ -582,7 +582,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   </ul>
   <div class="warn">When reusing a term, use the <em>exact</em>
   IRI from the source vocabulary. A typo like <code>foaf:nme</code> instead
-  of <code>foaf:name</code> silently breaks interoperability.</div>
+  of <code>foaf:name</code> breaks interoperability.</div>
   <div class="tip">askwol looks up every term you reuse from an external
   vocabulary and reports the ones that are not actually defined there. This
   catches typos like <code>foaf:nme</code> and made-up terms like
@@ -679,8 +679,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <code>has</code> or <code>is</code> prefix, or an <code>of</code>/<code>by</code>
   form, gives a single unambiguous reading: <code>hasWife</code>,
   <code>wifeOf</code>, <code>lovedBy</code>. This is a readability convention,
-  not something askwol enforces; askwol only checks the leading upper/lower
-  case, via <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/term_inventory.ttl" target="_blank" rel="noopener">SHACL shapes</a>.</div>
+  not something askwol enforces; askwol only checks the case of the first
+  letter, via <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/term_inventory.ttl" target="_blank" rel="noopener">SHACL shapes</a>.</div>
   <div class="warn">Mixing conventions (a lowercase class like
   <code>person</code>, or an uppercase property like <code>HasName</code>,
   with no digit following the capital) makes an ontology harder to read and
@@ -761,8 +761,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
 &lt;#born&gt; rdfs:range xsd:date .
 "42"^^xsd:integer</pre>
   <div class="warn">A misspelled datatype (<code>xsd:stirng</code>,
-  <code>xsd:dateTiem</code>) is silently treated as a brand-new, unknown
-  datatype. Filters and validators that expect the real datatype then skip your
+  <code>xsd:dateTiem</code>) is treated as a brand-new, unknown datatype.
+  Filters and validators that expect the real datatype then skip your
   values. askwol lists every datatype it sees and flags the ones it does not
   recognize.</div>
 """,
@@ -920,8 +920,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <a href="/#reasoner">Reasoner checks</a> section of the report:</p>
   <ul>
     <li><strong>Ontology consistency</strong>: the ontology as a whole
-    has a possible model. This is the overall pass/fail verdict; it fails
-    when at least one individual is inconsistent.</li>
+    has a possible model. This is the overall verdict; it fails when at
+    least one individual is inconsistent.</li>
     <li><strong>Inconsistent individuals</strong>: specific named
     individuals that violate a class restriction (e.g. a <code>Person</code>
     with two values for a functional property, or membership in two
@@ -1081,7 +1081,7 @@ _CLUSTER_NUMBERS = {c["key"]: i + 1 for i, c in enumerate(CHECK_CATEGORIES)}
 # API docs, which already speak Markdown.
 CHECKS: list[dict[str, str]] = [
     {"report_anchor": "ontology-metadata", "title": "Ontology metadata", "guide_anchor": "metadata", "category": "basics",
-     "description": "a SHACL check on the ontology header: title, description, creator, and version are required; created/modified dates and publisher are recommended."},
+     "description": "a SHACL check on the ontology header: title, description, creator, and version are required; created and modified dates and publisher are recommended."},
     {"report_anchor": "imports", "title": "Imports", "guide_anchor": "imports", "category": "basics",
      "description": "every `owl:imports` target declared in the ontology header is fetched over HTTP and parsed as RDF, the same way a reasoner would follow it."},
     {"report_anchor": "iri-strategy", "title": "IRI strategy", "guide_anchor": "iri-strategy", "category": "basics",
@@ -1150,13 +1150,13 @@ assert _seen_categories == [c["key"] for c in CHECK_CATEGORIES], (
 
 # Every check must carry a non-empty description - it's the only place this
 # text is written, feeding both the landing page and the API docs. A new
-# check added without one would otherwise render a silent blank/missing
-# bullet instead of failing, so this makes forgetting it impossible: the
-# module fails to import (caught by the test suite) until it's filled in.
+# check added without one would otherwise render a blank or missing bullet
+# instead of failing, so this makes forgetting it impossible: the module
+# fails to import (caught by the test suite) until it's filled in.
 _MISSING_DESCRIPTIONS = [c["report_anchor"] for c in CHECKS if not c.get("description", "").strip()]
 assert not _MISSING_DESCRIPTIONS, (
     "Every entry in CHECKS must have a non-empty 'description' (shown on the "
-    f"landing page and in the API docs). Missing/empty for: {_MISSING_DESCRIPTIONS}"
+    f"landing page and in the API docs). Missing or empty for: {_MISSING_DESCRIPTIONS}"
 )
 
 

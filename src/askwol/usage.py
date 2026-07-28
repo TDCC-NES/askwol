@@ -93,7 +93,7 @@ def record(
     duration_ms: int | None = None,
     ip: str | None = None,
 ) -> None:
-    """Insert a usage event. Silent on failure - tracking must never break the app."""
+    """Insert a usage event. Failures are swallowed - tracking must never break the app."""
     if _DISABLED:
         return
     try:

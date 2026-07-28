@@ -174,9 +174,9 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         # Whole row jumps to the matching section anchor when clicked.
         # Scrolling is done explicitly (not just via location.hash) because
         # setting the hash to its current value is a no-op in browsers - it
-        # would silently fail to (re)scroll if the user is already on that
-        # hash. <details> blocks are deliberately left as-is (collapsed
-        # stays collapsed) so clicking an overview row never force-expands
+        # would fail to (re)scroll if the user is already on that hash.
+        # <details> blocks are deliberately left as-is (collapsed stays
+        # collapsed) so clicking an overview row never force-expands
         # content the user didn't ask to see.
         num = _CHECK_NUMBERS.get(anchor, "")
         prefix = f'<span class="num">{num}</span> ' if num else ""
@@ -255,7 +255,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             if dr.status == Status.FAIL:
                 fails = sum(1 for c in dr.issues if c.status == Status.FAIL)
                 return [_row('domains-ranges', _fail, 'Domains &amp; ranges',
-                             f'{fails} property(ies) with a domain/range problem')]
+                             f'{fails} property(ies) with a domain or range problem')]
             if dr.status == Status.WARN:
                 return [_row('domains-ranges', _warn, 'Domains &amp; ranges',
                              f'{len(dr.issues)} property(ies) missing a domain or range')]
@@ -383,7 +383,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                              f'{lang_str} &middot; {issue_count} issue{"s" if issue_count != 1 else ""}')]
             if lt and lt.status == Status.WARN:
                 return [_row('language-tags', _warn, 'Language tag consistency',
-                             'labels/definitions present but none carry a language tag')]
+                             'labels or definitions present but none carry a language tag')]
             return [_row('language-tags', _info, 'Language tag consistency', 'not applicable')]
         if report_anchor == 'non-ontology-terms':
             sk = report.non_ontology_terms
@@ -678,7 +678,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<section class="section">')
         parts.append(_section_heading('iri-scheme', 'IRI scheme (http vs https)', sc_status, sc_label))
         parts.append(_guide_link('iri-scheme'))
-        parts.append('<p class="subtitle">In RDF, <code>http://example.org/X</code> and <code>https://example.org/X</code> are <strong>different IRIs</strong>. Within one ontology, each host should appear under exactly one scheme. Mixing schemes silently breaks SPARQL joins, <code>owl:sameAs</code>, and any tool that compares URIs as strings.</p>')
+        parts.append('<p class="subtitle">In RDF, <code>http://example.org/X</code> and <code>https://example.org/X</code> are <strong>different IRIs</strong>. Within one ontology, each host should appear under exactly one scheme. Mixing schemes breaks SPARQL joins, <code>owl:sameAs</code>, and any tool that compares URIs as strings.</p>')
 
         if sch.status == Status.SKIP:
             parts.append(_status_subtitle('info', sch.message or 'no http(s) IRIs found'))
@@ -1189,7 +1189,11 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show all issues ({n_issues})</summary>')
         parts.append('<table><tr><th>Subject</th><th>Property</th><th>Issue</th><th>Has</th><th>Expected</th></tr>')
         for i in lt.issues:
-            subject = '<em>(blank node)</em>' if i.is_blank_node else f'<code>{escape(i.subject)}</code>'
+            if i.is_blank_node or not i.subject_uri:
+                subject = '<em>(blank node)</em>' if i.is_blank_node else f'<code>{escape(i.subject)}</code>'
+            else:
+                s_iri = escape(i.subject_uri)
+                subject = f'<a href="{s_iri}" target="_blank" rel="noopener" title="{s_iri}"><code>{escape(i.subject)}</code></a>'
             has = ", ".join(f'<code>{escape(l)}</code>' for l in i.languages_found) or '&mdash;'
             expected = ", ".join(f'<code>{escape(l)}</code>' for l in i.languages_expected)
             parts.append(
@@ -1278,8 +1282,9 @@ let errShown = false;
 function fail(msg) { showError(msg); errShown = true; }
 
 // Load Mermaid via a dynamic import so a blocked or failed load can be caught
-// and reported. A static top-level import would abort the whole script
-// silently, leaving the raw diagram source on screen with no explanation.
+// and reported. A static top-level import would abort the whole script with
+// no visible error, leaving the raw diagram source on screen with no
+// explanation.
 let mermaid;
 try {
   mermaid = (await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs")).default;

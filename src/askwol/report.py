@@ -729,7 +729,7 @@ def _overview_line(report: ValidationReport, anchor: str) -> tuple[str, str] | N
             return "info", "no object or datatype properties"
         if dr.status == S.FAIL:
             fails = sum(1 for c in dr.issues if c.status == S.FAIL)
-            return "fail", f"{fails} property(ies) with a domain/range problem"
+            return "fail", f"{fails} property(ies) with a domain or range problem"
         if dr.status == S.WARN:
             return "warn", f"{len(dr.issues)} missing a domain or range"
         return "ok", f"{dr.total_properties} property(ies), all sound"
@@ -779,7 +779,7 @@ def _overview_line(report: ValidationReport, anchor: str) -> tuple[str, str] | N
             langs = ", ".join(lt.languages_used)
             return "warn", f"{langs}, {len(lt.issues)} issue(s)"
         if lt.status == Status.WARN:
-            return "warn", "labels/definitions present but none carry a language tag"
+            return "warn", "labels or definitions present but none carry a language tag"
         langs = ", ".join(lt.languages_used)
         return "ok", f"{langs}, consistent"
     if anchor == "reasoner":
@@ -1106,7 +1106,7 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
         console.print(lang_table)
     elif lt and lt.status == Status.WARN:
         console.print()
-        console.print("[yellow]⚠ Language tags  -  labels/definitions present but none carry a language tag[/yellow]")
+        console.print("[yellow]⚠ Language tags  -  labels or definitions present but none carry a language tag[/yellow]")
 
     # Reasoner checks
     reasoner = report.reasoner

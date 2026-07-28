@@ -41,9 +41,9 @@ from askwol.term_validator import validate_terms
 # for a root deployment.
 ROOT_PATH = os.environ.get("ASKWOL_ROOT_PATH", "").rstrip("/")
 
-# Generous cap for ontology uploads - real Turtle/RDF-XML/JSON-LD files are
-# almost always a few MB at most. Bounds memory/disk use against oversized
-# or abusive uploads.
+# Generous cap for ontology uploads - real Turtle, RDF/XML, or JSON-LD files
+# are almost always a few MB at most. Bounds memory and disk use against
+# oversized or abusive uploads.
 MAX_UPLOAD_SIZE = 20 * 1024 * 1024
 
 # Per-IP throttle for the two validation endpoints, since each request can
@@ -78,7 +78,7 @@ def _client_ip(request: Request) -> str | None:
     documented in docker-compose.yml, that peer is always the proxy itself
     (or the Docker gateway) - the same value for every visitor, which is
     why every event ends up with the same ip_hash on the stats page. When
-    the peer is trusted (private/loopback), prefer the address the proxy
+    the peer is trusted (private or loopback), prefer the address the proxy
     appended to X-Forwarded-For: the rightmost entry is the one our own
     proxy added, while anything to its left could be forged by the
     original client and is ignored.
@@ -124,8 +124,8 @@ app = FastAPI(
         "open license conformance (Open Definition), language-tag "
         "consistency, unused prefix declarations, owl:imports "
         "resolution, IRI strategy consistency (hash vs slash), IRI scheme "
-        "consistency (http vs https), term naming and inventory, domain/range "
-        "declarations, recognized datatypes, non-ontology terms, and "
+        "consistency (http vs https), term naming and inventory, domain and "
+        "range declarations, recognized datatypes, non-ontology terms, and "
         "lightweight OWL RL reasoner checks (ontology consistency, "
         "inconsistent individuals, and unsatisfiable classes)."
     ),
@@ -542,15 +542,15 @@ async def validate(
 
 
 # Recognized ontology file extensions. Used only as a narrow escape hatch for
-# generic/absent Content-Type responses (see _validate_url below) - never as
-# the primary signal for what counts as RDF.
+# generic or absent Content-Type responses (see _validate_url below) - never
+# as the primary signal for what counts as RDF.
 RDF_FILE_EXTENSIONS = frozenset({".ttl", ".rdf", ".owl", ".rdfs", ".jsonld", ".nt", ".n3", ".xml"})
 
 
 async def _validate_url(url: str) -> HTMLResponse:
     parsed_url = urlparse(url)
     if parsed_url.scheme not in ("http", "https"):
-        return HTMLResponse("<p>Only http/https URLs are supported.</p>", status_code=400)
+        return HTMLResponse("<p>Only http and https URLs are supported.</p>", status_code=400)
 
     # Ask the server for RDF via content negotiation. Many namespace URIs
     # return HTML by default and only serve RDF when explicitly asked.
@@ -580,14 +580,14 @@ async def _validate_url(url: str) -> HTMLResponse:
                 "application/json": ".jsonld",
                 "application/n-triples": ".nt",
                 # Note: text/plain is intentionally NOT mapped. Many servers (e.g.
-                # raw.githubusercontent.com) serve Turtle/RDF as text/plain, so we
+                # raw.githubusercontent.com) serve Turtle or RDF as text/plain, so we
                 # fall back to the URL path extension instead of assuming N-Triples.
                 "text/n3": ".n3",
             }.get(ctype)
 
             # This is direct user input ("validate this URL as my ontology"), so be
             # strict about what counts as RDF: trust a recognized media type above,
-            # or a generic/absent Content-Type whose URL path ends in a known
+            # or a generic or absent Content-Type whose URL path ends in a known
             # ontology file extension (the raw.githubusercontent.com case). Anything
             # else is rejected outright rather than optimistically parsed - some
             # servers redirect namespace URIs to catalog/metadata endpoints that

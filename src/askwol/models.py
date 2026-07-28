@@ -71,6 +71,9 @@ class LangTagIssue(BaseModel):
     """A single language-tag consistency issue on one subject+property."""
 
     subject: str
+    subject_uri: str = ""
+    """Full IRI of the subject, empty for blank nodes. `subject` is the
+    shortened prefix:local form used for display."""
     property: str
     issue_type: str  # "missing_tag" or "missing_language"
     languages_found: list[str] = Field(default_factory=list)
@@ -323,7 +326,7 @@ class TermInventoryReport(BaseModel):
 
 
 class DomainRangeCheck(BaseModel):
-    """Domain/range completeness and correctness for one property."""
+    """Domain and range completeness and correctness for one property."""
 
     term: str
     display_name: str
@@ -334,7 +337,7 @@ class DomainRangeCheck(BaseModel):
     message: str | None = None
     deprecated: str | None = None
     """Set to the deprecation marker (e.g. ``owl:DeprecatedClass``) when this
-    property is marked deprecated; domain/range issues are not raised for it."""
+    property is marked deprecated; domain and range issues are not raised for it."""
 
 
 class DomainRangeReport(BaseModel):

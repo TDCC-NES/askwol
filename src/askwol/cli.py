@@ -90,8 +90,8 @@ async def _run_check(
     ns_check_map = {c.uri: c for c in ns_checks}
 
     # 3. Validate terms per namespace (skip the ontology's own namespace: its
-    # terms are already covered by the internal-terms/term-inventory checks,
-    # not "externally reused" terms).
+    # terms are already covered by the internal-terms and term-inventory
+    # checks, not "externally reused" terms).
     for prefix, uri in active_ns.items():
         ns_check = ns_check_map[uri]
         local_names = parsed.terms_by_namespace.get(prefix, set())

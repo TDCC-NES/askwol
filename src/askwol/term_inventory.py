@@ -328,7 +328,7 @@ def check_datatypes(graph: Graph) -> DatatypeReport:
     }
 
     # 1. Ranges of datatype properties. A range that is actually a class is a
-    #    domain/range problem, not a datatype; leave it to that check.
+    #    domain or range problem, not a datatype; leave it to that check.
     for prop in datatype_props:
         for rng in graph.objects(prop, RDFS.range):
             if isinstance(rng, URIRef) and not _is_class_value(graph, rng):

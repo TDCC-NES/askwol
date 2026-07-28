@@ -88,7 +88,7 @@ def test_legacy_dublin_core_elements_satisfy_required_checks():
 
 def test_legacy_dc_date_satisfies_both_created_and_modified():
     """Dublin Core Elements 1.1 has one generic dc:date property, with no
-    separate created/modified split - it should count as an alternative for
+    separate created-and-modified split - it should count as an alternative for
     both recommended date checks."""
     g = _base_graph()
     ont = EX[""]

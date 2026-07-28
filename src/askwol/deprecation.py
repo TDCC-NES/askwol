@@ -1,8 +1,9 @@
 """Detect whether a term is marked deprecated by the vocabulary that defines it.
 
 Shared by the checks that should not flag issues about a term once it is
-deprecated (naming conventions, domain/range, label/comment documentation,
-language tag consistency), and by `term_validator` to note when a reused
+deprecated (naming conventions, domain and range, label and comment
+documentation, language tag consistency), and by `term_validator` to note
+when a reused
 external term is deprecated upstream. Three conventions are recognized,
 since there is no single official one:
 

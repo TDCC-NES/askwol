@@ -114,7 +114,7 @@ class ShaclResult:
 # Per-data-graph cache of run_shapes() results, keyed by shapes_file. Some
 # check modules validate the same shapes file twice against the same graph
 # for different shapes within it (e.g. term_inventory.ttl holds both naming
-# and domain/range shapes, checked by two separate public functions) -
+# and domain-and-range shapes, checked by two separate public functions) -
 # without this, that reruns the full pyshacl.validate() pipeline twice.
 # WeakKeyDictionary keys on the graph's identity and auto-evicts the entry
 # once the graph is garbage collected (each validation request builds its

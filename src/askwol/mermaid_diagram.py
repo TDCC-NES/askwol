@@ -57,7 +57,7 @@ def build_mermaid(graph: Graph, namespaces: dict[str, str]) -> str:
         if isinstance(s, URIRef):
             classes.add(str(s))
 
-    # Collect properties with domain/range
+    # Collect properties with a domain or range
     properties: list[tuple[str, str | None, str | None, str]] = []  # (name, domain, range, kind)
     seen_props: set[str] = set()
     for pred_type, kind in [(OWL.ObjectProperty, "obj"), (OWL.DatatypeProperty, "data")]:
@@ -71,14 +71,14 @@ def build_mermaid(graph: Graph, namespaces: dict[str, str]) -> str:
             rng = ranges[0] if ranges else None
             properties.append((prop_name, domain, rng, kind))
             seen_props.add(str(s))
-            # Ensure domain/range classes appear even if not explicitly typed
+            # Ensure domain and range classes appear even if not explicitly typed
             if domain:
                 classes.add(domain)
             if rng and kind == "obj":
                 classes.add(rng)
 
-    # Also pick up plain rdf:Property (used by Dublin Core, schema.org, etc.)
-    # — infer kind from the range URI (xsd:* or rdfs:Literal => data, else obj).
+    # Also pick up plain rdf:Property (used by Dublin Core, schema.org, etc.).
+    # Infer kind from the range URI (xsd:* or rdfs:Literal => data, else obj).
     xsd_ns = "http://www.w3.org/2001/XMLSchema#"
     rdfs_literal = "http://www.w3.org/2000/01/rdf-schema#Literal"
     for s, _, _ in graph.triples((None, RDF.type, RDF.Property)):

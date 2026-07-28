@@ -132,6 +132,7 @@ def check_lang_tags(graph: Graph, ns_map: dict[str, str]) -> LangTagReport:
             if None in subj_langs:
                 issues.append(LangTagIssue(
                     subject=subj_short,
+                    subject_uri="" if is_bnode else subj_uri,
                     property=prop_short,
                     issue_type="missing_tag",
                     languages_found=sorted(actual_langs),
@@ -147,6 +148,7 @@ def check_lang_tags(graph: Graph, ns_map: dict[str, str]) -> LangTagReport:
                 # uses tags (otherwise the "missing_tag" issue covers it)
                 issues.append(LangTagIssue(
                     subject=subj_short,
+                    subject_uri="" if is_bnode else subj_uri,
                     property=prop_short,
                     issue_type="missing_language",
                     languages_found=sorted(actual_langs),
