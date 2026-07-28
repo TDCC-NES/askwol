@@ -500,15 +500,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     </li>
   </ul>
 
+  <p>Declare it with <code>dcterms:license</code> in the ontology header:</p>
   <pre>&lt;https://example.org/my-ontology&gt; a owl:Ontology ;
-    dcterms:title "My Ontology"@en ;
-    dcterms:description "What this ontology is about."@en ;
-    dcterms:creator "Example Team" ;
-    dcterms:license &lt;https://creativecommons.org/publicdomain/zero/1.0/&gt; ;
-    dcterms:created "2026-04-20"^^xsd:date ;
-    dcterms:publisher "Example Institute" ;
-    owl:versionInfo "1.0" .</pre>
-  
+    dcterms:license &lt;https://creativecommons.org/publicdomain/zero/1.0/&gt; .</pre>
   <div class="tip">askwol checks each declared license against the Open Definition's <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of conformant licenses</a>. It will return an error if the ontology license is missing or not recognized as open. It will give a warning if the license is open but not well suited for ontologies, or if more than one license is declared (even if each one individually would be fine).</div>
 """,
     },
