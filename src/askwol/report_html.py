@@ -905,6 +905,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     skipped_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.SKIP]
     if failed_terms_flat:
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Terms not found in their vocabulary ({len(failed_terms_flat)})</summary>')
+        parts.append('<p style="font-size:0.85em;color:#666;margin:0.5em 0;">Some vocabularies redirect an unresolvable term&rsquo;s IRI to a general documentation page, which can coincidentally define a similarly named term under a different namespace. The IRI below is what askwol actually checked, not necessarily where the link redirects to.</p>')
         parts.append('<table><tr><th>Term</th><th>Prefix</th><th>Full IRI</th></tr>')
         for ns, t in failed_terms_flat:
             t_iri = escape(t.term_uri)
