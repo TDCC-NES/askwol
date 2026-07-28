@@ -71,8 +71,19 @@ Exit codes: `0` all pass, `1` issues found.
 
 ### Web UI
 
+Run the Web UI locally
+
+With the virtual environment activated:
+
 ```bash
-.venv/bin/uvicorn askwol.web:app --reload --port 8000
+python -m uvicorn askwol.web:app --port 8000
+```
+
+Open http://127.0.0.1:8000.
+
+For development with automatic reloading:
+```bash
+python -m uvicorn askwol.web:app --reload --reload-dir src --port 8000
 ```
 
 Open http://127.0.0.1:8000/. Endpoints: `GET /` (upload form), `POST /validate` (HTML report), `POST /api/validate` (JSON), `GET /guide` (publishing guide), `GET /health`, `GET /docs` (Swagger / OpenAPI).
