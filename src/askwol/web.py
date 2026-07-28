@@ -193,6 +193,19 @@ def _format_ts(ts: object) -> str:
     return text
 
 
+def _source_link(source: object) -> str:
+    """Render a usage-log source as a link to the tested ontology when it is
+    an http(s) URL; anything else (an uploaded filename, a placeholder like
+    "(no input)") is shown as plain text."""
+    text = str(source) if source is not None else ""
+    if not text:
+        return ""
+    if urlparse(text).scheme in ("http", "https"):
+        escaped = escape(text)
+        return f'<a href="{escaped}" target="_blank" rel="noopener">{escaped}</a>'
+    return escape(text)
+
+
 def _is_local_request(request: Request) -> bool:
     host = (request.url.hostname or "").lower()
     client_host = (request.client.host if request.client else "").lower()
@@ -269,7 +282,7 @@ def _render_stats_page(data: dict[str, object]) -> str:
         count = int(row["n"])
         source_rows.append(
             "<tr>"
-            f"<td class=\"source\">{escape(str(row['source']))}</td>"
+            f"<td class=\"source\">{_source_link(row['source'])}</td>"
             f"<td class=\"num\">{_format_int(count)}</td>"
             f"<td><span class=\"mini-bar\"><span style=\"width:{_stats_bar(count, max_source)}\"></span></span></td>"
             "</tr>"
@@ -296,7 +309,7 @@ def _render_stats_page(data: dict[str, object]) -> str:
             f"<td>{escape(str(row['kind']))}</td>"
             f"<td>{status_cell}</td>"
             f"<td>{escape(_format_duration(row.get('duration_ms')))}</td>"
-            f"<td class=\"source\">{escape(str(row['source']) if row['source'] is not None else '')}</td>"
+            f"<td class=\"source\">{_source_link(row['source'])}</td>"
             "</tr>"
         )
     all_html = "".join(all_rows) or '<tr><td colspan="6" class="empty-cell">No database entries yet.</td></tr>'
@@ -383,9 +396,21 @@ def _render_stats_page(data: dict[str, object]) -> str:
         <div class="hero">
             <span class="kicker">Internal dashboard</span>
             <h1>Ask Wol usage dashboard</h1>
-            <p class="lede">A read-only view of validation activity in the local usage database. The page shows overall volume, recent traffic, and the most common response codes and sources for the last {days} days.</p>
+            <p class="lede">A read-only view of validation activity in the local usage database: recent events first, then overall volume and the most common response codes and sources for the last {days} days.</p>
         </div>
         <div class="grid">
+            <section class="card panel" style="grid-column: span 12;">
+                <h2>All events</h2>
+                <p class="lede">The complete history stored in the usage database, newest first. Sources that are ontology URLs link to the tested document. Hover a status code to see what it means. The visitor column is a salted hash of the IP address; the raw IP is never stored.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Timestamp</th><th>Visitor</th><th>Kind</th><th>Status</th><th>Duration</th><th>Source</th></tr></thead>
+                        <tbody>{all_html}</tbody>
+                    </table>
+                </div>
+                {pagination_html}
+            </section>
+
             <section class="card summary" aria-label="Usage summary">
                 <div class="metric"><div class="label">Events</div><div class="value">{_format_int(total_events)}</div><div class="sub">Validation requests tracked in the window.</div></div>
                 <div class="metric"><div class="label">Unique visitors</div><div class="value">{_format_int(unique_visitors)}</div><div class="sub">Distinct hashed IPs seen in the window.</div></div>
@@ -415,18 +440,6 @@ def _render_stats_page(data: dict[str, object]) -> str:
                         <tbody>{source_html}</tbody>
                     </table>
                 </div>
-            </section>
-
-            <section class="card panel" style="grid-column: span 12;">
-                <h2>All events</h2>
-                <p class="lede">The complete history stored in the usage database, newest first. Hover a status code to see what it means. The visitor column is a salted hash of the IP address; the raw IP is never stored.</p>
-                <div class="table-wrap">
-                    <table>
-                        <thead><tr><th>Timestamp</th><th>Visitor</th><th>Kind</th><th>Status</th><th>Duration</th><th>Source</th></tr></thead>
-                        <tbody>{all_html}</tbody>
-                    </table>
-                </div>
-                {pagination_html}
             </section>
         </div>
     </div>
