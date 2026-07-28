@@ -111,21 +111,14 @@ def test_schema_license_predicate_is_checked():
     assert len(report.checks) == 1
 
 
-def test_non_uri_literal_license_fails():
+@pytest.mark.parametrize("license_value", [
+    Literal("All rights reserved"),
+    URIRef("https://example.org/my-custom-license"),
+])
+def test_unknown_license_fails(license_value):
     g = Graph()
     g.add((ONT, RDF.type, OWL.Ontology))
-    g.add((ONT, DCTERMS.license, Literal("All rights reserved")))
-    report = check_license(g)
-    assert report.status == Status.FAIL
-    check = report.checks[0]
-    assert check.is_open is False
-    assert check.name == "Unknown non-open license"
-
-
-def test_unknown_license_iri_fails():
-    g = Graph()
-    g.add((ONT, RDF.type, OWL.Ontology))
-    g.add((ONT, DCTERMS.license, URIRef("https://example.org/my-custom-license")))
+    g.add((ONT, DCTERMS.license, license_value))
     report = check_license(g)
     assert report.status == Status.FAIL
     check = report.checks[0]

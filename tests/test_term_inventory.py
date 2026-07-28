@@ -1,5 +1,6 @@
 """Tests for term inventory, domains/ranges, and datatype checks."""
 
+import pytest
 from rdflib import Graph, Literal, Namespace
 from rdflib.namespace import OWL, RDF, RDFS, XSD
 
@@ -45,28 +46,25 @@ def test_inventory_categorizes_terms():
     assert report.category_counts["Class"] == 1
 
 
-def test_inventory_flags_lowercase_class():
+@pytest.mark.parametrize(
+    "rdf_type, term_name, expected_message_part",
+    [
+        (OWL.Class, "person", "uppercase"),
+        (OWL.ObjectProperty, "HasName", "lowercase"),
+    ],
+    ids=["lowercase_class", "uppercase_property"],
+)
+def test_inventory_flags_naming_convention_violation(rdf_type, term_name, expected_message_part):
     g = _base_graph()
-    g.add((EX["person"], RDF.type, OWL.Class))
+    g.add((EX[term_name], RDF.type, rdf_type))
 
     report = check_term_inventory(g)
 
     assert report.status == Status.WARN
     issues = report.naming_issues
     assert len(issues) == 1
-    assert issues[0].display_name == "person"
-    assert "uppercase" in issues[0].naming_message
-
-
-def test_inventory_flags_uppercase_property():
-    g = _base_graph()
-    g.add((EX["HasName"], RDF.type, OWL.ObjectProperty))
-
-    report = check_term_inventory(g)
-
-    assert report.status == Status.WARN
-    assert report.naming_issues[0].display_name == "HasName"
-    assert "lowercase" in report.naming_issues[0].naming_message
+    assert issues[0].display_name == term_name
+    assert expected_message_part in issues[0].naming_message
 
 
 def test_inventory_exempts_coded_identifier_properties():

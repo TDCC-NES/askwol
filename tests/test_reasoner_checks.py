@@ -20,14 +20,6 @@ def test_consistent_ontology_reports_ok():
     assert report.unsatisfiable_classes == []
     assert any(c.key == "ontology_consistency" and c.status == Status.OK for c in report.checks)
 
-
-def test_all_three_facets_always_present_when_ok():
-    g = Graph()
-    g.add((EX.ontology, RDF.type, OWL.Ontology))
-    g.add((EX.Person, RDF.type, OWL.Class))
-
-    report = run_reasoner_checks(g)
-
     keys = [c.key for c in report.checks]
     assert keys == ["ontology_consistency", "inconsistent_individuals", "unsatisfiable_classes"]
     assert all(c.status == Status.OK for c in report.checks)
@@ -51,6 +43,9 @@ def test_all_three_facets_always_present_when_unsatisfiable_class_only():
     assert keys["unsatisfiable_classes"] == Status.WARN
     assert keys["ontology_consistency"] == Status.WARN
 
+    assert "https://example.org/ont#ImpossiblePet" in report.unsatisfiable_classes
+    assert any(c.key.startswith("unsatisfiable_class") and c.status == Status.WARN for c in report.checks)
+
 
 def test_disjoint_types_make_individual_inconsistent():
     g = Graph()
@@ -67,34 +62,8 @@ def test_disjoint_types_make_individual_inconsistent():
     assert any("Fido" in item for item in report.inconsistent_individuals)
     assert any(c.key.startswith("inconsistent_individual") and c.status == Status.FAIL for c in report.checks)
 
-
-def test_unsatisfiable_class_is_reported_without_dummy_instances():
-    g = Graph()
-    g.add((EX.ontology, RDF.type, OWL.Ontology))
-    g.add((EX.Cat, RDF.type, OWL.Class))
-    g.add((EX.Dog, RDF.type, OWL.Class))
-    g.add((EX.Cat, OWL.disjointWith, EX.Dog))
-    g.add((EX.ImpossiblePet, RDF.type, OWL.Class))
-    g.add((EX.ImpossiblePet, RDFS.subClassOf, EX.Cat))
-    g.add((EX.ImpossiblePet, RDFS.subClassOf, EX.Dog))
-
-    report = run_reasoner_checks(g)
-
-    assert "https://example.org/ont#ImpossiblePet" in report.unsatisfiable_classes
-    assert any(c.key.startswith("unsatisfiable_class") and c.status == Status.WARN for c in report.checks)
-
-
-def test_markdown_report_includes_reasoner_section():
-    g = Graph()
-    g.add((EX.ontology, RDF.type, OWL.Ontology))
-    g.add((EX.Cat, RDF.type, OWL.Class))
-    g.add((EX.Dog, RDF.type, OWL.Class))
-    g.add((EX.Cat, OWL.disjointWith, EX.Dog))
-    g.add((EX.Fido, RDF.type, EX.Cat))
-    g.add((EX.Fido, RDF.type, EX.Dog))
-
     full = ValidationReport(file="example.ttl")
-    full.reasoner = run_reasoner_checks(g)
+    full.reasoner = report
 
     md = report_as_markdown(full)
     assert "## Reasoner checks" in md

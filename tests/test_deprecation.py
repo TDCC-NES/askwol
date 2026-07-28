@@ -1,5 +1,6 @@
 """Tests for the shared deprecation-marker detection helper."""
 
+import pytest
 from rdflib import Graph, URIRef
 
 from askwol.deprecation import deprecation_marker, is_deprecated
@@ -21,48 +22,36 @@ def _graph(ttl: str) -> Graph:
     return g
 
 
-def test_no_marker_returns_none():
-    g = _graph("ex:Current a owl:Class .\n")
-    assert deprecation_marker(g, URIRef(EX + "Current")) is None
-    assert is_deprecated(g, URIRef(EX + "Current")) is False
-
-
-def test_owl_deprecated_true_is_detected():
-    g = _graph('ex:OldClass owl:deprecated "true"^^xsd:boolean .\n')
-    term = URIRef(EX + "OldClass")
-    assert deprecation_marker(g, term) == "owl:deprecated"
+@pytest.mark.parametrize(
+    "ttl, term_name, expected_marker",
+    [
+        ('ex:OldClass owl:deprecated "true"^^xsd:boolean .\n', "OldClass", "owl:deprecated"),
+        ("ex:OldClass a owl:DeprecatedClass .\n", "OldClass", "owl:DeprecatedClass"),
+        ("ex:oldProp a owl:DeprecatedProperty .\n", "oldProp", "owl:DeprecatedProperty"),
+        ('ex:legacyName vs:term_status "deprecated" .\n', "legacyName", 'vs:term_status "deprecated"'),
+        ('ex:geekcode vs:term_status "archaic" .\n', "geekcode", 'vs:term_status "archaic"'),
+    ],
+)
+def test_deprecation_marker_detected(ttl, term_name, expected_marker):
+    g = _graph(ttl)
+    term = URIRef(EX + term_name)
+    assert deprecation_marker(g, term) == expected_marker
     assert is_deprecated(g, term) is True
 
 
-def test_owl_deprecated_false_is_not_detected():
-    g = _graph('ex:Current owl:deprecated "false"^^xsd:boolean .\n')
-    assert deprecation_marker(g, URIRef(EX + "Current")) is None
-
-
-def test_owl_deprecated_class_type_is_detected():
-    g = _graph("ex:OldClass a owl:DeprecatedClass .\n")
-    assert deprecation_marker(g, URIRef(EX + "OldClass")) == "owl:DeprecatedClass"
-
-
-def test_owl_deprecated_property_type_is_detected():
-    g = _graph("ex:oldProp a owl:DeprecatedProperty .\n")
-    assert deprecation_marker(g, URIRef(EX + "oldProp")) == "owl:DeprecatedProperty"
-
-
-def test_vs_term_status_deprecated_is_detected():
-    g = _graph('ex:legacyName vs:term_status "deprecated" .\n')
-    assert deprecation_marker(g, URIRef(EX + "legacyName")) == 'vs:term_status "deprecated"'
-
-
-def test_vs_term_status_archaic_is_detected():
-    g = _graph('ex:geekcode vs:term_status "archaic" .\n')
-    assert deprecation_marker(g, URIRef(EX + "geekcode")) == 'vs:term_status "archaic"'
-
-
-def test_vs_term_status_stable_is_not_flagged():
-    g = _graph('ex:currentName vs:term_status "stable" .\n')
-    assert deprecation_marker(g, URIRef(EX + "currentName")) is None
-    assert is_deprecated(g, URIRef(EX + "currentName")) is False
+@pytest.mark.parametrize(
+    "ttl, term_name",
+    [
+        ("ex:Current a owl:Class .\n", "Current"),
+        ('ex:Current owl:deprecated "false"^^xsd:boolean .\n', "Current"),
+        ('ex:currentName vs:term_status "stable" .\n', "currentName"),
+    ],
+)
+def test_deprecation_marker_not_detected(ttl, term_name):
+    g = _graph(ttl)
+    term = URIRef(EX + term_name)
+    assert deprecation_marker(g, term) is None
+    assert is_deprecated(g, term) is False
 
 
 def test_term_not_in_graph_is_not_flagged():

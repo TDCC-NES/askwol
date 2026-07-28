@@ -1,3 +1,4 @@
+import pytest
 from rdflib import Graph, Literal, Namespace
 from rdflib.namespace import OWL, RDF, RDFS
 
@@ -52,7 +53,14 @@ def test_deprecated_term_missing_docs_is_not_flagged():
     assert check.deprecated == "owl:deprecated"
 
 
-def test_inverse_property_does_not_need_its_own_comment():
+@pytest.mark.parametrize(
+    "inverse_triple",
+    [
+        pytest.param((EX["hasChild"], OWL.inverseOf, EX["hasParent"]), id="forward"),
+        pytest.param((EX["hasParent"], OWL.inverseOf, EX["hasChild"]), id="reverse"),
+    ],
+)
+def test_inverse_exemption_works_in_either_assertion_direction(inverse_triple):
     g = Graph()
     g.add((EX["ontology"], RDF.type, OWL.Ontology))
     g.add((EX["hasParent"], RDF.type, OWL.ObjectProperty))
@@ -60,29 +68,11 @@ def test_inverse_property_does_not_need_its_own_comment():
     g.add((EX["hasParent"], RDFS.comment, Literal("Relates a person to a parent.", lang="en")))
     g.add((EX["hasChild"], RDF.type, OWL.ObjectProperty))
     g.add((EX["hasChild"], RDFS.label, Literal("has child", lang="en")))
-    g.add((EX["hasChild"], OWL.inverseOf, EX["hasParent"]))
+    g.add(inverse_triple)
 
     report = check_definition_documentation(g)
 
     assert report.issues == []
-    child_check = next(c for c in report.checks if c.term.endswith("hasChild"))
-    assert child_check.has_comment is True
-    assert child_check.status == Status.OK
-
-
-def test_inverse_exemption_works_in_either_assertion_direction():
-    g = Graph()
-    g.add((EX["ontology"], RDF.type, OWL.Ontology))
-    g.add((EX["hasParent"], RDF.type, OWL.ObjectProperty))
-    g.add((EX["hasParent"], RDFS.label, Literal("has parent", lang="en")))
-    g.add((EX["hasParent"], RDFS.comment, Literal("Relates a person to a parent.", lang="en")))
-    g.add((EX["hasChild"], RDF.type, OWL.ObjectProperty))
-    g.add((EX["hasChild"], RDFS.label, Literal("has child", lang="en")))
-    # Asserted in the opposite direction from the test above.
-    g.add((EX["hasParent"], OWL.inverseOf, EX["hasChild"]))
-
-    report = check_definition_documentation(g)
-
     child_check = next(c for c in report.checks if c.term.endswith("hasChild"))
     assert child_check.has_comment is True
     assert child_check.status == Status.OK

@@ -1,3 +1,4 @@
+import pytest
 from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import DCTERMS, OWL, RDF, RDFS
 
@@ -74,32 +75,34 @@ def test_version_iri_is_not_flagged():
     assert report.status == Status.OK
 
 
-def test_prior_version_is_not_flagged():
-    # Real-world case: OWL-Time's header has
-    # `owl:priorVersion <http://www.w3.org/2006/time#2006>`, a symbolic
-    # marker for "the 2006 edition" of the ontology, not a term - it must
-    # not be reported as "referenced but never defined".
+@pytest.mark.parametrize(
+    "markers",
+    [
+        pytest.param([(OWL.priorVersion, EX["2006"])], id="prior_version"),
+        pytest.param(
+            [(OWL.backwardCompatibleWith, EX["v1"]), (OWL.incompatibleWith, EX["v0"])],
+            id="backward_and_incompatible_with",
+        ),
+        pytest.param([(DCTERMS.replaces, EX["1.0"])], id="dcterms_replaces"),
+    ],
+)
+def test_version_marker_predicates_are_not_flagged(markers):
+    # Real-world cases: OWL-Time's header has
+    # `owl:priorVersion <http://www.w3.org/2006/time#2006>`, and GeoSPARQL
+    # 1.1's header has `dcterms:replaces
+    # <http://www.opengis.net/ont/geosparql/1.0>` - symbolic markers for a
+    # prior edition of the ontology, not terms. None of these must be
+    # reported as "referenced but never defined".
     g = _base_graph()
     g.add((EX["Person"], RDF.type, OWL.Class))
-    g.add((EX["ontology"], OWL.priorVersion, EX["2006"]))
+    for predicate, obj in markers:
+        g.add((EX["ontology"], predicate, obj))
 
     report = check_internal_terms(g)
 
-    assert all("2006" not in i.term for i in report.undefined)
-    assert report.status == Status.OK
-
-
-def test_backward_compatible_with_and_incompatible_with_are_not_flagged():
-    g = _base_graph()
-    g.add((EX["Person"], RDF.type, OWL.Class))
-    g.add((EX["ontology"], OWL.backwardCompatibleWith, EX["v1"]))
-    g.add((EX["ontology"], OWL.incompatibleWith, EX["v0"]))
-
-    report = check_internal_terms(g)
-
-    undefined_names = {i.display_name for i in report.undefined}
-    assert "v1" not in undefined_names
-    assert "v0" not in undefined_names
+    undefined_terms = {i.term for i in report.undefined}
+    for _, obj in markers:
+        assert str(obj) not in undefined_terms
     assert report.status == Status.OK
 
 
@@ -128,21 +131,6 @@ def test_skips_without_ontology_declaration():
 
     assert report.status == Status.SKIP
     assert report.undefined == []
-
-
-def test_dcterms_replaces_is_not_flagged():
-    # Real-world case: GeoSPARQL 1.1's header has
-    # `dcterms:replaces <http://www.opengis.net/ont/geosparql/1.0>`, pointing
-    # at its own prior version - a symbolic marker, not a term, and must not
-    # be reported as "referenced but never defined".
-    g = _base_graph()
-    g.add((EX["Person"], RDF.type, OWL.Class))
-    g.add((EX["ontology"], DCTERMS.replaces, EX["1.0"]))
-
-    report = check_internal_terms(g)
-
-    assert all("1.0" not in i.term for i in report.undefined)
-    assert report.status == Status.OK
 
 
 def test_own_namespace_self_reference_is_not_flagged():

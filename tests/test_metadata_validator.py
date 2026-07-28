@@ -86,27 +86,20 @@ def test_legacy_dublin_core_elements_satisfy_required_checks():
     assert any(c.key == "creator" and c.status == Status.OK for c in report.checks)
 
 
-def test_legacy_dc_date_satisfies_both_created_and_modified():
+def test_legacy_dc_date_and_publisher_satisfy_recommended_checks():
     """Dublin Core Elements 1.1 has one generic dc:date property, with no
     separate created-and-modified split - it should count as an alternative for
-    both recommended date checks."""
+    both recommended date checks. dc:publisher is likewise a direct
+    equivalent for the recommended publisher check."""
     g = _base_graph()
     ont = EX[""]
     g.add((ont, DC.date, Literal("2026-04-20", datatype=XSD.date)))
+    g.add((ont, DC.publisher, Literal("TDCC-NES")))
 
     report = validate_ontology_metadata(g)
 
     assert any(c.key == "created" and c.status == Status.OK for c in report.checks)
     assert any(c.key == "modified" and c.status == Status.OK for c in report.checks)
-
-
-def test_legacy_dc_publisher_satisfies_publisher_check():
-    g = _base_graph()
-    ont = EX[""]
-    g.add((ont, DC.publisher, Literal("TDCC-NES")))
-
-    report = validate_ontology_metadata(g)
-
     assert any(c.key == "publisher" and c.status == Status.OK for c in report.checks)
 
 
