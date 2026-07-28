@@ -1184,7 +1184,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append(_section_heading('language-tags', 'Language tag consistency', 'warn',
                                       f'{n_issues} issue{"s" if n_issues != 1 else ""}'))
         parts.append(_guide_link('language-tags'))
-        parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) should use language tags consistently across all subjects.</p>')
+        parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) on internally defined terms should use language tags consistently.</p>')
         parts.append(_status_subtitle('warn', headline or f'{n_issues} consistency issue{"s" if n_issues != 1 else ""}'))
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show all issues ({n_issues})</summary>')
         parts.append('<table><tr><th>Subject</th><th>Property</th><th>Issue</th><th>Has</th><th>Expected</th></tr>')
@@ -1201,17 +1201,17 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         lang_str = ', '.join(lt.languages_used)
         parts.append(_section_heading('language-tags', 'Language tag consistency', 'ok', 'consistent'))
         parts.append(_guide_link('language-tags'))
-        parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) should use language tags consistently across all subjects.</p>')
+        parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) on internally defined terms should use language tags consistently.</p>')
         parts.append(_status_subtitle('ok', f'Labels and definitions use {lang_str} consistently across subjects.'))
     elif lt and lt.status == Status.WARN:
         parts.append(_section_heading('language-tags', 'Language tag consistency', 'warn', 'no language tags used'))
         parts.append(_guide_link('language-tags'))
-        parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) should use language tags consistently across all subjects.</p>')
+        parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) on internally defined terms should use language tags consistently.</p>')
         parts.append(_status_subtitle('warn', 'None of the labels or definitions in this ontology carry a language tag (e.g. <code>"Person"@en</code>). Plain strings are valid RDF, but language tags make labels easier to localise and to filter by language.'))
     else:
         parts.append(_section_heading('language-tags', 'Language tag consistency', 'info', 'not applicable'))
         parts.append(_guide_link('language-tags'))
-        parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) should use language tags consistently across all subjects.</p>')
+        parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) on internally defined terms should use language tags consistently.</p>')
         parts.append(_status_subtitle('info', 'This ontology has no labels or definitions to check for language tags.'))
     parts.append('</section>')
 

@@ -7,6 +7,7 @@ from collections import defaultdict
 from rdflib import BNode, Graph, Literal, URIRef
 
 from askwol.deprecation import is_deprecated
+from askwol.iri_utils import is_external as _is_external, ontology_namespaces as _ontology_namespaces
 from askwol.models import LangTagIssue, LangTagPropertySummary, LangTagReport, Status
 
 # Annotation properties where language tags are expected
@@ -48,18 +49,25 @@ def _shorten(uri: str, ns_map: dict[str, str]) -> str:
 
 
 def check_lang_tags(graph: Graph, ns_map: dict[str, str]) -> LangTagReport:
-    """Check language tag consistency for annotation properties.
+    """Check language tag consistency for annotation properties on
+    internally defined terms.
 
     Rules:
     - If a property uses language tags on *any* subject, every subject
       using that property should also use language tags (no bare strings).
     - All subjects should use the same set of languages for each property.
+
+    Only subjects in the ontology's own namespace are considered (or, with
+    no owl:Ontology declaration, anything outside the well-known external
+    vocabularies); reused external terms are covered by the External term
+    definitions check instead.
     """
     # property URI -> subject (URI string or bnode id) -> set of language tags
     prop_data: dict[str, dict[str, set[str | None]]] = defaultdict(lambda: defaultdict(set))
     bnode_subjects: set[str] = set()
     # memoize deprecation lookups; a deprecated term is exempt from this check
     deprecated_cache: dict[URIRef, bool] = {}
+    own_namespaces = _ontology_namespaces(graph)
 
     for s, p, o in graph:
         if not isinstance(p, URIRef) or not isinstance(o, Literal):
@@ -67,12 +75,17 @@ def check_lang_tags(graph: Graph, ns_map: dict[str, str]) -> LangTagReport:
         p_str = str(p)
         if p_str not in LABEL_PROPERTIES:
             continue
+        s_str = str(s)
         if isinstance(s, URIRef):
+            if own_namespaces:
+                if not any(s_str.startswith(ns) for ns in own_namespaces):
+                    continue
+            elif _is_external(s_str):
+                continue
             if s not in deprecated_cache:
                 deprecated_cache[s] = is_deprecated(graph, s)
             if deprecated_cache[s]:
                 continue
-        s_str = str(s)
         if isinstance(s, BNode):
             bnode_subjects.add(s_str)
         lang = o.language  # None when untagged

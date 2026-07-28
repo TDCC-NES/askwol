@@ -90,7 +90,7 @@ class LangTagPropertySummary(BaseModel):
 
 
 class LangTagReport(BaseModel):
-    """Summary of language tag consistency across the ontology."""
+    """Summary of language tag consistency across internally defined terms."""
 
     properties_checked: int = 0
     languages_used: list[str] = Field(default_factory=list)

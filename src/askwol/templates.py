@@ -585,8 +585,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   of <code>foaf:name</code> silently breaks interoperability.</div>
   <div class="tip">askwol looks up every term you reuse from an external
   vocabulary and reports the ones that are not actually defined there. This
-  catches typos like <code>foaf:nme</code> and made-up reuse of established
-  prefixes. Terms from your own namespace are checked separately (see
+  catches typos like <code>foaf:nme</code> and made-up terms like
+  <code>owl:MadeUpClass</code>. Terms from your own namespace are checked
+  separately (see
   <a href="#internal-terms">Internal term definitions</a>).</div>
   <div class="warn">A term can also exist but be deprecated by the
   vocabulary that defines it. <span class="tag spec">Spec</span>
@@ -898,8 +899,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <div class="tip">askwol checks
   <code>rdfs:label</code>, <code>rdfs:comment</code>,
   <code>skos:prefLabel</code>, <code>skos:definition</code>, and other
-  standard annotation properties for tag consistency. A term you have marked
-  deprecated yourself is exempt.</div>
+  standard annotation properties for tag consistency on terms defined in
+  your own namespace. Reused external vocabulary terms, and terms you have
+  marked deprecated yourself, are ignored.</div>
 """,
     },
     {
@@ -1093,23 +1095,23 @@ CHECKS: list[dict[str, str]] = [
     {"report_anchor": "unused-prefixes", "title": "Unused prefixes", "guide_anchor": "prefixes", "category": "reuse",
      "description": "flags `@prefix` declarations that are never used in any triple."},
     {"report_anchor": "external-terms", "title": "External term definitions", "guide_anchor": "external-terms", "category": "reuse",
-     "description": "verifies that terms reused from an external vocabulary are actually defined there. Catches typos like `owl:MadeUpClass` and made-up reuse of established prefixes. A term that exists but is marked deprecated upstream is flagged as a warning."},
+     "description": "verifies that terms reused from an external vocabulary actually exist there. Catches both typos (`foaf:nme`) and made-up terms (`owl:MadeUpClass`). A term that exists but is marked deprecated upstream is flagged as a warning."},
     {"report_anchor": "internal-terms", "title": "Internal term definitions", "guide_anchor": "internal-terms", "category": "structure",
      "description": "flags terms in the ontology's own namespace that are referenced but never defined. Usually a typo or a forgotten declaration."},
     {"report_anchor": "term-inventory", "title": "Term inventory & naming", "guide_anchor": "term-inventory", "category": "structure",
-     "description": "categorizes every internal term (class, object property, datatype property, datatype, individual) and checks capitalization: classes start uppercase, properties lowercase. Coded identifiers and deprecated terms are exempt."},
+     "description": "categorizes every internal term (class, object property, datatype property, datatype, individual) and checks capitalization: classes start uppercase, properties lowercase. Coded identifiers are exempt."},
     {"report_anchor": "domains-ranges", "title": "Domains & ranges", "guide_anchor": "domains-ranges", "category": "structure",
-     "description": "object and datatype properties should declare a domain and a range. Object properties range over classes; datatype properties over datatypes. Deprecated properties are exempt."},
+     "description": "every internally defined object and datatype property should declare a domain and a range. Object properties range over classes; datatype properties over datatypes."},
     {"report_anchor": "datatypes", "title": "Datatypes", "guide_anchor": "datatypes", "category": "structure",
      "description": "datatypes used as property ranges and literal datatypes should be recognized XSD built-ins, `rdfs:Literal`, `rdf:langString`, or a locally declared `rdfs:Datatype`. Catches typos like `xsd:stirng`."},
     {"report_anchor": "non-ontology-terms", "title": "Non-ontology terms", "guide_anchor": "non-ontology-terms", "category": "structure",
-     "description": "an OWL ontology defines schema (classes, properties, datatypes). A `skos:Concept` scheme is subject-matter data and belongs in a separate resource. Named individuals are not flagged."},
+     "description": "an OWL ontology defines schema (classes, properties, datatypes). A `skos:Concept` scheme is subject-matter data, not schema, and belongs in a separate resource. Named individuals are not flagged."},
     {"report_anchor": "labels", "title": "Labels", "guide_anchor": "labels", "category": "docs",
-     "description": "a SHACL check that every internally defined class and property carries an `rdfs:label`. Reused external terms, and terms marked deprecated, are ignored."},
+     "description": "a SHACL check that every internally defined class and property carries an `rdfs:label`. Reused external terms are ignored."},
     {"report_anchor": "comments", "title": "Comments", "guide_anchor": "comments", "category": "docs",
-     "description": "a SHACL check that every internally defined class and property carries an `rdfs:comment`. Reused external terms, and terms marked deprecated, are ignored."},
+     "description": "a SHACL check that every internally defined class and property carries an `rdfs:comment`. Reused external terms are ignored."},
     {"report_anchor": "language-tags", "title": "Language tag consistency", "guide_anchor": "lang-tags", "category": "docs",
-     "description": "labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) should use the same language tags across subjects. Deprecated terms are exempt."},
+     "description": "labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) on internally defined terms should use language tags consistently."},
     {"report_anchor": "reasoner", "title": "Reasoner checks", "guide_anchor": "reasoner", "category": "logic",
      "description": "lightweight OWL RL reasoning on the current ontology only (`owl:imports` are not followed), with three facets: *ontology consistency*, *inconsistent individuals*, and *unsatisfiable classes*."},
 ]

@@ -1,7 +1,7 @@
 """Tests for language tag consistency checking."""
 
 from rdflib import Graph, Literal, Namespace, URIRef
-from rdflib.namespace import OWL, RDF, RDFS, SKOS
+from rdflib.namespace import FOAF, OWL, RDF, RDFS, SKOS
 
 from askwol.lang_tags import check_lang_tags
 from askwol.models import Status
@@ -118,6 +118,43 @@ def test_non_label_properties_ignored():
 
     report = check_lang_tags(g, _make_ns_map())
     assert report.issues == []
+
+
+def test_external_vocabulary_subject_ignored():
+    """A subject from a well-known external vocabulary is not checked, even
+    with no owl:Ontology declaration to anchor an "own namespace" against."""
+    g = Graph()
+    g.add((EX.A, RDFS.label, Literal("A", lang="en")))
+    g.add((FOAF.Person, RDFS.label, Literal("Person")))  # untagged, but external: ignored
+
+    report = check_lang_tags(g, _make_ns_map())
+    assert report.issues == []
+
+
+def test_terms_outside_declared_ontology_namespace_ignored():
+    """With an explicit owl:Ontology, only subjects in its own namespace are
+    checked, even for a namespace that isn't a well-known vocabulary."""
+    other = Namespace("http://other.org/vocab#")
+    g = Graph()
+    g.add((URIRef("http://example.org/onto"), RDF.type, OWL.Ontology))
+    g.add((URIRef("http://example.org/onto#A"), RDFS.label, Literal("A", lang="en")))
+    g.add((other.Thing, RDFS.label, Literal("Thing")))  # untagged, outside the ontology's namespace
+
+    report = check_lang_tags(g, _make_ns_map())
+    assert report.issues == []
+
+
+def test_subject_inside_declared_namespace_still_checked():
+    """A subject inside the declared ontology namespace is still checked
+    normally when an owl:Ontology is present."""
+    g = Graph()
+    g.add((URIRef("http://example.org/onto"), RDF.type, OWL.Ontology))
+    g.add((URIRef("http://example.org/onto#A"), RDFS.label, Literal("A", lang="en")))
+    g.add((URIRef("http://example.org/onto#B"), RDFS.label, Literal("B")))  # untagged
+
+    report = check_lang_tags(g, _make_ns_map())
+    assert len(report.issues) == 1
+    assert report.issues[0].subject.endswith("B")
 
 
 def test_multiple_properties_independent():
