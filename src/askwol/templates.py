@@ -364,7 +364,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <code>owl:Ontology</code>; this check uses that IRI as the root.</p>
   <div class="tip">Mixing hash and slash in the same vocabulary is almost
   always accidental. It breaks naive prefix-based namespace splitting and
-  confuses consumers about whether <code>Person</code> is the same term
+  confuses consumers about whether <code>/Person</code> is the same term
   as <code>#Person</code>.</div>
 
   <h3>Hash vs. slash, in plain terms</h3>
