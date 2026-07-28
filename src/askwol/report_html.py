@@ -114,8 +114,8 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         "  .footer { margin-top: 2em; font-size: 0.85em; color: #aaa; text-align: center; }",
         "</style>",
         "</head><body>",
-        '<p class="topnav"><strong>Navigation:</strong> <a href="./">Home</a> &middot; <a href="guide">Publishing guide</a> &middot; <a href="docs">API docs</a></p>',
-        f'<h1>Results for {source_html} <span class="beta-badge">Beta</span></h1>',
+        '<p class="topnav"><strong>Navigation:</strong> <a href="./">Home</a> &middot; <a href="guide">Publishing guide</a> &middot; <a href="docs">API docs</a> <span class="beta-badge">Beta</span></p>',
+        f'<h1>Results for {source_html}</h1>',
     ]
 
     if report.parse_errors:
@@ -703,7 +703,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 'warn',
                 f'<strong>{len(sch.conflicts)}</strong> host(s) are referenced under both <code>http://</code> and <code>https://</code> in the same ontology.',
             ))
-            parts.append('<details><summary style="cursor:pointer;font-weight:600;">Show conflicting hosts</summary>')
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show conflicting hosts ({len(sch.conflicts)})</summary>')
             for c in sch.conflicts:
                 parts.append(f'<h3 style="margin:1em 0 0.3em;font-size:1em;"><code>{escape(c.host)}</code></h3>')
                 parts.append(
@@ -1479,5 +1479,21 @@ if (!svg) {
   };
 }
 </script>""")
+
+    # External (target="_blank") links: take explicit control of the click
+    # instead of relying solely on the target attribute, so a browser
+    # extension or setting that forces same-tab navigation on such links
+    # can't hijack the current results page. Capture phase + stopPropagation
+    # so this runs before other listeners.
+    parts.append("""<script>
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a[target="_blank"]');
+  if (!a || !a.href) return;
+  e.preventDefault();
+  e.stopPropagation();
+  window.open(a.href, '_blank', 'noopener,noreferrer');
+}, true);
+</script>""")
+
     parts.append("</body></html>")
     return "\n".join(parts)
