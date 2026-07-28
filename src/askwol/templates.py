@@ -278,9 +278,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   </ul>
   <p>Pre-2010 ontologies (e.g. FOAF, OWL-Time) often use the older
   <a href="https://www.dublincore.org/specifications/dublin-core/dces/" target="_blank" rel="noopener">Dublin Core Elements</a>
-  (<code>dc:</code>) properties instead of DCMI Terms - askwol accepts
-  either, since they carry the same meaning. One nuance: Elements 1.1's
-  single, generic <code>dc:date</code> property doesn't distinguish created
+  (<code>dc:</code>) properties instead of DCMI Terms; askwol accepts
+  either, since they carry the same meaning. One nuance: Elements 1.1&rsquo;s
+  single, generic <code>dc:date</code> property doesn&rsquo;t distinguish created
   from modified, so askwol accepts it for either (or both) of the two
   recommended date checks above.</p>
   <div class="tip">Fill in these metadata so that both humans and machines
@@ -324,8 +324,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <a href="https://www.w3.org/TR/owl2-syntax/#Imports" target="_blank" rel="noopener">OWL 2</a>
   says to declare it with <code>owl:imports</code> in the ontology header:</p>
   <pre>&lt;https://example.org/my-ontology&gt; a owl:Ontology ;
-    owl:imports &lt;http://xmlns.com/foaf/0.1/&gt; ,
-                &lt;http://www.w3.org/2004/02/skos/core&gt; .</pre>
+    owl:imports &lt;http://xmlns.com/foaf/0.1/&gt; .</pre>
   <p>This tells reasoners and tools where your external terms are defined,
   so they can load the imported ontology and reason over it together with
   yours.</p>
@@ -467,8 +466,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Adopt an open license",
         "toc_label": "Open license",
         "body": """\
-  <p><span class="tag practice">TDCC guideline</span> Your ontology should be released under an <strong>open license</strong>; we recommend the DCMI property <code>dcterms:license</code>. To meet the Linked Open Data principles, the license must satisfy the <a href=https://opendefinition.org target="_blank" rel="noopener">Open Definition</a>: “anyone can freely access, use, modify, and share [the ontology] for any purpose (subject, at most, to requirements that preserve provenance and openness).”</p>
-  <p>A license is open if it's equivalent to the <strong>public domain</strong>, or at most adds <strong>attribution</strong> or <strong>share-alike</strong> restrictions; non-commercial or no-derivatives clauses are not open. For maximum reuse, we recommend one of the two <a href=https://creativecommons.org/cc-licenses/ target="_blank" rel="noopener">Creative Commons</a> licenses below.</p>
+  <p><span class="tag practice">TDCC guideline</span> Your ontology should be released under an <strong>open license</strong>; this guide recommends the DCMI property <code>dcterms:license</code>. To meet the Linked Open Data principles, the license must satisfy the <a href="https://opendefinition.org" target="_blank" rel="noopener">Open Definition</a>: &ldquo;anyone can freely access, use, modify, and share [the ontology] for any purpose (subject, at most, to requirements that preserve provenance and openness).&rdquo;</p>
+  <p>A license is open if it&rsquo;s equivalent to the <strong>public domain</strong>, or at most adds <strong>attribution</strong> or <strong>share-alike</strong> restrictions; non-commercial or no-derivatives clauses are not open. For maximum reuse, this guide recommends one of the two <a href="https://creativecommons.org/cc-licenses/" target="_blank" rel="noopener">Creative Commons</a> licenses below.</p>
   <ol>
     <li>
       <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener">Creative Commons Zero (CC0)</a> (public domain); IRI: <code>https://creativecommons.org/publicdomain/zero/1.0/</code>
@@ -478,7 +477,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     </li>
   </ol>
 
- askwol also recognizes, but does not recommend, the following licenses which fit the open definition but are less suitable for ontologies for the reasons listed below.
+  <p>askwol also recognizes other licenses that meet the Open Definition but are less suitable for ontologies, for the reasons below.</p>
   <ul>
     <li>
       <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">Creative Commons Attribution ShareAlike (CC BY-SA)</a> (requires attribution, share-alike); IRI: <code>https://creativecommons.org/licenses/by-sa/4.0/</code>; too restrictive due to the share-alike.
@@ -503,7 +502,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p>Declare it with <code>dcterms:license</code> in the ontology header:</p>
   <pre>&lt;https://example.org/my-ontology&gt; a owl:Ontology ;
     dcterms:license &lt;https://creativecommons.org/publicdomain/zero/1.0/&gt; .</pre>
-  <div class="tip">askwol checks each declared license against the Open Definition's <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of conformant licenses</a>. It will return an error if the ontology license is missing or not recognized as open. It will give a warning if the license is open but not well suited for ontologies, or if more than one license is declared (even if each one individually would be fine).</div>
+  <div class="tip">askwol checks each declared license against the Open Definition&rsquo;s <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of conformant licenses</a>: a missing or non-open license is an error; an open but not-recommended license, or more than one declared license (even if each is fine on its own), is a warning.</div>
 """,
     },
     {
@@ -552,7 +551,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   hygiene: only declare prefixes you actually use. Leftover
   <code>@prefix</code> declarations clutter the file and confuse readers;
   they suggest a dependency that doesn&rsquo;t exist.</p>
-  <pre>@prefix dct: &lt;http://purl.org/dc/terms/&gt; .   # used below
+  <pre>@prefix dct: &lt;http://purl.org/dc/terms/&gt; .              # used below
 @prefix geo: &lt;http://www.opengis.net/ont/geosparql#&gt; .  # unused, remove it</pre>
   <div class="tip">askwol flags every prefix that is declared
   but never appears in a triple, so you can clean them up.</div>
@@ -570,10 +569,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   already covers it. No spec requires reuse, but the wider Semantic Web
   interoperates far better when ontologies share terms:</p>
   <ul>
-    <li><a href="https://schema.org/">schema.org</a>: broad web vocabulary</li>
     <li><a href="http://xmlns.com/foaf/0.1/">FOAF</a>: people and social networks</li>
-    <li><a href="http://purl.org/dc/terms/">Dublin Core</a>: metadata (title, creator, date)</li>
-    <li><a href="https://www.w3.org/2004/02/skos/core">SKOS</a>: concept schemes and thesauri</li>
     <li><a href="https://www.w3.org/ns/prov#">PROV-O</a>: provenance</li>
   </ul>
   <div class="warn">When reusing a term, use the <em>exact</em>
@@ -581,9 +577,11 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   of <code>foaf:name</code> breaks interoperability.</div>
   <div class="tip">askwol looks up every term you reuse from an external
   vocabulary and reports the ones that are not actually defined there. This
-  catches typos like <code>foaf:nme</code> and made-up terms like
-  <code>owl:MadeUpClass</code>. Terms from your own namespace are checked
-  separately (see
+  catches typos like <code>foaf:nme</code>, made-up terms like
+  <code>owl:MadeUpClass</code>, and <strong>namespace hijacking</strong>
+  (asserting a brand-new term such as <code>foaf:MadeUpConcept</code> under
+  someone else&rsquo;s namespace instead of your own). Terms from your own
+  namespace are checked separately (see
   <a href="#internal-terms">Internal term definitions</a>).</div>
   <div class="warn">A term can also exist but be deprecated by the
   vocabulary that defines it. <span class="tag spec">Spec</span>
@@ -629,9 +627,15 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   in your own namespace that is referenced but never defined is flagged.
   External vocabulary terms are covered by the
   <a href="#external-terms">External term definitions</a> check instead.
-  Re-declaring a reused term (e.g. <code>rdfs:label a
-  owl:AnnotationProperty</code>, common boilerplate) does not make askwol
-  treat that term&rsquo;s whole vocabulary as yours to define.</div>
+  Some ontologies re-declare a reused term as boilerplate (e.g.
+  <code>rdfs:label a owl:AnnotationProperty</code>, as PROV-O and FOAF do).
+  askwol correctly recognizes this as reuse of an existing term, keeping
+  your own namespace scoped to what you actually define. New terms always
+  belong in your own namespace: the
+  <a href="#external-terms">External term definitions</a> check confirms
+  that anything asserted under an external prefix, like
+  <code>foaf:MadeUpConcept</code>, genuinely exists there already, catching
+  <strong>namespace hijacking</strong> along the way.</div>
 """,
     },
     {
@@ -665,11 +669,11 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     <li><strong>Properties start with a lowercase letter</strong>:
     <code>hasParent</code>, <code>birthDate</code>, <code>title</code>.</li>
   </ul>
-  <p>Some vocabularies use stable, coded identifiers instead: CIDOC CRM's
+  <p>Some vocabularies use stable, coded identifiers instead: CIDOC CRM&rsquo;s
   properties look like <code>P2_has_type</code> (the number is the permanent
   identifier; the wording after it can change between versions), and
-  Wikidata's are fully opaque, like <code>P19</code>, deliberately avoiding
-  any one language's naming bias. askwol recognizes this pattern, an
+  Wikidata&rsquo;s are fully opaque, like <code>P19</code>, deliberately avoiding
+  any one language&rsquo;s naming bias. askwol recognizes this pattern, an
   uppercase letter directly followed by a digit, and does not flag it.</p>
   <div class="tip">Object properties read best as verb phrases. A
   <code>has</code> or <code>is</code> prefix, or an <code>of</code>/<code>by</code>
@@ -704,11 +708,11 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   makes a property self-documenting and lets tools reason about it.</p>
   <pre>&lt;#hasParent&gt; a owl:ObjectProperty ;
     rdfs:domain &lt;#Person&gt; ;
-    rdfs:range  &lt;#Person&gt; .        # a class
+    rdfs:range  &lt;#Person&gt; .  # a class
 
 &lt;#birthDate&gt; a owl:DatatypeProperty ;
     rdfs:domain &lt;#Person&gt; ;
-    rdfs:range  xsd:date .        # a datatype</pre>
+    rdfs:range  xsd:date .   # a datatype</pre>
   <ul>
     <li>An <strong>object property</strong> should range over a
     <strong>class</strong>. A range that is a datatype means it should probably
@@ -719,19 +723,18 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     <li>A <strong>domain</strong> should be a class for either kind.</li>
   </ul>
   <div class="warn"><span class="tag spec">Spec</span> In OWL, a domain or
-  range is not a constraint that rejects bad data; it <em>licenses
-  inference</em>. Stating
+  range is not a constraint that rejects bad data; a reasoner instead
+  <em>infers new facts</em> from it. Stating
   <code>rdfs:domain :Person</code> on <code>:birthDate</code> tells a reasoner
   that anything with a <code>:birthDate</code> is a <code>:Person</code>. Pick
   domains and ranges that are actually true of every use.</div>
-  <div class="tip">askwol reads <code>rdfs:domain</code> and
-  <code>rdfs:range</code> directly on each property; it does not follow domains
-  or ranges inherited from a super-property. A reasoner would follow that
-  inheritance, so this check can warn even where reasoning finds no problem.
-  Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/term_inventory.ttl" target="_blank" rel="noopener">SHACL shapes</a>.
-  A property marked deprecated (see
-  <a href="#external-terms">External term definitions</a>) is exempt from
-  this check.</div>
+  <div class="tip">askwol only looks at the <code>rdfs:domain</code> and
+  <code>rdfs:range</code> declared directly on a property, not ones
+  inherited from a super-property. A reasoner does follow that inheritance,
+  so this check can occasionally flag something a reasoner would treat as
+  fine. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/term_inventory.ttl" target="_blank" rel="noopener">SHACL shapes</a>.
+  Deprecated properties (see
+  <a href="#external-terms">External term definitions</a>) are exempt.</div>
 """,
     },
     {
@@ -772,16 +775,19 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "body": """\
   <p><span class="tag practice">TDCC guideline</span> An OWL ontology is the
   <em>schema</em>: it defines classes, properties, and datatypes (the
-  terminology). OWL does not forbid mixing subject-matter
-  <strong>concepts</strong> (the members of a controlled vocabulary or
-  thesaurus) into the same file as the schema (the TBox); this guide
-  recommends keeping them apart, in a separate
+  terminology). Named individuals are a different kind of thing, actual
+  instances rather than schema, and most are fine to keep in the same
+  file. <strong>SKOS concepts</strong>, the members of a controlled
+  vocabulary or thesaurus, are the one case worth pulling out. A concept
+  scheme is typically much larger than the schema and grows on its own
+  schedule: new terms get added without ever touching a class or property
+  definition. This guide recommends keeping SKOS concepts in their own
   <a href="https://www.w3.org/TR/skos-reference/#Concept" target="_blank" rel="noopener">SKOS</a>
-  concept scheme, so schema and data can each evolve and be reused
-  independently.</p>
-  <pre>&lt;#Dataset&gt; a owl:Class .            # schema, belongs here
-&lt;#biology&gt; a skos:Concept .         # concept, belongs in a SKOS scheme
-&lt;#Monday&gt; a &lt;#DayOfWeek&gt; .        # named individual, fine to keep here</pre>
+  concept scheme, separate from the ontology file, so schema and data can
+  each evolve and be reused independently.</p>
+  <pre>&lt;#Dataset&gt; a owl:Class .     # schema, belongs here
+&lt;#biology&gt; a skos:Concept .  # concept, belongs in a SKOS scheme
+&lt;#Monday&gt; a &lt;#DayOfWeek&gt; .   # named individual, fine to keep here</pre>
   <div class="tip">askwol only flags <code>skos:Concept</code> instances defined
   in your own namespace; a full concept scheme has usually outgrown the schema
   file and is better managed on its own. Named individuals are left alone:
@@ -864,7 +870,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <pre>:Person a owl:Class ;
     rdfs:label "person"@en ,
                "persoon"@nl ;
-    skos:definition "A human being."@en ,
+    rdfs:comment "A human being."@en ,
                     "Een menselijk wezen."@nl .</pre>
   <h3>Consistency rules</h3>
   <p><span class="tag practice">TDCC guideline</span> Neither RDF nor BCP 47
@@ -884,11 +890,12 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     or comments but none carry a language tag, askwol warns too: plain
     strings are valid RDF, but untagged text is harder to localise or filter
     by language. An ontology with no labels or comments at all isn&rsquo;t
-    flagged - there is nothing to tag.</li>
+    flagged: there is nothing to tag.</li>
   </ul>
-  <div class="warn">SPARQL filters like
-  <code>FILTER(LANG(?label) = "en")</code> return nothing for untagged
-  literals; your data becomes invisible.</div>
+  <div class="warn">If a literal has no language tag, SPARQL filters like
+  <code>FILTER(LANG(?label) = "en")</code> won&rsquo;t match it. The triple
+  is still in your data, but any app or query that filters by language will
+  skip it, as if it doesn&rsquo;t exist.</div>
   <div class="tip">askwol checks
   <code>rdfs:label</code>, <code>rdfs:comment</code>,
   <code>skos:prefLabel</code>, <code>skos:definition</code>, and other
@@ -949,24 +956,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "toc_label": "Validate early and often",
         "body": """\
   <p>Run <a href="./">askwol</a> on your ontology during development, not just
-  before release. You get:</p>
-  <ul>
-    <li>An interactive <strong>class diagram</strong> of your ontology</li>
-    <li>Broken namespace URIs (servers down, domains expired)</li>
-    <li>Typos in term names (<code>owl:Clss</code> instead of <code>owl:Class</code>)</li>
-    <li>Namespaces that don&rsquo;t serve RDF</li>
-    <li>Terms that don&rsquo;t exist in the remote vocabulary</li>
-    <li>Unused <code>@prefix</code> declarations</li>
-    <li>Inconsistent language tags</li>
-    <li>Missing <code>rdfs:label</code> or <code>rdfs:comment</code> on your own classes and properties</li>
-    <li>Logical contradictions and unsatisfiable classes in the current ontology (without following imports)</li>
-    <li>Missing ontology metadata (title, creator, version, and more)</li>
-    <li>A missing or non-open license</li>
-  </ul>
-  <div class="tip">askwol also runs lightweight reasoner checks on the
-  <em>current ontology only</em> (it does <strong>not</strong> follow
-  <code>owl:imports</code>), catching obvious contradictions and
-  unsatisfiable classes before you publish.</div>
+  before release.</p>
   <div class="tip">Integrate validation into your CI pipeline:
   <code>askwol check my-ontology.ttl</code></div>
 """,
