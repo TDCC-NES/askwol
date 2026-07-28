@@ -2,15 +2,19 @@
 
 For every term defined inside the ontology's own namespace, determine
 whether it follows the hash pattern (`http://example.org/ont#Term`) or
-the slash pattern (`http://example.org/ont/Term`). Mixing both within a
-single ontology is flagged as a consistency warning.
+the slash pattern (`http://example.org/ont/Term`). Consistency is judged
+per declared owl:Ontology base IRI: a file that bundles more than one base
+IRI (e.g. the W3C PROV family's prov/prov-o) may use a different, but
+internally consistent, style per base IRI without being flagged. Mixing
+hash and slash within ONE base IRI's own terms is what triggers a warning.
 """
 
 from __future__ import annotations
 
 from rdflib import OWL, RDF, RDFS, Graph, URIRef
 
-from askwol.models import IRIStrategyReport, Status
+from askwol.iri_utils import ontology_stems
+from askwol.models import IRINamespaceStrategy, IRIStrategyReport, Status
 
 # RDF types that mark a node as something *defined* by the ontology.
 _DEFINING_TYPES = (
@@ -24,24 +28,32 @@ _DEFINING_TYPES = (
 )
 
 
-def _strip(uri: str) -> str:
-    return uri.rstrip("#/")
+def _classify_stem(stem: str, defined: set[str]) -> IRINamespaceStrategy | None:
+    """Classify the subset of `defined` terms under one ontology stem's own
+    hash ("stem#") or slash ("stem/") namespace. Returns None when the stem
+    defines no terms of its own."""
+    hash_ns, slash_ns = stem + "#", stem + "/"
+    hash_terms = sorted(u for u in defined if u.startswith(hash_ns) and len(u) > len(hash_ns))
+    slash_terms = sorted(u for u in defined if u.startswith(slash_ns) and len(u) > len(slash_ns))
+    if not hash_terms and not slash_terms:
+        return None
+    strategy = "mixed" if hash_terms and slash_terms else ("hash" if hash_terms else "slash")
+    return IRINamespaceStrategy(
+        namespace=stem,
+        strategy=strategy,
+        hash_count=len(hash_terms),
+        slash_count=len(slash_terms),
+        hash_examples=hash_terms[:5],
+        slash_examples=slash_terms[:5],
+    )
 
 
 def check_iri_strategy(graph: Graph) -> IRIStrategyReport:
-    ontology_iris = sorted(
-        str(s) for s in graph.subjects(RDF.type, OWL.Ontology) if isinstance(s, URIRef)
-    )
-    if not ontology_iris:
+    stems = ontology_stems(graph)
+    if not stems:
         return IRIStrategyReport(status=Status.SKIP, message="no owl:Ontology declaration found")
 
-    # A file can declare more than one owl:Ontology subject (e.g. the W3C
-    # PROV family bundles prov, prov-o, prov-dc, ... into one document).
-    # Union every declared IRI's hash AND slash sibling - using only the
-    # first (alphabetically) would wrongly hide terms defined under the others.
-    stems = {_strip(iri) for iri in ontology_iris}
-    hash_ns = {stem + "#" for stem in stems}
-    slash_ns = {stem + "/" for stem in stems}
+    ontology_iri = sorted(stems)[0]
 
     # Collect every URI that is declared as a class/property/individual.
     defined: set[str] = set()
@@ -50,94 +62,56 @@ def check_iri_strategy(graph: Graph) -> IRIStrategyReport:
             if isinstance(s, URIRef):
                 defined.add(str(s))
 
-    hash_terms: list[str] = []
-    slash_terms: list[str] = []
-    for uri in defined:
-        if any(uri.startswith(ns) and len(uri) > len(ns) for ns in hash_ns):
-            hash_terms.append(uri)
-        elif any(uri.startswith(ns) and len(uri) > len(ns) for ns in slash_ns):
-            slash_terms.append(uri)
+    # A file can declare more than one owl:Ontology subject (e.g. the W3C PROV
+    # family bundles prov, prov-o, prov-dc, ... into one document). Classify
+    # each stem's OWN terms separately so one base IRI's style never
+    # contaminates another's verdict.
+    namespaces: list[IRINamespaceStrategy] = []
+    for stem in sorted(stems):
+        classified = _classify_stem(stem, defined)
+        if classified is not None:
+            namespaces.append(classified)
 
-    total = len(hash_terms) + len(slash_terms)
-    if total == 0:
+    if not namespaces:
         return IRIStrategyReport(
-            ontology_iri=ontology_iris[0],
+            ontology_iri=ontology_iri,
             status=Status.SKIP,
             message="no internally defined terms found in the ontology's own namespace",
         )
 
-    hash_terms.sort()
-    slash_terms.sort()
-
-    if hash_terms and slash_terms:
-        strategy = "mixed"
-        status = Status.WARN
+    mixed = [ns for ns in namespaces if ns.strategy == "mixed"]
+    if mixed:
+        hash_n = sum(ns.hash_count for ns in mixed)
+        slash_n = sum(ns.slash_count for ns in mixed)
+        offenders = ", ".join(f"<code>{ns.namespace}</code>" for ns in mixed)
         message = (
-            f"{len(hash_terms)} hash-style and {len(slash_terms)} slash-style terms "
-            "are defined in the same namespace - pick one and stick to it"
+            f"{hash_n} hash-style and {slash_n} slash-style terms are mixed within "
+            f"{offenders}; pick one style per base IRI and stick to it"
         )
-    elif hash_terms:
-        strategy = "hash"
-        status = Status.OK
-        message = f"all {len(hash_terms)} defined terms use the hash pattern (<code>#Term</code>)"
-    else:
-        strategy = "slash"
-        status = Status.OK
-        message = f"all {len(slash_terms)} defined terms use the slash pattern (<code>/Term</code>)"
-
-    return IRIStrategyReport(
-        ontology_iri=ontology_iris[0],
-        strategy=strategy,
-        hash_count=len(hash_terms),
-        slash_count=len(slash_terms),
-        hash_examples=hash_terms[:5],
-        slash_examples=slash_terms[:5],
-        status=status,
-        message=message,
-    )
-
-    hash_terms: list[str] = []
-    slash_terms: list[str] = []
-    for uri in defined:
-        if any(uri.startswith(ns) and len(uri) > len(ns) for ns in hash_ns):
-            hash_terms.append(uri)
-        elif any(uri.startswith(ns) and len(uri) > len(ns) for ns in slash_ns):
-            slash_terms.append(uri)
-
-    total = len(hash_terms) + len(slash_terms)
-    if total == 0:
         return IRIStrategyReport(
-            ontology_iri=ontology_iris[0],
-            status=Status.SKIP,
-            message="no internally defined terms found in the ontology's own namespace",
+            ontology_iri=ontology_iri, namespaces=namespaces, status=Status.WARN, message=message,
         )
 
-    hash_terms.sort()
-    slash_terms.sort()
-
-    if hash_terms and slash_terms:
-        strategy = "mixed"
-        status = Status.WARN
+    styles = {ns.strategy for ns in namespaces}
+    total = sum(ns.hash_count + ns.slash_count for ns in namespaces)
+    if len(namespaces) == 1:
+        strategy = namespaces[0].strategy
+        pattern = "#Term" if strategy == "hash" else "/Term"
+        message = f"all {total} defined terms use the {strategy} pattern (<code>{pattern}</code>)"
+    elif len(styles) == 1:
+        strategy = styles.pop()
+        pattern = "#Term" if strategy == "hash" else "/Term"
         message = (
-            f"{len(hash_terms)} hash-style and {len(slash_terms)} slash-style terms "
-            "are defined in the same namespace - pick one and stick to it"
+            f"all {total} defined terms across {len(namespaces)} declared base IRIs "
+            f"use the {strategy} pattern (<code>{pattern}</code>)"
         )
-    elif hash_terms:
-        strategy = "hash"
-        status = Status.OK
-        message = f"all {len(hash_terms)} defined terms use the hash pattern (<code>#Term</code>)"
     else:
-        strategy = "slash"
-        status = Status.OK
-        message = f"all {len(slash_terms)} defined terms use the slash pattern (<code>/Term</code>)"
+        message = (
+            f"{len(namespaces)} declared base IRIs are each internally consistent "
+            f"({total} defined terms overall) but differ from each other; see the breakdown"
+        )
 
     return IRIStrategyReport(
-        ontology_iri=ontology_iris[0],
-        strategy=strategy,
-        hash_count=len(hash_terms),
-        slash_count=len(slash_terms),
-        hash_examples=hash_terms[:5],
-        slash_examples=slash_terms[:5],
-        status=status,
-        message=message,
+        ontology_iri=ontology_iri, namespaces=namespaces, status=Status.OK, message=message,
     )
+

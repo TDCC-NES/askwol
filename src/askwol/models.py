@@ -414,15 +414,29 @@ class ImportsReport(BaseModel):
         return len(self.checks)
 
 
-class IRIStrategyReport(BaseModel):
-    """Hash vs slash IRI strategy used by the ontology's own defined terms."""
+class IRINamespaceStrategy(BaseModel):
+    """Hash vs slash usage for one declared owl:Ontology base IRI's own terms."""
 
-    ontology_iri: str | None = None
-    strategy: str = "none"  # "hash" | "slash" | "mixed" | "none"
+    namespace: str
+    strategy: str = "none"  # "hash" | "slash" | "mixed"
     hash_count: int = 0
     slash_count: int = 0
     hash_examples: list[str] = Field(default_factory=list)
     slash_examples: list[str] = Field(default_factory=list)
+
+
+class IRIStrategyReport(BaseModel):
+    """Hash vs slash IRI strategy used by the ontology's own defined terms.
+
+    Consistency is judged per declared owl:Ontology base IRI, not pooled
+    across all of them: an ontology that bundles more than one base IRI
+    (e.g. the W3C PROV family's prov/prov-o) may use a different, but
+    internally consistent, style per base IRI without being flagged. Only
+    mixing hash and slash within ONE base IRI's own terms triggers a warning.
+    """
+
+    ontology_iri: str | None = None
+    namespaces: list[IRINamespaceStrategy] = Field(default_factory=list)
     status: Status = Status.SKIP
     message: str | None = None
 

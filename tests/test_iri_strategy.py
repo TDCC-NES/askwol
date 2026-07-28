@@ -37,9 +37,11 @@ def test_hash_strategy_ok():
         g.add((URIRef(f"http://example.org/ont#{name}"), RDF.type, OWL.Class))
     r = check_iri_strategy(g)
     assert r.status == Status.OK
-    assert r.strategy == "hash"
-    assert r.hash_count == 3
-    assert r.slash_count == 0
+    assert len(r.namespaces) == 1
+    ns = r.namespaces[0]
+    assert ns.strategy == "hash"
+    assert ns.hash_count == 3
+    assert ns.slash_count == 0
 
 
 def test_slash_strategy_ok():
@@ -49,9 +51,11 @@ def test_slash_strategy_ok():
         g.add((URIRef(f"http://example.org/ont/{name}"), RDF.type, OWL.Class))
     r = check_iri_strategy(g)
     assert r.status == Status.OK
-    assert r.strategy == "slash"
-    assert r.slash_count == 2
-    assert r.hash_count == 0
+    assert len(r.namespaces) == 1
+    ns = r.namespaces[0]
+    assert ns.strategy == "slash"
+    assert ns.slash_count == 2
+    assert ns.hash_count == 0
 
 
 def test_mixed_strategy_warns():
@@ -61,10 +65,12 @@ def test_mixed_strategy_warns():
     g.add((URIRef("http://example.org/ont/Organization"), RDF.type, OWL.Class))
     r = check_iri_strategy(g)
     assert r.status == Status.WARN
-    assert r.strategy == "mixed"
-    assert r.hash_count == 1
-    assert r.slash_count == 1
-    assert r.hash_examples and r.slash_examples
+    assert len(r.namespaces) == 1
+    ns = r.namespaces[0]
+    assert ns.strategy == "mixed"
+    assert ns.hash_count == 1
+    assert ns.slash_count == 1
+    assert ns.hash_examples and ns.slash_examples
 
 
 def test_bundle_with_multiple_ontology_subjects_is_not_hidden_by_alphabetical_order():
@@ -79,8 +85,43 @@ def test_bundle_with_multiple_ontology_subjects_is_not_hidden_by_alphabetical_or
         g.add((URIRef(f"http://example.org/main#{name}"), RDF.type, OWL.Class))
     r = check_iri_strategy(g)
     assert r.status == Status.OK
-    assert r.strategy == "hash"
-    assert r.hash_count == 2
+    assert len(r.namespaces) == 1
+    assert r.namespaces[0].strategy == "hash"
+    assert r.namespaces[0].hash_count == 2
+
+
+def test_different_styles_across_base_iris_does_not_warn():
+    """Two declared base IRIs, each internally consistent but using a
+    DIFFERENT style from each other, must not be flagged as mixed: style
+    consistency is judged per base IRI, not pooled across all of them."""
+    g = Graph()
+    _ont(g, "http://example.org/hash-ont")
+    _ont(g, "http://example.org/slash-ont")
+    g.add((URIRef("http://example.org/hash-ont#Person"), RDF.type, OWL.Class))
+    g.add((URIRef("http://example.org/hash-ont#Organization"), RDF.type, OWL.Class))
+    g.add((URIRef("http://example.org/slash-ont/Person"), RDF.type, OWL.Class))
+    r = check_iri_strategy(g)
+    assert r.status == Status.OK
+    assert len(r.namespaces) == 2
+    by_ns = {ns.namespace: ns.strategy for ns in r.namespaces}
+    assert by_ns["http://example.org/hash-ont"] == "hash"
+    assert by_ns["http://example.org/slash-ont"] == "slash"
+
+
+def test_mixed_within_one_base_iri_warns_even_with_other_consistent_base_iris():
+    """A single base IRI that internally mixes hash and slash must still
+    warn, even when other declared base IRIs are each perfectly consistent."""
+    g = Graph()
+    _ont(g, "http://example.org/clean-ont")
+    _ont(g, "http://example.org/messy-ont")
+    g.add((URIRef("http://example.org/clean-ont#Widget"), RDF.type, OWL.Class))
+    g.add((URIRef("http://example.org/messy-ont#Person"), RDF.type, OWL.Class))
+    g.add((URIRef("http://example.org/messy-ont/Organization"), RDF.type, OWL.Class))
+    r = check_iri_strategy(g)
+    assert r.status == Status.WARN
+    mixed = [ns for ns in r.namespaces if ns.strategy == "mixed"]
+    assert len(mixed) == 1
+    assert mixed[0].namespace == "http://example.org/messy-ont"
 
 
 def test_host_root_is_not_treated_as_own_namespace():

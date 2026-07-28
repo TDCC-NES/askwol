@@ -340,12 +340,21 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 return [_row('iri-strategy', _info, 'IRI strategy',
                              iri.message or 'skipped')]
             if iri.status == Status.WARN:
-                return [_row('iri-strategy', _warn, 'IRI strategy',
-                             f'mixed: {iri.hash_count} hash + {iri.slash_count} slash')]
-            label = 'hash (<code>#Term</code>)' if iri.strategy == 'hash' else 'slash (<code>/Term</code>)'
-            count = iri.hash_count if iri.strategy == 'hash' else iri.slash_count
+                mixed = [ns for ns in iri.namespaces if ns.strategy == 'mixed']
+                hash_n = sum(ns.hash_count for ns in mixed)
+                slash_n = sum(ns.slash_count for ns in mixed)
+                detail = f'mixed: {hash_n} hash + {slash_n} slash'
+                if len(iri.namespaces) > 1:
+                    detail += f' in {len(mixed)} of {len(iri.namespaces)} base IRIs'
+                return [_row('iri-strategy', _warn, 'IRI strategy', detail)]
+            if len(iri.namespaces) == 1:
+                ns = iri.namespaces[0]
+                label = 'hash (<code>#Term</code>)' if ns.strategy == 'hash' else 'slash (<code>/Term</code>)'
+                count = ns.hash_count if ns.strategy == 'hash' else ns.slash_count
+                return [_row('iri-strategy', _ok, 'IRI strategy',
+                             f'{label} &middot; {count} term{"s" if count != 1 else ""}')]
             return [_row('iri-strategy', _ok, 'IRI strategy',
-                         f'{label} &middot; {count} term{"s" if count != 1 else ""}')]
+                         f'{len(iri.namespaces)} base IRIs, each consistent')]
         if report_anchor == 'iri-scheme':
             sch = report.iri_scheme
             if not sch:
@@ -617,52 +626,59 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     iri = report.iri_strategy
     if iri is not None:
         _open_cluster('iri-strategy')
+        multi = len(iri.namespaces) > 1
         if iri.status == Status.SKIP:
             s_status, s_label = 'info', 'skipped'
         elif iri.status == Status.WARN:
             s_status, s_label = 'warn', 'mixed strategy'
+        elif multi:
+            s_status, s_label = 'ok', f'{len(iri.namespaces)} base IRIs'
         else:
-            s_status, s_label = 'ok', f'{iri.strategy} style'
+            s_status, s_label = 'ok', f'{iri.namespaces[0].strategy} style'
         parts.append('<section class="section">')
         parts.append(_section_heading('iri-strategy', 'IRI strategy', s_status, s_label))
         parts.append(_guide_link('iri-strategy'))
-        parts.append('<p class="subtitle">A consistent IRI pattern for the ontology&rsquo;s own terms. Either every term sits under a fragment (<code>http://example.org/ont#Term</code>, the <strong>hash</strong> pattern) or every term is its own slash path (<code>http://example.org/ont/Term</code>, the <strong>slash</strong> pattern). Mixing both within one ontology confuses consumers and tooling.</p>')
+        parts.append('<p class="subtitle">A consistent IRI pattern for the ontology&rsquo;s own terms. Either every term sits under a fragment (<code>http://example.org/ont#Term</code>, the <strong>hash</strong> pattern) or every term is its own slash path (<code>http://example.org/ont/Term</code>, the <strong>slash</strong> pattern). Mixing both within the same base IRI confuses consumers and tooling; an ontology that bundles more than one base IRI may use a different, internally consistent style for each.</p>')
 
         if iri.status == Status.SKIP:
             parts.append(_status_subtitle('info', iri.message or 'no terms in the ontology&rsquo;s own namespace could be classified'))
-        elif iri.status == Status.WARN:
-            parts.append(_status_subtitle(
-                'warn',
-                f'<strong>Mixed</strong>: {iri.hash_count} hash-style and {iri.slash_count} slash-style terms in the same ontology. Pick one and migrate the others.',
-            ))
-            parts.append('<details><summary style="cursor:pointer;font-weight:600;">Show examples</summary>')
-            if iri.hash_examples:
-                parts.append(f'<p style="margin:0.5em 0 0.2em;font-weight:600;">Hash style ({iri.hash_count}):</p>')
-                parts.append('<ul style="margin:0.2em 0 0.4em 1.2em;font-size:0.9em;">')
-                for ex in iri.hash_examples:
-                    parts.append(f'<li><code>{escape(ex)}</code></li>')
-                parts.append('</ul>')
-            if iri.slash_examples:
-                parts.append(f'<p style="margin:0.5em 0 0.2em;font-weight:600;">Slash style ({iri.slash_count}):</p>')
-                parts.append('<ul style="margin:0.2em 0 0.4em 1.2em;font-size:0.9em;">')
-                for ex in iri.slash_examples:
-                    parts.append(f'<li><code>{escape(ex)}</code></li>')
-                parts.append('</ul>')
-            parts.append('</details>')
         else:
-            count = iri.hash_count if iri.strategy == 'hash' else iri.slash_count
-            pattern = '<code>#Term</code>' if iri.strategy == 'hash' else '<code>/Term</code>'
-            parts.append(_status_subtitle(
-                'ok',
-                f'<strong>{iri.strategy.capitalize()} pattern</strong> ({pattern}) used consistently across all {count} defined term{"s" if count != 1 else ""}.',
-            ))
-            examples = iri.hash_examples if iri.strategy == 'hash' else iri.slash_examples
-            if examples:
-                parts.append('<details><summary style="cursor:pointer;font-weight:600;">Show examples</summary>')
-                parts.append('<ul style="margin:0.2em 0 0.4em 1.2em;font-size:0.9em;">')
-                for ex in examples:
-                    parts.append(f'<li><code>{escape(ex)}</code></li>')
-                parts.append('</ul></details>')
+            for ns in iri.namespaces:
+                if multi:
+                    parts.append(f'<p style="margin:0.6em 0 0.2em;font-weight:600;"><code>{escape(ns.namespace)}</code></p>')
+                if ns.strategy == 'mixed':
+                    parts.append(_status_subtitle(
+                        'warn',
+                        f'<strong>Mixed</strong>: {ns.hash_count} hash-style and {ns.slash_count} slash-style terms in the same namespace. Pick one and migrate the others.',
+                    ))
+                    parts.append('<details><summary style="cursor:pointer;font-weight:600;">Show examples</summary>')
+                    if ns.hash_examples:
+                        parts.append(f'<p style="margin:0.5em 0 0.2em;font-weight:600;">Hash style ({ns.hash_count}):</p>')
+                        parts.append('<ul style="margin:0.2em 0 0.4em 1.2em;font-size:0.9em;">')
+                        for ex in ns.hash_examples:
+                            parts.append(f'<li><code>{escape(ex)}</code></li>')
+                        parts.append('</ul>')
+                    if ns.slash_examples:
+                        parts.append(f'<p style="margin:0.5em 0 0.2em;font-weight:600;">Slash style ({ns.slash_count}):</p>')
+                        parts.append('<ul style="margin:0.2em 0 0.4em 1.2em;font-size:0.9em;">')
+                        for ex in ns.slash_examples:
+                            parts.append(f'<li><code>{escape(ex)}</code></li>')
+                        parts.append('</ul>')
+                    parts.append('</details>')
+                else:
+                    count = ns.hash_count if ns.strategy == 'hash' else ns.slash_count
+                    pattern = '<code>#Term</code>' if ns.strategy == 'hash' else '<code>/Term</code>'
+                    parts.append(_status_subtitle(
+                        'ok',
+                        f'<strong>{ns.strategy.capitalize()} pattern</strong> ({pattern}) used consistently across all {count} defined term{"s" if count != 1 else ""}.',
+                    ))
+                    examples = ns.hash_examples if ns.strategy == 'hash' else ns.slash_examples
+                    if examples:
+                        parts.append('<details><summary style="cursor:pointer;font-weight:600;">Show examples</summary>')
+                        parts.append('<ul style="margin:0.2em 0 0.4em 1.2em;font-size:0.9em;">')
+                        for ex in examples:
+                            parts.append(f'<li><code>{escape(ex)}</code></li>')
+                        parts.append('</ul></details>')
         parts.append('</section>')
 
     # IRI scheme consistency (http vs https) per host

@@ -128,44 +128,48 @@ def report_as_markdown(report: ValidationReport) -> str:
         w("")
         w("A consistent IRI pattern for the ontology's own terms: either every term sits under a "
           "fragment (`http://example.org/ont#Term`, hash) or every term is its own slash path "
-          "(`http://example.org/ont/Term`, slash). Mixing both within one ontology confuses "
-          "consumers and tooling.")
+          "(`http://example.org/ont/Term`, slash). Mixing both within the same base IRI confuses "
+          "consumers and tooling; an ontology that bundles more than one base IRI may use a "
+          "different, internally consistent style for each.")
         w("")
-        if iri.status == Status.WARN:
-            w(f"> **Mixed**: {iri.hash_count} hash-style and {iri.slash_count} slash-style terms in the same ontology.")
-            w("")
-            if iri.hash_examples:
-                w("<details>")
-                w(f"<summary>Hash style examples ({iri.hash_count})</summary>")
+        multi = len(iri.namespaces) > 1
+        for ns in iri.namespaces:
+            label = f" for `{ns.namespace}`" if multi else ""
+            if ns.strategy == "mixed":
+                w(f"> **Mixed**{label}: {ns.hash_count} hash-style and {ns.slash_count} slash-style terms in the same namespace.")
                 w("")
-                for ex in iri.hash_examples:
-                    w(f"- `{ex}`")
+                if ns.hash_examples:
+                    w("<details>")
+                    w(f"<summary>Hash style examples ({ns.hash_count})</summary>")
+                    w("")
+                    for ex in ns.hash_examples:
+                        w(f"- `{ex}`")
+                    w("")
+                    w("</details>")
+                    w("")
+                if ns.slash_examples:
+                    w("<details>")
+                    w(f"<summary>Slash style examples ({ns.slash_count})</summary>")
+                    w("")
+                    for ex in ns.slash_examples:
+                        w(f"- `{ex}`")
+                    w("")
+                    w("</details>")
+                    w("")
+            else:
+                count = ns.hash_count if ns.strategy == "hash" else ns.slash_count
+                w(f"> **{ns.strategy.capitalize()} pattern**{label} used consistently across all {count} defined term(s).")
                 w("")
-                w("</details>")
-                w("")
-            if iri.slash_examples:
-                w("<details>")
-                w(f"<summary>Slash style examples ({iri.slash_count})</summary>")
-                w("")
-                for ex in iri.slash_examples:
-                    w(f"- `{ex}`")
-                w("")
-                w("</details>")
-                w("")
-        else:
-            count = iri.hash_count if iri.strategy == "hash" else iri.slash_count
-            w(f"> **{iri.strategy.capitalize()} pattern** used consistently across all {count} defined term(s).")
-            w("")
-            examples = iri.hash_examples if iri.strategy == "hash" else iri.slash_examples
-            if examples:
-                w("<details>")
-                w(f"<summary>Show examples ({len(examples)})</summary>")
-                w("")
-                for ex in examples:
-                    w(f"- `{ex}`")
-                w("")
-                w("</details>")
-                w("")
+                examples = ns.hash_examples if ns.strategy == "hash" else ns.slash_examples
+                if examples:
+                    w("<details>")
+                    w(f"<summary>Show examples ({len(examples)})</summary>")
+                    w("")
+                    for ex in examples:
+                        w(f"- `{ex}`")
+                    w("")
+                    w("</details>")
+                    w("")
 
     # IRI scheme consistency (http vs https) per host
     sch = report.iri_scheme
@@ -642,9 +646,18 @@ def _overview_line(report: ValidationReport, anchor: str) -> tuple[str, str] | N
         if iri.status == S.SKIP:
             return "info", "skipped"
         if iri.status == S.WARN:
-            return "warn", f"mixed: {iri.hash_count} hash + {iri.slash_count} slash"
-        count = iri.hash_count if iri.strategy == "hash" else iri.slash_count
-        return "ok", f"{iri.strategy} style, {count} term(s)"
+            mixed = [ns for ns in iri.namespaces if ns.strategy == "mixed"]
+            hash_n = sum(ns.hash_count for ns in mixed)
+            slash_n = sum(ns.slash_count for ns in mixed)
+            detail = f"mixed: {hash_n} hash + {slash_n} slash"
+            if len(iri.namespaces) > 1:
+                detail += f" in {len(mixed)} of {len(iri.namespaces)} base IRI(s)"
+            return "warn", detail
+        if len(iri.namespaces) == 1:
+            ns = iri.namespaces[0]
+            count = ns.hash_count if ns.strategy == "hash" else ns.slash_count
+            return "ok", f"{ns.strategy} style, {count} term(s)"
+        return "ok", f"{len(iri.namespaces)} base IRIs, each consistent"
     if anchor == "iri-scheme":
         sch = report.iri_scheme
         if not sch:
@@ -915,15 +928,24 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     iri = report.iri_strategy
     if iri is not None and iri.status != Status.SKIP:
         console.print()
+        multi = len(iri.namespaces) > 1
         if iri.status == Status.WARN:
-            console.print(f"[yellow]\u26A0 IRI strategy  -  mixed: {iri.hash_count} hash + {iri.slash_count} slash[/yellow]")
-            if iri.hash_examples:
-                console.print(f"  [dim]hash:[/dim] {', '.join(iri.hash_examples)}")
-            if iri.slash_examples:
-                console.print(f"  [dim]slash:[/dim] {', '.join(iri.slash_examples)}")
+            mixed = [ns for ns in iri.namespaces if ns.strategy == "mixed"]
+            hash_n = sum(ns.hash_count for ns in mixed)
+            slash_n = sum(ns.slash_count for ns in mixed)
+            suffix = f" in {len(mixed)} of {len(iri.namespaces)} base IRI(s)" if multi else ""
+            console.print(f"[yellow]\u26A0 IRI strategy  -  mixed: {hash_n} hash + {slash_n} slash{suffix}[/yellow]")
+            for ns in mixed:
+                if ns.hash_examples:
+                    console.print(f"  [dim]hash:[/dim] {', '.join(ns.hash_examples)}")
+                if ns.slash_examples:
+                    console.print(f"  [dim]slash:[/dim] {', '.join(ns.slash_examples)}")
+        elif multi:
+            console.print(f"[green]\u2713 IRI strategy  -  {len(iri.namespaces)} base IRIs, each consistent[/green]")
         else:
-            count = iri.hash_count if iri.strategy == "hash" else iri.slash_count
-            console.print(f"[green]\u2713 IRI strategy  -  {iri.strategy} style, {count} term(s)[/green]")
+            ns = iri.namespaces[0]
+            count = ns.hash_count if ns.strategy == "hash" else ns.slash_count
+            console.print(f"[green]\u2713 IRI strategy  -  {ns.strategy} style, {count} term(s)[/green]")
 
     # IRI scheme consistency (http vs https) per host
     sch = report.iri_scheme

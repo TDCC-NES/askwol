@@ -19,6 +19,7 @@ from askwol.models import (
     InternalTermEntry,
     InternalTermIssue,
     InternalTermsReport,
+    IRINamespaceStrategy,
     IRISchemeConflict,
     IRISchemeReport,
     IRIStrategyReport,
@@ -65,7 +66,10 @@ def test_render_minimal_report_contains_all_section_anchors():
         )],
     )
     report.imports = ImportsReport(status=Status.OK, message="ok")
-    report.iri_strategy = IRIStrategyReport(status=Status.OK, strategy="hash", hash_count=3)
+    report.iri_strategy = IRIStrategyReport(
+        status=Status.OK,
+        namespaces=[IRINamespaceStrategy(namespace="http://example.org/", strategy="hash", hash_count=3)],
+    )
     report.iri_scheme = IRISchemeReport(status=Status.OK, total_hosts=1, http_only_hosts=0, https_only_hosts=1)
     report.license = LicenseReport(
         checks=[LicenseCheck(

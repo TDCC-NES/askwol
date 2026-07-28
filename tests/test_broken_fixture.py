@@ -113,7 +113,7 @@ def test_external_terms_flags_hijacked_foaf_term(parsed, foaf_stub):
 def test_iri_strategy_warns_on_mixed(parsed):
     iri = check_iri_strategy(parsed.graph)
     assert iri.status == Status.WARN
-    assert iri.strategy == "mixed"
+    assert any(ns.strategy == "mixed" for ns in iri.namespaces)
 
 
 def test_iri_scheme_warns_on_mixed_host(parsed):

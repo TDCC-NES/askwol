@@ -59,6 +59,23 @@ def is_external(uri: str) -> bool:
     return any(uri.startswith(ns) for ns in EXTERNAL_NAMESPACES)
 
 
+def ontology_stems(graph: Graph) -> set[str]:
+    """Return each declared owl:Ontology subject's URI with any trailing
+    "#"/"/" separator stripped, e.g. "http://example.org/onto" whether the
+    subject was declared as that bare URI, "...onto#", or "...onto/".
+
+    Unlike `ontology_namespaces`, this keeps each declared ontology distinct
+    instead of merging them into one set, and never falls back to
+    `namespace_of`'s broader path-stripping. Callers that need to build the
+    hash and slash namespace candidates *per declared ontology* (e.g.
+    iri_strategy.py, which must not let one base IRI's style contaminate
+    another's) should use this instead.
+    """
+    return {
+        str(s).rstrip("#/") for s in graph.subjects(RDF.type, OWL.Ontology) if isinstance(s, URIRef)
+    }
+
+
 def ontology_namespaces(graph: Graph, *, include_parent_path: bool = True) -> set[str]:
     """Return the namespace(s) declared as this ontology's own (subject of owl:Ontology).
 

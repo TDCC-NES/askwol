@@ -357,11 +357,13 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p><strong>What askwol checks:</strong> every term defined inside your
   ontology&rsquo;s own namespace is classified as either <em>hash style</em>
   (<code>http://example.org/ont#Person</code>) or <em>slash style</em>
-  (<code>http://example.org/ont/Person</code>). The check
-  <strong>passes</strong> when all defined terms use the same pattern and
-  <strong>warns</strong> when you mix both within one ontology. The
-  Imports section already verifies that you have declared an
-  <code>owl:Ontology</code>; this check uses that IRI as the root.</p>
+  (<code>http://example.org/ont/Person</code>), per declared
+  <code>owl:Ontology</code> base IRI. The check <strong>passes</strong>
+  when all defined terms under one base IRI use the same pattern and
+  <strong>warns</strong> when a single base IRI mixes both. An ontology
+  that legitimately bundles more than one base IRI (a rare pattern, e.g.
+  the W3C PROV family) may use a different, consistent style for each
+  without being flagged.</p>
   <div class="tip">Mixing hash and slash in the same vocabulary is almost
   always accidental. It breaks naive prefix-based namespace splitting and
   confuses consumers about whether <code>/Person</code> is the same term
@@ -399,8 +401,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   vocabularies and OWL ontologies. [&hellip;] 303&nbsp;URIs may also be
   used for [large] data sets, making neater-looking URIs.&rdquo;
   </blockquote>
-  <p>Either way, <strong>pick one per ontology</strong> and don&rsquo;t mix
-  them. Use a domain you control, or a persistent ID service like
+  <p>Either way, <strong>pick one per base IRI</strong> and don&rsquo;t mix
+  styles within it. Use a domain you control, or a persistent ID service
+  like
   <a href="https://w3id.org/" target="_blank" rel="noopener">w3id.org</a> or
   <a href="https://purl.org/" target="_blank" rel="noopener">purl.org</a>, so
   your IRIs survive domain changes.</p>
