@@ -659,7 +659,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   community convention, not an OWL or RDFS rule; nothing stops you from
   naming a class <code>person</code> or a property <code>HasName</code>.
   askwol checks it anyway, because consistent casing is one of the fastest
-  ways to tell a class from a property at a glance:</p>
+  ways to tell a class from a property at a glance. A mismatch is reported
+  as a warning, not a failure: it&rsquo;s worth fixing, but it won&rsquo;t
+  block publication.</p>
   <ul>
     <li><strong>Classes start with an uppercase letter</strong> and are usually
     nouns: <code>Person</code>, <code>Dataset</code>, <code>Organization</code>.</li>

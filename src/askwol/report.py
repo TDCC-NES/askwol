@@ -719,7 +719,7 @@ def _overview_line(report: ValidationReport, anchor: str) -> tuple[str, str] | N
         if inv.status == S.SKIP:
             return "info", "no terms in the ontology's own namespace"
         if inv.naming_issues:
-            return "fail", f"{inv.total_terms} terms, {len(inv.naming_issues)} naming issue(s)"
+            return "warn", f"{inv.total_terms} terms, {len(inv.naming_issues)} naming issue(s)"
         return "ok", f"{inv.total_terms} terms, naming consistent"
     if anchor == "domains-ranges":
         dr = report.domains_ranges
@@ -1049,9 +1049,9 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     inv = report.term_inventory
     if inv and inv.naming_issues:
         console.print()
-        console.print(f"[red]\u2717 Naming conventions  -  {len(inv.naming_issues)} issue{'s' if len(inv.naming_issues) != 1 else ''}[/red]")
+        console.print(f"[yellow]\u26A0 Naming conventions  -  {len(inv.naming_issues)} issue{'s' if len(inv.naming_issues) != 1 else ''}[/yellow]")
         inv_table = Table(title="Term naming issues", show_lines=True)
-        inv_table.add_column("Term", style="red bold")
+        inv_table.add_column("Term", style="yellow bold")
         inv_table.add_column("Category")
         inv_table.add_column("Issue")
         for e in inv.naming_issues:

@@ -188,7 +188,7 @@ def check_term_inventory(graph: Graph) -> TermInventoryReport:
         total_terms=len(entries),
         category_counts=ordered_counts,
         entries=entries,
-        status=Status.FAIL if naming_issues else Status.OK,
+        status=Status.WARN if naming_issues else Status.OK,
     )
 
 

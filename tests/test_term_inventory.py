@@ -51,7 +51,7 @@ def test_inventory_flags_lowercase_class():
 
     report = check_term_inventory(g)
 
-    assert report.status == Status.FAIL
+    assert report.status == Status.WARN
     issues = report.naming_issues
     assert len(issues) == 1
     assert issues[0].display_name == "person"
@@ -64,7 +64,7 @@ def test_inventory_flags_uppercase_property():
 
     report = check_term_inventory(g)
 
-    assert report.status == Status.FAIL
+    assert report.status == Status.WARN
     assert report.naming_issues[0].display_name == "HasName"
     assert "lowercase" in report.naming_issues[0].naming_message
 

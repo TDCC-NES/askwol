@@ -151,7 +151,7 @@ def test_non_ontology_terms_warns(parsed):
 
 def test_term_inventory_flags_naming(parsed):
     inv = check_term_inventory(parsed.graph)
-    assert inv.status == Status.FAIL
+    assert inv.status == Status.WARN
     flagged = {e.display_name for e in inv.naming_issues}
     assert "badFormat" in flagged
     assert "HasOwner" in flagged
@@ -207,7 +207,7 @@ async def test_cli_pipeline_populates_every_check(monkeypatch, foaf_stub):
     assert report.unused_prefixes
     assert report.non_ontology_terms is not None and report.non_ontology_terms.status == Status.WARN
     assert report.internal_terms is not None and report.internal_terms.status == Status.FAIL
-    assert report.term_inventory is not None and report.term_inventory.status == Status.FAIL
+    assert report.term_inventory is not None and report.term_inventory.status == Status.WARN
     assert report.domains_ranges is not None and report.domains_ranges.status == Status.FAIL
     assert report.datatypes is not None and report.datatypes.status == Status.FAIL
     assert report.definition_docs is not None and report.definition_docs.issues
@@ -243,7 +243,7 @@ async def test_cli_pipeline_skip_resolution_still_runs_local_checks():
     assert report.unused_prefixes
     assert report.non_ontology_terms is not None and report.non_ontology_terms.status == Status.WARN
     assert report.internal_terms is not None and report.internal_terms.status == Status.FAIL
-    assert report.term_inventory is not None and report.term_inventory.status == Status.FAIL
+    assert report.term_inventory is not None and report.term_inventory.status == Status.WARN
     assert report.domains_ranges is not None and report.domains_ranges.status == Status.FAIL
     assert report.datatypes is not None and report.datatypes.status == Status.FAIL
     assert report.definition_docs is not None and report.definition_docs.issues

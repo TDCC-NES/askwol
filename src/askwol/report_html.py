@@ -87,8 +87,8 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         "  .ns { margin-top: 1.5em; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }",
         "  .ns-header { background: #f5f5f5; padding: 0.6em 1em; font-weight: bold; border-bottom: 1px solid #ddd; }",
         "  .ns-body { padding: 0.5em 1em; }",
-        "  table { border-collapse: collapse; width: 100%; margin: 0.5em 0; }",
-        "  th, td { text-align: left; padding: 0.3em 0.8em; border-bottom: 1px solid #f0f0f0; font-size: 0.9em; }",
+        "  table { border-collapse: collapse; width: 100%; margin: 0.5em 0; table-layout: fixed; }",
+        "  th, td { text-align: left; padding: 0.3em 0.8em; border-bottom: 1px solid #f0f0f0; font-size: 0.9em; overflow-wrap: anywhere; }",
         "  th { color: #666; font-weight: 600; }",
         "  .back { margin-top: 2em; }",
         "  .error { color: #c00; background: #fff0f0; padding: 0.8em; border-radius: 6px; }",
@@ -243,7 +243,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 return [_row('term-inventory', _info, 'Term inventory &amp; naming',
                              'no terms defined in the ontology&rsquo;s own namespace')]
             if inv.naming_issues:
-                return [_row('term-inventory', _fail, 'Term inventory &amp; naming',
+                return [_row('term-inventory', _warn, 'Term inventory &amp; naming',
                              f'{inv.total_terms} terms &middot; {len(inv.naming_issues)} naming issue(s)')]
             return [_row('term-inventory', _ok, 'Term inventory &amp; naming',
                          f'{inv.total_terms} terms &middot; naming consistent')]
@@ -906,28 +906,27 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     if failed_terms_flat:
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Terms not found in their vocabulary ({len(failed_terms_flat)})</summary>')
         parts.append('<p style="font-size:0.85em;color:#666;margin:0.5em 0;">Some vocabularies redirect an unresolvable term&rsquo;s IRI to a general documentation page, which can coincidentally define a similarly named term under a different namespace. The IRI below is what askwol actually checked, not necessarily where the link redirects to.</p>')
-        parts.append('<table><tr><th>Term</th><th>Prefix</th><th>Full IRI</th></tr>')
+        parts.append('<table><tr><th>Term</th><th>Prefix</th></tr>')
         for ns, t in failed_terms_flat:
             t_iri = escape(t.term_uri)
-            parts.append(f'<tr><td><code>{escape(t.local_name)}</code></td>'
-                         f'<td><code>{escape(ns.prefix)}</code></td>'
-                         f'<td><a href="{t_iri}" target="_blank" rel="noopener"><code>{t_iri}</code></a></td></tr>')
+            parts.append(f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(t.local_name)}</code></a></td>'
+                         f'<td><code>{escape(ns.prefix)}</code></td></tr>')
         parts.append('</table></details>')
     if deprecated_terms_flat:
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Deprecated upstream ({len(deprecated_terms_flat)})</summary>')
-        parts.append('<table><tr><th>Term</th><th>Prefix</th><th>Marker</th><th>Full IRI</th></tr>')
+        parts.append('<table><tr><th>Term</th><th>Prefix</th><th>Marker</th></tr>')
         for ns, t in deprecated_terms_flat:
             t_iri = escape(t.term_uri)
-            parts.append(f'<tr><td><code>{escape(t.local_name)}</code></td>'
+            parts.append(f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(t.local_name)}</code></a></td>'
                          f'<td><code>{escape(ns.prefix)}</code></td>'
-                         f'<td>{escape(t.deprecated or "")}</td>'
-                         f'<td><a href="{t_iri}" target="_blank" rel="noopener"><code>{t_iri}</code></a></td></tr>')
+                         f'<td>{escape(t.deprecated or "")}</td></tr>')
         parts.append('</table></details>')
     if skipped_terms_flat:
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Terms not checkable, namespace unavailable ({len(skipped_terms_flat)})</summary>')
         parts.append('<table><tr><th>Term</th><th>Prefix</th></tr>')
         for ns, t in skipped_terms_flat:
-            parts.append(f'<tr><td><code>{escape(t.local_name)}</code></td>'
+            t_iri = escape(t.term_uri)
+            parts.append(f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(t.local_name)}</code></a></td>'
                          f'<td><code>{escape(ns.prefix)}</code></td></tr>')
         parts.append('</table></details>')
     if ok_terms:
@@ -937,7 +936,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             for t in ns.terms:
                 if t.status == Status.OK:
                     t_iri = escape(t.term_uri)
-                    parts.append(f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener"><code>{escape(t.local_name)}</code></a></td>'
+                    parts.append(f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(t.local_name)}</code></a></td>'
                                  f'<td><code>{escape(ns.prefix)}</code></td></tr>')
         parts.append('</table></details>')
     parts.append('</section>')
@@ -955,22 +954,21 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append(_status_subtitle(i_status, f'{it.defined}/{it.total_referenced} referenced terms defined &middot; {len(it.undefined)} undefined'))
         if it.undefined:
             parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Referenced but never defined ({len(it.undefined)})</summary>')
-            parts.append('<table><tr><th>Term</th><th>Full IRI</th></tr>')
+            parts.append('<table><tr><th>Term</th></tr>')
             for issue in it.undefined:
                 t_iri = escape(issue.term)
                 parts.append(
-                    f'<tr><td><code>{escape(issue.display_name)}</code></td>'
-                    f'<td><a href="{t_iri}" target="_blank" rel="noopener"><code>{t_iri}</code></a></td></tr>'
+                    f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(issue.display_name)}</code></a></td></tr>'
                 )
             parts.append('</table></details>')
         if it.referenced:
             parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show all referenced terms ({len(it.referenced)})</summary>')
             parts.append('<table><tr><th>Term</th><th>Status</th></tr>')
-            for ref in it.referenced:
+            for ref in sorted(it.referenced, key=lambda x: (x.defined, x.display_name.lower())):
                 t_iri = escape(ref.term)
                 status_html = _ok + ' defined' if ref.defined else _fail + ' undefined'
                 parts.append(
-                    f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener"><code>{escape(ref.display_name)}</code></a></td>'
+                    f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(ref.display_name)}</code></a></td>'
                     f'<td>{status_html}</td></tr>'
                 )
             parts.append('</table></details>')
@@ -983,7 +981,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     inv = report.term_inventory
     if inv and inv.status != Status.SKIP and inv.entries:
         _open_cluster('term-inventory')
-        inv_status = 'ok' if not inv.naming_issues else 'fail'
+        inv_status = 'ok' if not inv.naming_issues else 'warn'
         inv_label = 'naming consistent' if inv_status == 'ok' else f'{len(inv.naming_issues)} naming issue(s)'
         parts.append('<section class="section">')
         parts.append(_section_heading('term-inventory', 'Term inventory &amp; naming', inv_status, inv_label))
@@ -998,16 +996,16 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             summary += f' &middot; {len(inv.naming_issues)} to review'
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">{summary}</summary>')
         parts.append('<table><tr><th>Term</th><th>Category</th><th>Naming</th></tr>')
-        for e in sorted(inv.entries, key=lambda x: (x.category, x.display_name.lower())):
+        for e in sorted(inv.entries, key=lambda x: (x.naming_ok, x.category, x.display_name.lower())):
             t_iri = escape(e.term)
             if e.deprecated:
                 mark = f'<span title="Deprecated ({escape(e.deprecated)}); naming not checked" style="color:#999;font-size:1.2em;line-height:1">&#x2298;</span>'
             elif e.naming_ok:
                 mark = '<span style="color:#2e7d32;font-size:1.2em;line-height:1">&#x2713;</span>'
             else:
-                mark = f'<span style="color:#c62828;font-size:1.2em;line-height:1">&#x2717;</span> {escape(e.naming_message or "")}'
+                mark = f'<span style="color:#e6a700;font-size:1.2em;line-height:1">&#x26A0;</span> {escape(e.naming_message or "")}'
             parts.append(
-                f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener"><code>{escape(e.display_name)}</code></a></td>'
+                f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(e.display_name)}</code></a></td>'
                 f'<td>{escape(e.category)}</td><td>{mark}</td></tr>'
             )
         parts.append('</table></details>')
@@ -1039,8 +1037,8 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         if dr.issues:
             summary += f' &middot; {len(dr.issues)} to review'
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">{summary}</summary>')
-        parts.append('<table><tr><th>Property</th><th>Category</th><th>Domain</th><th>Range</th><th>Status</th></tr>')
-        for c in sorted(dr.checks, key=lambda x: (x.category, x.display_name.lower())):
+        parts.append('<table><tr><th>Property</th><th>Category</th><th style="width:70px;">Domain</th><th style="width:70px;">Range</th><th>Status</th></tr>')
+        for c in sorted(dr.checks, key=lambda x: (x.status == Status.OK, x.category, x.display_name.lower())):
             t_iri = escape(c.term)
             dmark = ('<span style="color:#2e7d32">&#x2713;</span>' if c.has_domain
                      else '<span style="color:#c62828">&#x2717;</span>')
@@ -1051,7 +1049,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 category += f' <span title="Deprecated ({escape(c.deprecated)}); not checked" style="color:#999;">&#x2298;</span>'
             issue = f'{_status_mark(c.status)} {escape(c.message or "")}' if c.status != Status.OK else _status_mark(c.status)
             parts.append(
-                f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener"><code>{escape(c.display_name)}</code></a></td>'
+                f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(c.display_name)}</code></a></td>'
                 f'<td>{category}</td><td>{dmark}</td><td>{rmark}</td><td>{issue}</td></tr>'
             )
         parts.append('</table></details>')
@@ -1075,15 +1073,15 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         if dt.unrecognized:
             summary += f' &middot; {len(dt.unrecognized)} unrecognized'
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">{summary}</summary>')
-        parts.append('<table><tr><th>Datatype</th><th>Uses</th><th>Where</th><th>Status</th></tr>')
-        for u in sorted(dt.usages, key=lambda x: x.display_name.lower()):
+        parts.append('<table><tr><th>Datatype</th><th style="width:60px;">Uses</th><th>Where</th><th>Status</th></tr>')
+        for u in sorted(dt.usages, key=lambda x: (x.recognized, x.display_name.lower())):
             t_iri = escape(u.datatype)
             if u.recognized:
                 status = '<span style="color:#2e7d32;font-size:1.2em;line-height:1">&#x2713;</span>'
             else:
                 status = f'<span style="color:#c62828;font-size:1.2em;line-height:1">&#x2717;</span> {escape(u.message or "")}'
             parts.append(
-                f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener"><code>{escape(u.display_name)}</code></a></td>'
+                f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(u.display_name)}</code></a></td>'
                 f'<td>{u.count}</td><td>{escape(", ".join(u.sources))}</td><td>{status}</td></tr>'
             )
         parts.append('</table></details>')
@@ -1105,13 +1103,12 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         if sk.terms:
             parts.append(_status_subtitle('warn', f'{len(sk.terms)} skos:Concept instance{"s" if len(sk.terms) != 1 else ""} defined in the ontology&rsquo;s own namespace'))
             parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Terms to move into a separate concept scheme ({len(sk.terms)})</summary>')
-            parts.append('<table><tr><th>Term</th><th>What it is</th><th>Full IRI</th></tr>')
+            parts.append('<table><tr><th>Term</th><th>What it is</th></tr>')
             for issue in sk.terms:
                 t_iri = escape(issue.term)
                 parts.append(
-                    f'<tr><td><code>{escape(issue.display_name)}</code></td>'
-                    f'<td>{escape(issue.type_label)}</td>'
-                    f'<td><a href="{t_iri}" target="_blank" rel="noopener"><code>{t_iri}</code></a></td></tr>'
+                    f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(issue.display_name)}</code></a></td>'
+                    f'<td>{escape(issue.type_label)}</td></tr>'
                 )
             parts.append('</table></details>')
         else:
@@ -1142,13 +1139,13 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             parts.append(f'<p class="subtitle">Every internally defined class and property should carry an <code>{prop}</code>. Reused external vocabulary terms, and terms you have marked deprecated, are ignored. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes for term documentation</a>.</p>')
             parts.append(_status_subtitle(status, f'{present_count}/{docs.total_definitions} have an <code>{prop}</code> &middot; {len(missing)} missing'))
             parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show {title.lower()} ({docs.total_definitions})</summary>')
-            parts.append(f'<table><tr><th>Term</th><th>Type</th><th>{title.rstrip("s")}</th></tr>')
+            parts.append(f'<table><tr><th>Term</th><th>Type</th><th style="width:70px;">{title.rstrip("s")}</th></tr>')
             for check in sorted(docs.checks, key=lambda c: (getattr(c, "has_label" if anchor == "labels" else "has_comment"), c.display_name.lower())):
                 term = escape(check.display_name)
                 term_uri = escape(check.term)
                 present = check.has_label if anchor == 'labels' else check.has_comment
                 parts.append(
-                    f'<tr><td><a href="{term_uri}" target="_blank" rel="noopener"><code>{term}</code></a></td>'
+                    f'<tr><td><a href="{term_uri}" target="_blank" rel="noopener" title="{term_uri}"><code>{term}</code></a></td>'
                     f'<td>{escape(check.term_type)}</td><td>{_mark_cell(present, check.deprecated)}</td></tr>'
                 )
             parts.append('</table></details>')
