@@ -106,7 +106,6 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         "  .diagram-controls button:hover { background: #e8e8e8; }",
         "  .diagram h2 { margin: 0 0 0.5em 0; font-size: 1.1em; color: #555; }",
         "  .topnav { margin-bottom: 1em; font-size: 0.95em; color: #555; background: #f7f7f7; border: 1px solid #eee; border-radius: 8px; padding: 0.6em 0.9em; }",
-        "  .beta-badge { display: inline-block; font-size: 0.5em; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #8a6d1a; background: #fef3d7; border: 1px solid #e8d5a3; border-radius: 999px; padding: 0.2em 0.65em; vertical-align: middle; margin-left: 0.5em; }",
         "  .section { background: #f9f9f9; border: 1px solid #eee; border-radius: 8px; padding: 0.8em 1.2em; margin: 1em 0; }",
         "  .section h2 { margin: 0 0 0.2em 0; font-size: 1.1em; color: #444; border: none; padding: 0; }",
         "  .section .subtitle { font-size: 0.9em; color: #666; margin: 0.35em 0; }",
@@ -114,7 +113,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         "  .footer { margin-top: 2em; font-size: 0.85em; color: #aaa; text-align: center; }",
         "</style>",
         "</head><body>",
-        '<p class="topnav"><strong>Navigation:</strong> <a href="./">Home</a> &middot; <a href="guide">Publishing guide</a> &middot; <a href="docs">API docs</a> <span class="beta-badge">Beta</span></p>',
+        '<p class="topnav"><strong>Navigation:</strong> <a href="./">Home</a> &middot; <a href="guide">Publishing guide</a> &middot; <a href="docs">API docs</a></p>',
         f'<h1>Results for {source_html}</h1>',
     ]
 
