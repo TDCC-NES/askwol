@@ -20,12 +20,25 @@ services:
       # prefix (e.g. /askwol) so nav links and API docs resolve correctly.
       # Leave empty when the app is served at the domain root.
       - ASKWOL_ROOT_PATH=${ASKWOL_ROOT_PATH:-}
+      # Each validation runs in its own isolated process and is killed if it
+      # exceeds this many seconds. Defaults shown here match the app's own
+      # built-in defaults; uncomment only to override them.
+      # - ASKWOL_VALIDATION_TIMEOUT=300
+      # Maximum number of validations allowed to run at the same time;
+      # excess requests get an immediate 503 instead of queueing. Keep at or
+      # below the host's CPU core count - each validation can use a full core.
+      # - ASKWOL_MAX_CONCURRENT_VALIDATIONS=2
+      # Generous caps on ontology size, checked right after parsing so an
+      # oversized file fails fast instead of occupying a validation slot.
+      # - ASKWOL_MAX_TRIPLES=500000
+      # - ASKWOL_MAX_NAMESPACES=500
+      # - ASKWOL_MAX_IMPORTS=200
     volumes:
       # Persist usage.db across container restarts/rebuilds.
       # The :z suffix relabels the bind mount for SELinux (Redhat/Fedora),
       # allowing the non-root container user to read/write the volume.
       - ./data:/data:z
-    # Use the production-style command by default (2 workers, no reload).
+    # Use the production-style command by default (1 worker, no reload).
     # For development, copy docker-compose.override.yml.example to
     # docker-compose.override.yml to enable hot-reload + bind-mounted source.
     # The live override file is gitignored so it never lands on the server.

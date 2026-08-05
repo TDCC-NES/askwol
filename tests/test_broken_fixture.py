@@ -175,10 +175,10 @@ def test_datatypes_flags_unrecognized(parsed):
 
 
 @pytest.mark.asyncio
-async def test_cli_pipeline_populates_every_check(monkeypatch, foaf_stub):
-    """Regression guard: the CLI must actually run all 16 checks.
+async def test_cli_pipeline_populates_every_check(foaf_stub):
+    """Regression guard: the shared pipeline must actually run all 16 checks.
 
-    cli.py's _run_check() used to never call check_iri_strategy,
+    The shared pipeline used to never call check_iri_strategy,
     check_iri_scheme, or check_non_ontology_terms, so those three checks
     silently never ran from the CLI even though web.py wired them up
     correctly and the report renderer had a row ready for them. This pins
@@ -194,11 +194,12 @@ async def test_cli_pipeline_populates_every_check(monkeypatch, foaf_stub):
     cache.put("http://xmlns.com/foaf/0.1/", foaf_stub)
     cache.put("http://w3id.org/askwol/broken/", None, error="404 - not found")
     cache.put("http://w3id.org/askwol/broken#", None, error="404 - not found")
-    monkeypatch.setattr("askwol.cli.OntologyCache", lambda: cache)
 
-    from askwol.cli import _run_check
+    from askwol.pipeline import run_full_validation
 
-    report = await _run_check(BROKEN, timeout=10.0, skip_resolution=False)
+    report, _mermaid = await run_full_validation(
+        BROKEN, include_mermaid=False, timeout=10.0, skip_resolution=False, cache=cache,
+    )
 
     assert report.ontology_metadata is not None and report.ontology_metadata.failed_checks
     assert report.imports is not None and report.imports.status == Status.FAIL
@@ -227,14 +228,16 @@ async def test_cli_pipeline_skip_resolution_still_runs_local_checks():
     (namespace resolution, imports, external term validation), not every
     other check.
 
-    cli.py's _run_check() used to return immediately after building
+    The shared pipeline used to return immediately after building
     placeholder SKIP namespace entries, silently skipping every local,
     network-free check too (metadata, license, term structure, docs,
     reasoner, IRI strategy/scheme, non-ontology terms).
     """
-    from askwol.cli import _run_check
+    from askwol.pipeline import run_full_validation
 
-    report = await _run_check(BROKEN, timeout=10.0, skip_resolution=True)
+    report, _mermaid = await run_full_validation(
+        BROKEN, include_mermaid=False, timeout=10.0, skip_resolution=True,
+    )
 
     assert report.ontology_metadata is not None and report.ontology_metadata.failed_checks
     assert report.license is not None and report.license.status == Status.FAIL

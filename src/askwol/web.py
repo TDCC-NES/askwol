@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
+import json
 import os
+import sys
 import tempfile
 import threading
 import time
+import uuid
 from html import escape
 from pathlib import Path
 from urllib.parse import quote, urlparse
@@ -16,26 +20,10 @@ from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from askwol import usage
-from askwol.cache import OntologyCache
-from askwol.definition_docs import check_definition_documentation
-from askwol.imports_check import check_imports
-from askwol.internal_terms import check_internal_terms
-from askwol.iri_scheme import check_iri_scheme
-from askwol.iri_strategy import check_iri_strategy
-from askwol.iri_utils import ontology_namespaces
-from askwol.lang_tags import check_lang_tags
-from askwol.license_check import check_license
-from askwol.mermaid_diagram import build_mermaid
-from askwol.metadata_validator import validate_ontology_metadata
-from askwol.models import NamespaceReport, UnusedPrefix, ValidationReport
-from askwol.parser import parse_ontology
-from askwol.reasoner_checks import run_reasoner_checks
+from askwol.models import ValidationReport
 from askwol.report_html import render_report
-from askwol.resolver import block_private_network_requests, resolve_all_namespaces
-from askwol.non_ontology_terms import check_non_ontology_terms
+from askwol.resolver import block_private_network_requests
 from askwol.templates import GUIDE_HTML, UPLOAD_HTML, render_checks_api_description
-from askwol.term_inventory import check_datatypes, check_domains_ranges, check_term_inventory
-from askwol.term_validator import validate_terms
 
 # ASKWOL_ROOT_PATH is the reverse-proxy sub-path prefix (e.g. /askwol); empty
 # for a root deployment.
@@ -114,6 +102,166 @@ def _rate_limited(client_ip: str | None) -> bool:
         _rate_limit_buckets[client_ip] = (window_start, count)
         return count > RATE_LIMIT_MAX_REQUESTS
 
+
+# Isolated validation. Each job parses and checks the ontology in its own OS
+# process (validate_worker.py), never inline in this event loop, so a slow
+# or hung ontology can be killed outright without blocking /health or any
+# other concurrent request. Both /validate and /api/validate call
+# run_isolated_validation() below - the one place this is implemented.
+VALIDATION_TIMEOUT = float(os.environ.get("ASKWOL_VALIDATION_TIMEOUT", "300"))
+MAX_CONCURRENT_VALIDATIONS = int(os.environ.get("ASKWOL_MAX_CONCURRENT_VALIDATIONS", "2"))
+
+# The command used to spawn the worker, as a plain module-level list rather
+# than hardcoded inline, so tests can monkeypatch it to a small fake process
+# to exercise timeout/kill/concurrency behaviour without a real slow ontology.
+WORKER_CMD: list[str] = [sys.executable, "-m", "askwol.validate_worker"]
+
+_validation_slots_lock = asyncio.Lock()
+_validation_slots_in_use = 0
+
+_OWL_BUSY_MESSAGE = "Wol is busy validating other ontologies right now. Please try again in a few minutes."
+_OWL_TIMEOUT_MESSAGE = "This ontology took too long to validate. Please try a smaller file, or try again later."
+_OWL_ERROR_MESSAGE = "Something went wrong while validating this ontology. Please try again."
+
+
+def _owl_message_html(message: str) -> str:
+    """A small, friendly owl-branded message for the 503/504 HTML responses."""
+    return (
+        '<div style="text-align:center;padding:48px 20px;'
+        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;\">"
+        '<div style="font-size:3.5rem;line-height:1;" aria-hidden="true">🦉</div>'
+        f'<p style="font-size:1.15rem;color:#3d6a4a;margin:18px 0 0;font-weight:600;">{escape(message)}</p>'
+        "</div>"
+    )
+
+
+class ValidationBusyError(Exception):
+    """Raised when the global concurrent-validation limit is reached."""
+
+
+class ValidationTimeoutError(Exception):
+    """Raised when a validation job exceeds VALIDATION_TIMEOUT."""
+
+
+async def _try_acquire_validation_slot() -> bool:
+    global _validation_slots_in_use
+    async with _validation_slots_lock:
+        if _validation_slots_in_use >= MAX_CONCURRENT_VALIDATIONS:
+            return False
+        _validation_slots_in_use += 1
+        return True
+
+
+async def _release_validation_slot() -> None:
+    global _validation_slots_in_use
+    async with _validation_slots_lock:
+        _validation_slots_in_use = max(0, _validation_slots_in_use - 1)
+
+
+async def _drain_phase_updates(request_id: str, stream: asyncio.StreamReader) -> None:
+    """Read phase-update lines from the worker's stderr as it runs, logging
+    each one so a job that never finishes still shows its last known phase."""
+    async for raw_line in stream:
+        try:
+            data = json.loads(raw_line)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+        phase = data.get("phase")
+        if phase:
+            usage.job_phase(request_id, phase)
+
+
+async def run_isolated_validation(
+    tmp_path: Path,
+    display_name: str,
+    *,
+    kind: str,
+    base_uri: str | None = None,
+) -> tuple[ValidationReport, str]:
+    """Validate one ontology file in an isolated child process.
+
+    Shared by /validate and /api/validate so both get identical protection:
+    a global concurrency limit (raises ValidationBusyError past it) and a
+    hard wall-clock timeout that kills the child process outright (raises
+    ValidationTimeoutError). Any other unexpected failure is turned into a
+    plain error result rather than propagating, so a bug in one job can
+    never take down the request. Job start, phase, and outcome are logged
+    via askwol.usage so a job that never finishes can still be identified.
+    """
+    request_id = uuid.uuid4().hex[:12]
+    usage.job_started(request_id, kind=kind, source=display_name)
+
+    if _TEST_INPROCESS_PIPELINE is not None:
+        return await _TEST_INPROCESS_PIPELINE(tmp_path, display_name=display_name, base_uri=base_uri)
+
+    if not await _try_acquire_validation_slot():
+        usage.job_finished(request_id, outcome="rejected", status="503", duration_ms=0)
+        raise ValidationBusyError()
+
+    started = time.perf_counter()
+
+    def _fail(outcome: str, status: str) -> tuple[ValidationReport, str]:
+        usage.job_finished(
+            request_id, outcome=outcome, status=status,
+            duration_ms=int((time.perf_counter() - started) * 1000),
+        )
+        failed_report = ValidationReport(file=display_name)
+        failed_report.parse_errors.append(_OWL_ERROR_MESSAGE)
+        return failed_report, ""
+
+    try:
+        cmd = [*WORKER_CMD, str(tmp_path), "--display-name", display_name]
+        if base_uri:
+            cmd += ["--base-uri", base_uri]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        assert proc.stdout is not None and proc.stderr is not None
+        stdout_task = asyncio.create_task(proc.stdout.read())
+        phase_task = asyncio.create_task(_drain_phase_updates(request_id, proc.stderr))
+        wait_task = asyncio.create_task(proc.wait())
+
+        try:
+            await asyncio.wait_for(asyncio.gather(stdout_task, phase_task, wait_task), timeout=VALIDATION_TIMEOUT)
+        except asyncio.TimeoutError:
+            proc.terminate()
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=5)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+            for task in (stdout_task, phase_task, wait_task):
+                task.cancel()
+            usage.job_finished(
+                request_id, outcome="timeout", status="504",
+                duration_ms=int((time.perf_counter() - started) * 1000),
+            )
+            raise ValidationTimeoutError() from None
+
+        if proc.returncode != 0:
+            report, mermaid = _fail("error", "500")
+            return report, mermaid
+
+        stdout = stdout_task.result()
+        payload = json.loads(stdout)
+        report = ValidationReport.model_validate(payload["report"])
+        mermaid = payload.get("mermaid", "")
+    except ValidationTimeoutError:
+        raise
+    except Exception:
+        report, mermaid = _fail("error", "500")
+        return report, mermaid
+    finally:
+        await _release_validation_slot()
+
+    duration_ms = int((time.perf_counter() - started) * 1000)
+    if report.parse_errors:
+        usage.job_finished(request_id, outcome="error", status="422", duration_ms=duration_ms)
+    else:
+        usage.job_finished(request_id, outcome="ok", status="200", duration_ms=duration_ms)
+    return report, mermaid
+
+
 app = FastAPI(
     title="askwol",
     description=(
@@ -133,8 +281,14 @@ app = FastAPI(
     root_path=ROOT_PATH,
 )
 
-# Global cache  -  persists across requests so repeated uploads don't re-fetch
-_global_cache = OntologyCache()
+# Test-only hook: when set, run_isolated_validation calls this directly
+# in-process instead of spawning a worker subprocess, bypassing all
+# isolation machinery. Namespace/import resolution normally happens inside
+# a separate process, which can no longer be stubbed via an in-process cache
+# shared with the test - the test suite uses this hook instead, so report-
+# content tests keep working exactly as before. Left unset (None) in
+# production; askwol.pipeline.run_full_validation is called directly.
+_TEST_INPROCESS_PIPELINE = None
 
 
 def _apply_prefix(html: str) -> str:
@@ -741,65 +895,20 @@ async def _validate_upload(file: UploadFile) -> HTMLResponse:
     return await _run_validation(tmp_path, file.filename or "upload")
 
 async def _run_validation(tmp_path: Path, source_name: str, base_uri: str | None = None) -> HTMLResponse:
-    report = ValidationReport(file=source_name)
-    cache = _global_cache
-    mermaid = ""
-
     try:
-        parsed = parse_ontology(tmp_path, base_uri=base_uri)
-    except Exception as exc:
-        report.parse_errors.append(str(exc))
-        return HTMLResponse(_apply_prefix(render_report(report, mermaid)), status_code=422)
+        try:
+            report, mermaid = await run_isolated_validation(
+                tmp_path, source_name, kind="validate", base_uri=base_uri,
+            )
+        except ValidationBusyError:
+            return HTMLResponse(_apply_prefix(_owl_message_html(_OWL_BUSY_MESSAGE)), status_code=503)
+        except ValidationTimeoutError:
+            return HTMLResponse(_apply_prefix(_owl_message_html(_OWL_TIMEOUT_MESSAGE)), status_code=504)
     finally:
         tmp_path.unlink(missing_ok=True)
 
-    mermaid = build_mermaid(parsed.graph, parsed.namespaces)
-
-    # Detect unused prefixes
-    used_prefixes = set(parsed.namespaces.keys())
-    for pfx, uri in parsed.declared_prefixes.items():
-        if pfx not in used_prefixes:
-            report.unused_prefixes.append(UnusedPrefix(prefix=pfx, uri=uri))
-
-    report.lang_tags = check_lang_tags(parsed.graph, parsed.namespaces)
-    report.ontology_metadata = validate_ontology_metadata(parsed.graph)
-    report.definition_docs = check_definition_documentation(parsed.graph)
-    report.internal_terms = check_internal_terms(parsed.graph)
-    report.term_inventory = check_term_inventory(parsed.graph)
-    report.domains_ranges = check_domains_ranges(parsed.graph)
-    report.datatypes = check_datatypes(parsed.graph)
-    report.imports = await check_imports(parsed.graph, cache)
-    # "Strategy" = hash vs. slash IRIs; "scheme" = http vs. https.
-    report.iri_strategy = check_iri_strategy(parsed.graph)
-    report.iri_scheme = check_iri_scheme(parsed.graph, parsed.namespaces)
-    report.license = check_license(parsed.graph)
-    # Reasoner checks: current ontology only, imports are not followed.
-    report.reasoner = run_reasoner_checks(parsed.graph)
-    report.non_ontology_terms = check_non_ontology_terms(parsed.graph)
-
-    # Only resolve and report namespaces that have subject-position terms
-    active_ns = {pfx: uri for pfx, uri in parsed.namespaces.items()
-                 if parsed.terms_by_namespace.get(pfx)}
-    own_ns = ontology_namespaces(parsed.graph)
-
-    ns_checks = await resolve_all_namespaces(active_ns, cache)
-    ns_check_map = {c.uri: c for c in ns_checks}
-
-    for prefix, uri in active_ns.items():
-        ns_check = ns_check_map[uri]
-        local_names = parsed.terms_by_namespace.get(prefix, set())
-        term_checks = [] if uri in own_ns else validate_terms(prefix, uri, local_names, cache)
-
-        report.namespaces.append(
-            NamespaceReport(
-                prefix=prefix,
-                uri=uri,
-                resolution=ns_check,
-                terms=term_checks,
-            )
-        )
-
-    return HTMLResponse(_apply_prefix(render_report(report, mermaid)))
+    status_code = 422 if report.parse_errors else 200
+    return HTMLResponse(_apply_prefix(render_report(report, mermaid)), status_code=status_code)
 
 
 @app.post(
@@ -811,6 +920,8 @@ async def _run_validation(tmp_path: Path, source_name: str, base_uri: str | None
     responses={
         422: {"description": "Parse error  -  the file could not be parsed as RDF"},
         429: {"description": "Too many requests from this client"},
+        503: {"description": "Too many concurrent validations, try again shortly"},
+        504: {"description": "This ontology took too long to validate"},
     },
 )
 async def validate_api(
@@ -820,65 +931,43 @@ async def validate_api(
     """Upload an OWL ontology and get a full validation report as JSON.
 
     See the route description for the full list of checks (single-sourced
-    from askwol.templates.CHECKS).
+    from askwol.templates.CHECKS). Uses the same isolated validation runner
+    as the HTML /validate route.
     """
+    started = time.perf_counter()
     client_ip = _client_ip(request)
+    source = file.filename or "upload"
+
     if _rate_limited(client_ip):
-        return JSONResponse(
+        response = JSONResponse(
             content={"detail": "Too many requests. Please wait a minute and try again."},
             status_code=429,
         )
-    try:
-        content = await _read_upload_capped(file)
-    except UploadTooLargeError as exc:
-        return JSONResponse(content={"detail": str(exc)}, status_code=413)
-    suffix = Path(file.filename or "ontology.ttl").suffix or ".ttl"
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(content)
-        tmp_path = Path(tmp.name)
+    else:
+        try:
+            content = await _read_upload_capped(file)
+        except UploadTooLargeError as exc:
+            response = JSONResponse(content={"detail": str(exc)}, status_code=413)
+        else:
+            suffix = Path(file.filename or "ontology.ttl").suffix or ".ttl"
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp.write(content)
+                tmp_path = Path(tmp.name)
+            try:
+                try:
+                    report, _mermaid = await run_isolated_validation(tmp_path, source, kind="validate_api")
+                    status_code = 422 if report.parse_errors else 200
+                    response = JSONResponse(content=report.model_dump(mode="json"), status_code=status_code)
+                except ValidationBusyError:
+                    response = JSONResponse(content={"detail": _OWL_BUSY_MESSAGE}, status_code=503)
+                except ValidationTimeoutError:
+                    response = JSONResponse(content={"detail": _OWL_TIMEOUT_MESSAGE}, status_code=504)
+            finally:
+                tmp_path.unlink(missing_ok=True)
 
-    report = ValidationReport(file=file.filename or "upload")
-    cache = _global_cache
-    try:
-        parsed = parse_ontology(tmp_path)
-    except Exception as exc:
-        report.parse_errors.append(str(exc))
-        return JSONResponse(content=report.model_dump(mode="json"), status_code=422)
-    finally:
-        tmp_path.unlink(missing_ok=True)
-
-    active_ns = {pfx: uri for pfx, uri in parsed.namespaces.items()
-                 if parsed.terms_by_namespace.get(pfx)}
-    own_ns = ontology_namespaces(parsed.graph)
-
-    ns_checks = await resolve_all_namespaces(active_ns, cache)
-    ns_check_map = {c.uri: c for c in ns_checks}
-    for prefix, uri in active_ns.items():
-        ns_check = ns_check_map[uri]
-        local_names = parsed.terms_by_namespace.get(prefix, set())
-        term_checks = [] if uri in own_ns else validate_terms(prefix, uri, local_names, cache)
-        report.namespaces.append(
-            NamespaceReport(prefix=prefix, uri=uri, resolution=ns_check, terms=term_checks)
-        )
-
-    used_prefixes = set(parsed.namespaces.keys())
-    for pfx, uri in parsed.declared_prefixes.items():
-        if pfx not in used_prefixes:
-            report.unused_prefixes.append(UnusedPrefix(prefix=pfx, uri=uri))
-
-    report.lang_tags = check_lang_tags(parsed.graph, parsed.namespaces)
-    report.ontology_metadata = validate_ontology_metadata(parsed.graph)
-    report.definition_docs = check_definition_documentation(parsed.graph)
-    report.internal_terms = check_internal_terms(parsed.graph)
-    report.term_inventory = check_term_inventory(parsed.graph)
-    report.domains_ranges = check_domains_ranges(parsed.graph)
-    report.datatypes = check_datatypes(parsed.graph)
-    report.imports = await check_imports(parsed.graph, cache)
-    report.iri_strategy = check_iri_strategy(parsed.graph)
-    report.iri_scheme = check_iri_scheme(parsed.graph, parsed.namespaces)
-    report.license = check_license(parsed.graph)
-    report.reasoner = run_reasoner_checks(parsed.graph)
-    report.non_ontology_terms = check_non_ontology_terms(parsed.graph)
-
-    return report.model_dump(mode="json")
+    usage.record(
+        "validate_api", source=source, status=str(response.status_code),
+        duration_ms=int((time.perf_counter() - started) * 1000), ip=client_ip,
+    )
+    return response
 

@@ -62,6 +62,21 @@ def _init() -> None:
                     key   TEXT PRIMARY KEY,
                     value TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS validation_jobs (
+                    request_id   TEXT PRIMARY KEY,
+                    kind         TEXT NOT NULL,
+                    source       TEXT,
+                    started_at   TEXT NOT NULL,
+                    phase        TEXT,
+                    phase_at     TEXT,
+                    finished_at  TEXT,
+                    outcome      TEXT,
+                    status       TEXT,
+                    duration_ms  INTEGER
+                );
+                CREATE INDEX IF NOT EXISTS idx_validation_jobs_started ON validation_jobs(started_at);
+                CREATE INDEX IF NOT EXISTS idx_validation_jobs_outcome ON validation_jobs(outcome);
                 """
             )
             row = conn.execute(
@@ -234,3 +249,71 @@ def all_events(limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
 
 def stats_token() -> str | None:
     return os.environ.get("ASKWOL_STATS_TOKEN") or None
+
+
+def job_started(request_id: str, *, kind: str, source: str | None) -> None:
+    """Record that an isolated validation job has started, before any work
+    happens. Failures are swallowed - job tracking must never break the app."""
+    if _DISABLED:
+        return
+    try:
+        _init()
+        with _connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO validation_jobs(request_id, kind, source, started_at, outcome) "
+                "VALUES (?, ?, ?, ?, 'running')",
+                (request_id, kind, source, datetime.now(timezone.utc).isoformat(timespec="seconds")),
+            )
+    except Exception:
+        pass
+
+
+def job_phase(request_id: str, phase: str) -> None:
+    """Record a running job's current pipeline phase (parsing, checks, ...)."""
+    if _DISABLED:
+        return
+    try:
+        _init()
+        with _connect() as conn:
+            conn.execute(
+                "UPDATE validation_jobs SET phase = ?, phase_at = ? WHERE request_id = ?",
+                (phase, datetime.now(timezone.utc).isoformat(timespec="seconds"), request_id),
+            )
+    except Exception:
+        pass
+
+
+def job_finished(request_id: str, *, outcome: str, status: str | None, duration_ms: int) -> None:
+    """Record a job's outcome: one of 'ok', 'error', 'timeout', or 'rejected'."""
+    if _DISABLED:
+        return
+    try:
+        _init()
+        with _connect() as conn:
+            conn.execute(
+                "UPDATE validation_jobs SET finished_at = ?, outcome = ?, status = ?, duration_ms = ? "
+                "WHERE request_id = ?",
+                (
+                    datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    outcome, status, duration_ms, request_id,
+                ),
+            )
+    except Exception:
+        pass
+
+
+def stuck_jobs(older_than_seconds: int = 600) -> list[dict[str, Any]]:
+    """Jobs that started but never finished (still 'running' after the given
+    age) - for identifying hangs after the fact, e.g. from a shell:
+    ``python -c "from askwol import usage; print(usage.stuck_jobs())"``."""
+    if _DISABLED:
+        return []
+    _init()
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT request_id, kind, source, started_at, phase, phase_at FROM validation_jobs "
+            "WHERE outcome = 'running' AND started_at < datetime('now', ?) "
+            "ORDER BY started_at",
+            (f"-{int(older_than_seconds)} seconds",),
+        ).fetchall()
+    return [dict(row) for row in rows]

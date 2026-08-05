@@ -17,7 +17,7 @@
 
 The W3C originally planned to call their Web Ontology Language **WOL**. Tim Finin [proposed rearranging it to **OWL**](http://lists.w3.org/Archives/Public/www-webont-wg/2001Dec/0169.html), since *"owls are associated with wisdom."* Fittingly, [Owl](https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)) from Milne's *Winnie-the-Pooh* [famously misspells his own name](https://lists.w3.org/Archives/Public/www-webont-wg/2002Sep/0301.html) as **"Wol."**
 
-So the name went WOL → OWL → and, for a tool that *asks* Owl for a wise second opinion on your ontology, back to **askwol**.
+So the name went WOL → OWL → and, for a tool that *asks* Owl for a wise second opinion on your ontology, back to **askwol**. Wollie, to friends.
 
 <p align="center">
   <a href="https://commons.wikimedia.org/wiki/File:Winnie-the-Pooh_67.png">
@@ -181,11 +181,13 @@ server.example.com {
 
 **Security notes:** askwol fetches arbitrary URLs (namespace resolution + URL upload). Outbound requests to private, loopback, and other internal IP ranges are blocked automatically (SSRF guard in [`resolver.py`](src/askwol/resolver.py)). Each client IP is capped at `ASKWOL_RATE_LIMIT` requests per minute (default 20; set to `0` to disable) on `/validate` and `/api/validate`. Uploads are capped at 20 MB in the app itself; also enforce a request-size limit on the reverse proxy as defence-in-depth.
 
+**Validation limits:** each validation runs in its own isolated process, never inline in a web worker, so a slow or hung ontology can be killed without affecting other requests. A hard timeout (`ASKWOL_VALIDATION_TIMEOUT`, default 300 seconds) kills a job outright and returns a `504`. A global concurrency limit (`ASKWOL_MAX_CONCURRENT_VALIDATIONS`, default 2; keep at or below the host's CPU core count) caps how many validations run at once, and rejects excess requests immediately with a `503` instead of queueing them. Generous size caps (`ASKWOL_MAX_TRIPLES` default 500000, `ASKWOL_MAX_NAMESPACES` default 500, `ASKWOL_MAX_IMPORTS` default 200) reject oversized ontologies right after parsing, before any expensive check runs. `/validate`, `/api/validate`, and the CLI all share the same validation pipeline and the same limits. If your reverse proxy sets its own timeout for these routes, set it comfortably above `ASKWOL_VALIDATION_TIMEOUT` so askwol's own timeout response is what clients actually see.
+
 ### Usage tracking
 
 A lightweight, privacy-friendly tracker logs each validation request to a local SQLite database. No cookies, no JavaScript, no third-party services. IPs are hashed with a per-database secret so they cannot be recovered from the stored data.
 
-Recorded per event: timestamp, request kind (`validate` / `validate_upload`), source (the submitted URL or filename), HTTP status, duration in ms, and a truncated SHA-256 hash of the client IP.
+Recorded per event: timestamp, request kind (`validate`, `validate_upload`, or `validate_api`), source (the submitted URL or filename), HTTP status, duration in ms, and a truncated SHA-256 hash of the client IP.
 
 Environment variables:
 

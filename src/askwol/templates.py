@@ -105,7 +105,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
     <a href="docs">API docs</a>
   </p>
   <h1><span class="owl" aria-hidden="true">&#x1F989;</span> Ask Wol <span class="beta-badge">Beta</span></h1>
-  <p>Your friendly owl for instant <a href="https://www.w3.org/OWL/">OWL</a>
+  <p>Your friendly owl (Wollie, to friends) for instant <a href="https://www.w3.org/OWL/">OWL</a>
   ontology reviews: a visual class diagram, namespace and term checks,
   metadata and documentation review, and a clean-up report.</p>
 

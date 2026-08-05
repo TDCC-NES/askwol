@@ -18,6 +18,7 @@ from rdflib import Graph
 
 from askwol import web
 from askwol.cache import OntologyCache
+from askwol.pipeline import run_full_validation
 
 SAMPLE = Path(__file__).resolve().parent.parent / "html" / "ontologies" / "sample.ttl"
 
@@ -30,11 +31,10 @@ async def _noop_request_hook(request):
 
 @pytest.fixture
 def client(monkeypatch):
-    # Isolate the cache and prevent network calls for resolved namespaces
-    # by pre-populating an empty graph for every namespace the sample uses.
+    """Route validation through the pipeline in-process (bypassing the
+    worker subprocess) so the pre-populated cache below stubs out network
+    calls, exactly like before isolated subprocesses were introduced."""
     cache = OntologyCache()
-    monkeypatch.setattr(web, "_global_cache", cache)
-
     for ns_uri in [
         "https://w3id.org/test/",
         "http://www.w3.org/2002/07/owl#",
@@ -44,6 +44,11 @@ def client(monkeypatch):
     ]:
         cache.put(ns_uri, Graph())
 
+    async def _inprocess(tmp_path, *, display_name, base_uri=None):
+        return await run_full_validation(tmp_path, display_name=display_name, base_uri=base_uri, cache=cache)
+
+    monkeypatch.setattr(web, "_TEST_INPROCESS_PIPELINE", _inprocess)
+    monkeypatch.setattr(web, "_test_cache", cache, raising=False)
     return TestClient(web.app)
 
 
@@ -213,8 +218,8 @@ def test_html_validate_url_accepts_text_plain_with_recognized_extension(client, 
     # namespace (the ":" prefix) also goes through namespace resolution;
     # pre-cache both so check_imports/resolve_all_namespaces don't need a
     # real network fetch.
-    web._global_cache.put("http://www.w3.org/ns/dcat", Graph())
-    web._global_cache.put("https://lod-4tu.tudelft.nl/dataset#", Graph())
+    web._test_cache.put("http://www.w3.org/ns/dcat", Graph())
+    web._test_cache.put("https://lod-4tu.tudelft.nl/dataset#", Graph())
     respx.get("https://raw.githubusercontent.com/example/sample.ttl").mock(
         return_value=httpx.Response(200, content=SAMPLE.read_bytes(), headers={"content-type": "text/plain"})
     )
