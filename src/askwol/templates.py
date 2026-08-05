@@ -180,7 +180,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
   <ul>
     <li><a href="https://protege.stanford.edu/" target="_blank" rel="noopener">Prot&eacute;g&eacute;</a>: the standard free, open-source ontology editor.</li>
     <li><a href="https://www.michaeldebellis.com/post/new-protege-pizza-tutorial" target="_blank" rel="noopener">The Pizza Tutorial</a>: a revised Prot&eacute;g&eacute; 5 version of the classic hands-on OWL tutorial.</li>
-    <li><a href="https://lov.linkeddata.es/dataset" target="_blank" rel="noopener">Linked Open Vocabularies (LOV)</a>: a searchable catalogue of established RDF vocabularies for finding terms to reuse.</li>
+    <li><a href="https://lov.linkeddata.es/dataset" target="_blank" rel="noopener">Linked Open Vocabularies (LOV)</a>: a searchable catalogue of established RDF vocabularies and ontologies, for finding terms to reuse.</li>
     <li><a href="https://oops.linkeddata.es/" target="_blank" rel="noopener">OOPS!</a>: an online scanner for common ontology pitfalls.</li>
     <li><a href="https://robot.obolibrary.org/" target="_blank" rel="noopener">ROBOT</a>: a command-line tool for automating ontology engineering workflows.</li>
   </ul>
