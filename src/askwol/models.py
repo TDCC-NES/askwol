@@ -103,7 +103,7 @@ class LangTagReport(BaseModel):
 
 
 class LicenseCheck(BaseModel):
-    """Ontology license check."""
+    """Ontology licence check."""
 
     iri: str
     name: str
@@ -114,7 +114,7 @@ class LicenseCheck(BaseModel):
 
 
 class LicenseReport(BaseModel):
-    """Summary of ontology license compliance."""
+    """Summary of ontology licence compliance."""
 
     checks: list[LicenseCheck] = Field(default_factory=list)
 

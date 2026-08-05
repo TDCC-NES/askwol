@@ -47,6 +47,48 @@ def test_open_but_not_recommended_license_warns():
     assert check.status == Status.WARN
 
 
+@pytest.mark.parametrize("license_iri", [
+    "https://creativecommons.org/licenses/by/4.0/legalcode",
+    "https://creativecommons.org/licenses/by/4.0/legalcode.en",
+    "https://creativecommons.org/licenses/by/4.0/deed.en",
+    "https://creativecommons.org/licenses/by/3.0/",
+    "https://creativecommons.org/licenses/by/3.0/legalcode",
+    "https://creativecommons.org/licenses/by/2.5/",
+    "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
+])
+def test_cc_url_variants_and_older_versions_are_recommended(license_iri):
+    """Creative Commons licences are versioned and each version has more than
+    one equivalent URL (short deed link, full /legalcode text, translated
+    /legalcode.xx or /deed.xx). Found via the real CiTO ontology, which cites
+    the /legalcode URL directly - that was not recognised at all before."""
+    g = Graph()
+    g.add((ONT, RDF.type, OWL.Ontology))
+    g.add((ONT, DCTERMS.license, URIRef(license_iri)))
+    report = check_license(g)
+    assert report.status == Status.OK, license_iri
+    check = report.checks[0]
+    assert check.is_recommended is True
+    assert check.is_open is True
+
+
+@pytest.mark.parametrize("license_iri", [
+    "https://creativecommons.org/licenses/by-sa/3.0/legalcode",
+    "https://creativecommons.org/licenses/by-sa/2.0/deed.en",
+])
+def test_cc_url_variants_of_a_non_recommended_family_still_only_warn(license_iri):
+    """Normalising away the version and /legalcode or /deed suffix must not
+    blur different CC licence families together - only CC-BY and CC0 are
+    recommended, CC-BY-SA (any version or URL form) stays open-but-warn."""
+    g = Graph()
+    g.add((ONT, RDF.type, OWL.Ontology))
+    g.add((ONT, DCTERMS.license, URIRef(license_iri)))
+    report = check_license(g)
+    assert report.status == Status.WARN, license_iri
+    check = report.checks[0]
+    assert check.is_open is True
+    assert check.is_recommended is False
+
+
 def test_rejected_license_fails():
     """CC-BY-NC-4.0 is explicitly rejected by the Open Definition and must not
     be treated as open just because it appears in the license register."""

@@ -208,26 +208,26 @@ def report_as_markdown(report: ValidationReport) -> str:
             w("</details>")
             w("")
 
-    # Open license compliance
+    # Open licence compliance
     lcns = report.license
     if lcns is not None:
-        w("## Open license")
+        w("## Open licence")
         w("")
         w("Every `dcterms:license` value declared in the ontology header is checked "
-            "against a list of open licenses following the Open Definition.")
+            "against a list of open licences following the Open Definition.")
         w("")
         if lcns.status != Status.OK:
             license_count = len(lcns.checks)
             if license_count == 0:
-                w("> No license declared.")
+                w("> No licence declared.")
                 w("")
             else:
                 plural = "s" if license_count > 1 else ""
-                w(f"> {license_count} license{plural} declared.")
+                w(f"> {license_count} licence{plural} declared.")
                 w("")
                 w("<details>")
                 w("")
-                w("| License | License IRI | License Category |")
+                w("| Licence | Licence IRI | Licence Category |")
                 w("|---------|-------------|------------------|")
                 for c in lcns.checks:
                     license_category = "recommended" if c.is_recommended else ("open" if c.is_open else "non-open")
@@ -237,7 +237,7 @@ def report_as_markdown(report: ValidationReport) -> str:
                 w("")
         else:
             c = lcns.checks[0]
-            w(f"> 1 recommended license declared"
+            w(f"> 1 recommended licence declared"
               f" ({c.name}: `{c.iri}`).")
             w("")
 
@@ -681,12 +681,12 @@ def _overview_line(report: ValidationReport, anchor: str) -> tuple[str, str] | N
         plural = "s" if license_count > 1 else ""
         if lcns.status == S.FAIL:
             if not license_count:
-                return "fail", "no license declared"
+                return "fail", "no licence declared"
             else:
-                return "fail", f"{license_count} license{plural} declared, {recommended_str}{open_str}{non_open_str}"
+                return "fail", f"{license_count} licence{plural} declared, {recommended_str}{open_str}{non_open_str}"
         if lcns.status == S.WARN:
-            return "warn", f"{license_count} license{plural} declared, {recommended_str}{open_str}{non_open_str}"
-        return "ok", "1 recommended license declared"
+            return "warn", f"{license_count} licence{plural} declared, {recommended_str}{open_str}{non_open_str}"
+        return "ok", "1 recommended licence declared"
     if anchor == "namespaces":
         total = len(report.namespaces)
         if total == 0:
@@ -890,11 +890,11 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
             imp_table.add_row(c.iri, _status_badge(res.status), ", ".join(bits))
         console.print(imp_table)
 
-    # Open license compliance
+    # Open licence compliance
     lcns = report.license
     if lcns is not None:
         console.print()
-        license_table = Table(title="Licenses", show_lines=True)
+        license_table = Table(title="Licences", show_lines=True)
         license_table.add_column("IRI")
         license_table.add_column("Name")
         license_table.add_column("Status")
@@ -904,7 +904,7 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
             license_table.add_row(c.iri, c.name, _status_badge(c.status), license_category)
         license_count = len(lcns.checks)
         if lcns.status == Status.OK:
-            console.print(f"[green]\u2713 Open license  -  1 recommended license declared ({lcns.checks[0].name})[/green]")
+            console.print(f"[green]\u2713 Open licence  -  1 recommended licence declared ({lcns.checks[0].name})[/green]")
         else:
             recommended_count = len(lcns.recommended_licenses)
             open_count = len(lcns.open_licenses)
@@ -914,12 +914,12 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
             non_open_str = f'{", " if recommended_count or open_count else ""}{non_open_count} non-open' if non_open_count else ''
             plural = "s" if license_count > 1 else ""
             if lcns.status == Status.WARN:
-                console.print(f"[yellow]\u26A0 Open license  -  {license_count} license{plural} declared, {recommended_str}{open_str}{non_open_str}[/yellow]")
+                console.print(f"[yellow]\u26A0 Open licence  -  {license_count} licence{plural} declared, {recommended_str}{open_str}{non_open_str}[/yellow]")
             else:
                 if license_count == 0:
-                    console.print("[red]\u2717 Open license  -  no license declared[/red]")
+                    console.print("[red]\u2717 Open licence  -  no licence declared[/red]")
                 else:
-                    console.print(f"[red]\u2717 Open license  -  {license_count} license{plural} declared, {recommended_str}{open_str}{non_open_str}[/red]")
+                    console.print(f"[red]\u2717 Open licence  -  {license_count} licence{plural} declared, {recommended_str}{open_str}{non_open_str}[/red]")
         if license_count > 0:
             console.print()
             console.print(license_table)

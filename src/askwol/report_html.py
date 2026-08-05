@@ -307,17 +307,17 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 return []
             license_count = lcns.license_count
             if license_count == 0:
-                return [_row('license', _fail, 'License', 'no license declared')]
+                return [_row('license', _fail, 'Licence', 'no licence declared')]
             elif license_count == 1:
                 if lcns.recommended_licenses:
-                    return [_row('license', _ok, 'Open license',
-                             '1 recommended license')]
+                    return [_row('license', _ok, 'Open licence',
+                             '1 recommended licence')]
                 elif lcns.open_licenses:
-                    return [_row('license', _warn, 'Open license',
-                             '1 open license, not recommended')]
+                    return [_row('license', _warn, 'Open licence',
+                             '1 open licence, not recommended')]
                 else:
-                    return [_row('license', _fail, 'Open license',
-                             '1 non-open license')]
+                    return [_row('license', _fail, 'Open licence',
+                             '1 non-open licence')]
             else:
                 recommended_count = len(lcns.recommended_licenses)
                 open_count = len(lcns.open_licenses)
@@ -326,11 +326,11 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 open_str = f'{", " if recommended_count else ""}{open_count} open' if open_count else ''
                 non_open_str = f'{", " if recommended_count or open_count else ""}{non_open_count} non-open' if non_open_count else ''
                 if non_open_count > 0:
-                    return [_row('license', _fail, 'Open license',
-                             f'{license_count} licenses &middot; {recommended_str}{open_str}{non_open_str}')]
+                    return [_row('license', _fail, 'Open licence',
+                             f'{license_count} licences &middot; {recommended_str}{open_str}{non_open_str}')]
                 else:
-                    return [_row('license', _warn, 'Open license',
-                             f'{license_count} licenses &middot; {recommended_str}{open_str}{non_open_str}')]
+                    return [_row('license', _warn, 'Open licence',
+                             f'{license_count} licences &middot; {recommended_str}{open_str}{non_open_str}')]
         if report_anchor == 'iri-strategy':
             iri = report.iri_strategy
             if not iri:
@@ -742,30 +742,30 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             parts.append('</table></details>')
         parts.append('</section>')
 
-    # License check
+    # Licence check
     lcns = report.license
     if lcns is not None:
         _open_cluster('license')
         if lcns.license_count == 0:
-            i_status, i_label = 'fail', 'no license declared'
+            i_status, i_label = 'fail', 'no licence declared'
         elif lcns.license_count == 1:
             if lcns.recommended_licenses:
-                i_status, i_label = 'ok', 'recommended license declared'
+                i_status, i_label = 'ok', 'recommended licence declared'
             elif lcns.open_licenses:
-                i_status, i_label = 'warn', 'open license declared, not recommended'
+                i_status, i_label = 'warn', 'open licence declared, not recommended'
             else:
-                i_status, i_label = 'fail', 'no open license declared'
+                i_status, i_label = 'fail', 'no open licence declared'
         else:
             if lcns.non_open_licenses:
-                i_status, i_label = 'fail', 'multiple licenses declared, at least one non-open'
+                i_status, i_label = 'fail', 'multiple licences declared, at least one non-open'
             elif lcns.recommended_licenses:
-                i_status, i_label = 'warn', 'multiple licenses declared, at least one recommended'
+                i_status, i_label = 'warn', 'multiple licences declared, at least one recommended'
             else:
-                i_status, i_label = 'warn', 'multiple licenses declared, at least one open'
+                i_status, i_label = 'warn', 'multiple licences declared, at least one open'
         parts.append('<section class="section">')
-        parts.append(_section_heading('license', 'Open license', i_status, i_label))
+        parts.append(_section_heading('license', 'Open licence', i_status, i_label))
         parts.append(_guide_link('license'))
-        parts.append('<p class="subtitle">Each <code>dcterms:license</code> value declared in the ontology header is checked against a <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of open licenses</a> following the <a href="https://opendefinition.org" target="_blank" rel="noopener">Open Definition</a>. For the check to pass, there needs to be only one license and it needs to be one of the <a href="guide#license" target="_blank" rel="noopener">recommended ones</a>. If no license is declared or at least one of the declared licenses is not open, the check will fail. In all other cases, a warning will be returned.</p>')
+        parts.append('<p class="subtitle">Each <code>dcterms:license</code> value declared in the ontology header is checked against a <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of open licences</a> following the <a href="https://opendefinition.org" target="_blank" rel="noopener">Open Definition</a>. For the check to pass, there needs to be only one licence and it needs to be one of the <a href="guide#license" target="_blank" rel="noopener">recommended ones</a>. If no licence is declared or at least one of the declared licences is not open, the check will fail. In all other cases, a warning will be returned.</p>')
         license_count = len(lcns.checks)
         plural = "s" if license_count > 1 else ""
         if lcns.checks:
@@ -777,28 +777,28 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             non_open_str = f'{", " if recommended_count or open_count else ""}{non_open_count} non-open' if non_open_count else ''
             if license_count == 1:
                 if lcns.recommended_licenses:
-                    parts.append(_status_subtitle('ok', '<strong>1</strong> recommended license'))
+                    parts.append(_status_subtitle('ok', '<strong>1</strong> recommended licence'))
                 elif lcns.open_licenses:
-                    parts.append(_status_subtitle('warn', '<strong>1</strong> open license, not recommended'))
+                    parts.append(_status_subtitle('warn', '<strong>1</strong> open licence, not recommended'))
                 else:
-                    parts.append(_status_subtitle('fail', '<strong>1</strong> non-open license'))
+                    parts.append(_status_subtitle('fail', '<strong>1</strong> non-open licence'))
             elif non_open_count > 0:
-                parts.append(_status_subtitle('fail', f'<strong>{license_count}</strong> license{plural} &middot; {recommended_str}{open_str}{non_open_str}'))
+                parts.append(_status_subtitle('fail', f'<strong>{license_count}</strong> licence{plural} &middot; {recommended_str}{open_str}{non_open_str}'))
             else:
-                parts.append(_status_subtitle('warn', f'<strong>{license_count}</strong> license{plural} &middot; {recommended_str}{open_str}{non_open_str}'))
+                parts.append(_status_subtitle('warn', f'<strong>{license_count}</strong> licence{plural} &middot; {recommended_str}{open_str}{non_open_str}'))
         else:
-            parts.append(_status_subtitle('ok', 'no license declared'))
+            parts.append(_status_subtitle('ok', 'no licence declared'))
         if lcns.checks:
-            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show license{plural} ({len(lcns.checks)})</summary>')
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show licence{plural} ({len(lcns.checks)})</summary>')
             for c in lcns.checks:
                 mark = _status_mark(c.status)
                 parts.append(f'<div class="ns"><div class="ns-header">{mark} {c.name}</div>')
                 parts.append('<div class="ns-body">')
-                parts.append(f'<p style="font-size:0.9em;color:#444;margin:0.2em 0;">License IRI: <a href="{c.iri}" target="_blank" rel="noopener"><code>{c.iri}</code></a></p>')
+                parts.append(f'<p style="font-size:0.9em;color:#444;margin:0.2em 0;">Licence IRI: <a href="{c.iri}" target="_blank" rel="noopener"><code>{c.iri}</code></a></p>')
                 if c.status == Status.OK:
-                    parts.append('<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is one of the open licenses we recommend.</p>')
+                    parts.append('<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is one of the open licences we recommend.</p>')
                 elif c.status == Status.WARN:
-                    parts.append('<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is an open license but we do not recommend it.</p>')
+                    parts.append('<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is an open licence but we do not recommend it.</p>')
                 else:
                     parts.append('<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is not a known open licence.</p>')
                 parts.append('</div></div>')

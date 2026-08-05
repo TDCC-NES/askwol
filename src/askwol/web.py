@@ -269,7 +269,7 @@ app = FastAPI(
         "definitions (existence in remote vocabularies), internal term "
         "definitions (own-namespace terms are defined), label "
         "and comment documentation (SHACL), ontology metadata (SHACL), "
-        "open license conformance (Open Definition), language-tag "
+        "open licence conformance (Open Definition), language-tag "
         "consistency, unused prefix declarations, owl:imports "
         "resolution, IRI strategy consistency (hash vs slash), IRI scheme "
         "consistency (http vs https), term naming and inventory, domain and "
