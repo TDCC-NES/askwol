@@ -34,7 +34,7 @@ _CC_LICENSE_RE = re.compile(
 )
 
 
-def _normalize_iri(iri_cut: str) -> str:
+def _normalise_iri(iri_cut: str) -> str:
     """Collapse Creative Commons URL variants (any version, /legalcode,
     /deed.xx, ...) down to one canonical form; anything else is returned
     unchanged."""
@@ -68,9 +68,9 @@ def check_license(graph: Graph) -> LicenseReport:
             if not is_recognized_open:
                 continue
             if entry["url"]:
-                open_iris[_normalize_iri(entry["url"].split("://")[1].strip("/"))] = entry["title"]
+                open_iris[_normalise_iri(entry["url"].split("://")[1].strip("/"))] = entry["title"]
             for alias in KNOWN_URL_ALIASES.get(license_id, ()):
-                open_iris[_normalize_iri(alias)] = entry["title"]
+                open_iris[_normalise_iri(alias)] = entry["title"]
 
     licenses = []
     licenses += list(graph.triples((None, DCTERMS.license, None)))
@@ -80,9 +80,9 @@ def check_license(graph: Graph) -> LicenseReport:
 
     for _subject, _predicate, license_value in licenses:
         try:
-            license_iri_cut = _normalize_iri(license_value.split("://")[1].strip("/"))
+            license_iri_cut = _normalise_iri(license_value.split("://")[1].strip("/"))
         except IndexError:
-            license_iri_cut = _normalize_iri(license_value)
+            license_iri_cut = _normalise_iri(license_value)
 
         is_recommended = license_iri_cut in RECOMMENDED_IRIS
         is_known_open_prefix = license_iri_cut.startswith(KNOWN_OPEN_PREFIX)

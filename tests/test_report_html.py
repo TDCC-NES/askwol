@@ -118,7 +118,7 @@ def test_render_minimal_report_contains_all_section_anchors():
             display_name="integer",
             count=1,
             sources=["literal"],
-            recognized=True,
+            recognised=True,
         )],
     )
     report.lang_tags = LangTagReport()

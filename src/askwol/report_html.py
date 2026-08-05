@@ -264,9 +264,9 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             dt = report.datatypes
             if not dt or dt.status == Status.SKIP:
                 return [_row('datatypes', _info, 'Datatypes', 'no datatypes used')]
-            if dt.unrecognized:
+            if dt.unrecognised:
                 return [_row('datatypes', _fail, 'Datatypes',
-                             f'{len(dt.unrecognized)} unrecognised of {dt.total_datatypes}')]
+                             f'{len(dt.unrecognised)} unrecognised of {dt.total_datatypes}')]
             return [_row('datatypes', _ok, 'Datatypes',
                          f'{dt.total_datatypes} used, all recognised')]
         if report_anchor == 'labels':
@@ -1077,21 +1077,21 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     dt = report.datatypes
     if dt and dt.status != Status.SKIP and dt.usages:
         _open_cluster('datatypes')
-        dt_status = 'ok' if not dt.unrecognized else 'fail'
-        dt_label = 'all recognised' if dt_status == 'ok' else f'{len(dt.unrecognized)} unrecognised'
+        dt_status = 'ok' if not dt.unrecognised else 'fail'
+        dt_label = 'all recognised' if dt_status == 'ok' else f'{len(dt.unrecognised)} unrecognised'
         parts.append('<section class="section">')
         parts.append(_section_heading('datatypes', 'Datatypes', dt_status, dt_label))
         parts.append(_guide_link('datatypes'))
         parts.append('<p class="subtitle">Datatypes used as property ranges and as literal datatypes should be recognised XSD built-ins (<code>xsd:string</code>, <code>xsd:integer</code>, &hellip;), <code>rdfs:Literal</code>, <code>rdf:langString</code>, or a datatype you declare with <code>rdfs:Datatype</code>. An unrecognised datatype is usually a typo.</p>')
-        parts.append(_status_subtitle(dt_status, f'{dt.recognized}/{dt.total_datatypes} recognised &middot; {len(dt.unrecognized)} unrecognised'))
+        parts.append(_status_subtitle(dt_status, f'{dt.recognised}/{dt.total_datatypes} recognised &middot; {len(dt.unrecognised)} unrecognised'))
         summary = f'Show all datatypes ({dt.total_datatypes})'
-        if dt.unrecognized:
-            summary += f' &middot; {len(dt.unrecognized)} unrecognised'
+        if dt.unrecognised:
+            summary += f' &middot; {len(dt.unrecognised)} unrecognised'
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">{summary}</summary>')
         parts.append('<table><tr><th>Datatype</th><th style="width:60px;">Uses</th><th>Where</th><th>Status</th></tr>')
-        for u in sorted(dt.usages, key=lambda x: (x.recognized, x.display_name.lower())):
+        for u in sorted(dt.usages, key=lambda x: (x.recognised, x.display_name.lower())):
             t_iri = escape(u.datatype)
-            if u.recognized:
+            if u.recognised:
                 status = '<span style="color:#2e7d32;font-size:1.2em;line-height:1">&#x2713;</span>'
             else:
                 status = f'<span style="color:#c62828;font-size:1.2em;line-height:1">&#x2717;</span> {escape(u.message or "")}'

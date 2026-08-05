@@ -255,7 +255,7 @@ def test_datatypes_recognized():
     assert report.status == Status.OK
     names = {u.display_name for u in report.usages}
     assert "nonNegativeInteger" in names or "integer" in names
-    assert report.unrecognized == []
+    assert report.unrecognised == []
 
 
 def test_datatypes_flags_misspelled_range():
@@ -266,7 +266,7 @@ def test_datatypes_flags_misspelled_range():
     report = check_datatypes(g)
 
     assert report.status == Status.FAIL
-    assert any(u.display_name == "stirng" for u in report.unrecognized)
+    assert any(u.display_name == "stirng" for u in report.unrecognised)
 
 
 def test_datatypes_flags_misspelled_literal_datatype():
@@ -277,7 +277,7 @@ def test_datatypes_flags_misspelled_literal_datatype():
     report = check_datatypes(g)
 
     assert report.status == Status.FAIL
-    assert any(u.display_name == "dat" for u in report.unrecognized)
+    assert any(u.display_name == "dat" for u in report.unrecognised)
 
 
 def test_datatypes_recognizes_custom_datatype():
@@ -289,7 +289,7 @@ def test_datatypes_recognizes_custom_datatype():
     report = check_datatypes(g)
 
     assert report.status == Status.OK
-    assert any(u.display_name == "personAge" and u.recognized for u in report.usages)
+    assert any(u.display_name == "personAge" and u.recognised for u in report.usages)
 
 
 def test_datatypes_skips_when_none_used():

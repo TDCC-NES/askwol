@@ -370,7 +370,7 @@ class DatatypeUsage(BaseModel):
     display_name: str
     count: int = 0
     sources: list[str] = Field(default_factory=list)  # "range", "literal", "declared"
-    recognized: bool = True
+    recognised: bool = True
     status: Status = Status.OK
     message: str | None = None
 
@@ -384,12 +384,12 @@ class DatatypeReport(BaseModel):
     message: str | None = None
 
     @property
-    def recognized(self) -> int:
-        return sum(1 for u in self.usages if u.recognized)
+    def recognised(self) -> int:
+        return sum(1 for u in self.usages if u.recognised)
 
     @property
-    def unrecognized(self) -> list[DatatypeUsage]:
-        return [u for u in self.usages if not u.recognized]
+    def unrecognised(self) -> list[DatatypeUsage]:
+        return [u for u in self.usages if not u.recognised]
 
 
 class ImportsCheck(BaseModel):
@@ -544,7 +544,7 @@ class ValidationReport(BaseModel):
             return True
         if self.domains_ranges and self.domains_ranges.status in (Status.FAIL, Status.WARN):
             return True
-        if self.datatypes and self.datatypes.unrecognized:
+        if self.datatypes and self.datatypes.unrecognised:
             return True
         if self.imports and self.imports.broken:
             return True

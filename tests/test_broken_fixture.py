@@ -169,7 +169,7 @@ def test_domains_ranges_has_problems(parsed):
 def test_datatypes_flags_unrecognized(parsed):
     dt = check_datatypes(parsed.graph)
     assert dt.status == Status.FAIL
-    flagged = {u.display_name for u in dt.unrecognized}
+    flagged = {u.display_name for u in dt.unrecognised}
     assert "flaot" in flagged
     assert "stirng" in flagged
 

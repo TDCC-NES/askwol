@@ -294,7 +294,7 @@ def check_domains_ranges(graph: Graph) -> DomainRangeReport:
     )
 
 
-def _datatype_recognized(graph: Graph, uri: str) -> bool:
+def _datatype_recognised(graph: Graph, uri: str) -> bool:
     if uri.startswith(str(XSD)):
         return _local_name(uri) in XSD_BUILTIN_TYPES
     if uri in _OTHER_DATATYPES:
@@ -353,22 +353,22 @@ def check_datatypes(graph: Graph) -> DatatypeReport:
     usages: list[DatatypeUsage] = []
     for uri in sorted(usage):
         count, sources = usage[uri]
-        recognized = _datatype_recognized(graph, uri)
+        recognised = _datatype_recognised(graph, uri)
         usages.append(
             DatatypeUsage(
                 datatype=uri,
                 display_name=_local_name(uri),
                 count=count,
                 sources=sorted(sources),
-                recognized=recognized,
-                status=Status.OK if recognized else Status.FAIL,
-                message=None if recognized else "Not a recognised datatype (possible typo).",
+                recognised=recognised,
+                status=Status.OK if recognised else Status.FAIL,
+                message=None if recognised else "Not a recognised datatype (possible typo).",
             )
         )
 
-    unrecognized = [u for u in usages if not u.recognized]
+    unrecognised = [u for u in usages if not u.recognised]
     return DatatypeReport(
         total_datatypes=len(usages),
         usages=usages,
-        status=Status.FAIL if unrecognized else Status.OK,
+        status=Status.FAIL if unrecognised else Status.OK,
     )
