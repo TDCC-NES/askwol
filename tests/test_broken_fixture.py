@@ -144,7 +144,7 @@ def test_non_ontology_terms_warns(parsed):
     # A SKOS concept defined in the ontology's own namespace is flagged.
     assert "Biology" in flagged
     # Named individuals are not flagged: a small, fixed set of individuals
-    # alongside the schema is a common, legitimate modeling pattern.
+    # alongside the schema is a common, legitimate modelling pattern.
     assert "alice" not in flagged
     assert "bob" not in flagged
 

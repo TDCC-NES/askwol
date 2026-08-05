@@ -174,6 +174,17 @@ UPLOAD_HTML = """<!DOCTYPE html>
   structure, but not content or meaning, which is what ontologies are all
   about.</p>
 
+  <h2 id="other-resources">Other resources</h2>
+  <p><i>askwol</i> is a checker, not a full ontology engineering toolkit.
+  A few other resources worth a look:</p>
+  <ul>
+    <li><a href="https://protege.stanford.edu/" target="_blank" rel="noopener">Prot&eacute;g&eacute;</a>: the standard free, open-source ontology editor.</li>
+    <li><a href="https://www.michaeldebellis.com/post/new-protege-pizza-tutorial" target="_blank" rel="noopener">The Pizza Tutorial</a>: a revised Prot&eacute;g&eacute; 5 version of the classic hands-on OWL tutorial.</li>
+    <li><a href="https://lov.linkeddata.es/dataset" target="_blank" rel="noopener">Linked Open Vocabularies (LOV)</a>: a searchable catalogue of established RDF vocabularies for finding terms to reuse.</li>
+    <li><a href="https://oops.linkeddata.es/" target="_blank" rel="noopener">OOPS!</a>: an online scanner for common ontology pitfalls.</li>
+    <li><a href="https://robot.obolibrary.org/" target="_blank" rel="noopener">ROBOT</a>: a command-line tool for automating ontology engineering workflows.</li>
+  </ul>
+
   <div class="about">
     <a class="wol-link" href="https://commons.wikimedia.org/wiki/File:Winnie-the-Pooh_67.png" target="_blank" rel="noopener" title="Open the image on Wikimedia Commons">
       <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Winnie-the-Pooh_67.png/250px-Winnie-the-Pooh_67.png"
@@ -246,7 +257,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "toc_label": "Ontology metadata",
         "body": """\
   <p>Your ontology is itself a published research object. It should say
-  what it is, who made it, which version it is, and under which license
+  what it is, who made it, which version it is, and under which licence
   it can be reused.</p>
   <p><span class="tag spec">Spec</span> <code>rdf:type owl:Ontology</code> and
   <code>owl:versionIRI</code>/<code>owl:versionInfo</code> come from OWL 2;
@@ -256,7 +267,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   defined by the
   <a href="https://www.dublincore.org/specifications/dublin-core/dcmi-terms/" target="_blank" rel="noopener">DCMI Metadata Terms</a>
   vocabulary, not OWL itself. Licensing gets its own dedicated check; see
-  <a href="#license">Open license</a> below.</p>
+  <a href="#license">Open licence</a> below.</p>
   <p><span class="tag practice">TDCC guideline</span> Neither spec says any
   of these properties is mandatory on an ontology header. The
   <strong>Required</strong> / <strong>Recommended</strong> split below, and
@@ -463,11 +474,11 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "group": "check",
         "category": "basics",
         "anchor": "license",
-        "title": "Adopt an open license",
-        "toc_label": "Open license",
+        "title": "Adopt an open licence",
+        "toc_label": "Open licence",
         "body": """\
-  <p><span class="tag practice">TDCC guideline</span> Your ontology should be released under an <strong>open license</strong>; this guide recommends the DCMI property <code>dcterms:license</code>. To meet the Linked Open Data principles, the license must satisfy the <a href="https://opendefinition.org" target="_blank" rel="noopener">Open Definition</a>: &ldquo;anyone can freely access, use, modify, and share [the ontology] for any purpose (subject, at most, to requirements that preserve provenance and openness).&rdquo;</p>
-  <p>A license is open if it&rsquo;s equivalent to the <strong>public domain</strong>, or at most adds <strong>attribution</strong> or <strong>share-alike</strong> restrictions; non-commercial or no-derivatives clauses are not open. For maximum reuse, this guide recommends one of the two <a href="https://creativecommons.org/cc-licenses/" target="_blank" rel="noopener">Creative Commons</a> licenses below.</p>
+  <p><span class="tag practice">TDCC guideline</span> Your ontology should be released under an <strong>open licence</strong>; this guide recommends the DCMI property <code>dcterms:license</code>. To meet the Linked Open Data principles, the licence must satisfy the <a href="https://opendefinition.org" target="_blank" rel="noopener">Open Definition</a>: &ldquo;anyone can freely access, use, modify, and share [the ontology] for any purpose (subject, at most, to requirements that preserve provenance and openness).&rdquo;</p>
+  <p>A licence is open if it&rsquo;s equivalent to the <strong>public domain</strong>, or at most adds <strong>attribution</strong> or <strong>share-alike</strong> restrictions; non-commercial or no-derivatives clauses are not open. For maximum reuse, this guide recommends one of the two <a href="https://creativecommons.org/cc-licenses/" target="_blank" rel="noopener">Creative Commons</a> licences below.</p>
   <ol>
     <li>
       <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener">Creative Commons Zero (CC0)</a> (public domain); IRI: <code>https://creativecommons.org/publicdomain/zero/1.0/</code>
@@ -477,7 +488,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     </li>
   </ol>
 
-  <p>askwol also recognizes other licenses that meet the Open Definition but are less suitable for ontologies, for the reasons below.</p>
+  <p>askwol also recognises other licences that meet the Open Definition but are less suitable for ontologies, for the reasons below.</p>
   <ul>
     <li>
       <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">Creative Commons Attribution ShareAlike (CC BY-SA)</a> (requires attribution, share-alike); IRI: <code>https://creativecommons.org/licenses/by-sa/4.0/</code>; too restrictive due to the share-alike.
@@ -492,17 +503,17 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
       <a href="http://opendatacommons.org/licenses/odbl/1.0/" target="_blank" rel="noopener">Open Data Commons Open Database License (ODbL)</a> (requires attribution, share-alike); IRI: <code>http://opendatacommons.org/licenses/odbl/1.0/</code>; too restrictive due to the share-alike.
     </li>
     <li>
-      <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">Other licenses conformant with the Open Definition</a>; most of these are little used and incompatible with more widely adopted open licenses.
+      <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">Other licences conformant with the Open Definition</a>; most of these are little used and incompatible with more widely adopted open licences.
     </li>
     <li>
-      <a href="https://opensource.org/licenses" target="_blank" rel="noopener">Any license approved by the Open Source Initiative</a>; these are primarily meant for open source software rather than ontologies.
+      <a href="https://opensource.org/licenses" target="_blank" rel="noopener">Any licence approved by the Open Source Initiative</a>; these are primarily meant for open source software rather than ontologies.
     </li>
   </ul>
 
   <p>Declare it with <code>dcterms:license</code> in the ontology header:</p>
   <pre>&lt;https://example.org/my-ontology&gt; a owl:Ontology ;
     dcterms:license &lt;https://creativecommons.org/publicdomain/zero/1.0/&gt; .</pre>
-  <div class="tip">askwol checks each declared license against the Open Definition&rsquo;s <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of conformant licenses</a>: a missing or non-open license is an error; an open but not-recommended license, or more than one declared license (even if each is fine on its own), is a warning.</div>
+  <div class="tip">askwol checks each declared licence against the Open Definition&rsquo;s <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of conformant licences</a>: a missing or non-open licence is an error; an open but not-recommended licence, or more than one declared licence (even if each is fine on its own), is a warning.</div>
 """,
     },
     {
@@ -629,7 +640,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <a href="#external-terms">External term definitions</a> check instead.
   Some ontologies re-declare a reused term as boilerplate (e.g.
   <code>rdfs:label a owl:AnnotationProperty</code>, as PROV-O and FOAF do).
-  askwol correctly recognizes this as reuse of an existing term, keeping
+  askwol correctly recognises this as reuse of an existing term, keeping
   your own namespace scoped to what you actually define. New terms always
   belong in your own namespace: the
   <a href="#external-terms">External term definitions</a> check confirms
@@ -642,7 +653,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "group": "check",
         "category": "structure",
         "anchor": "term-inventory",
-        "title": "Categorize your terms and name them consistently",
+        "title": "Categorise your terms and name them consistently",
         "toc_label": "Term inventory &amp; naming",
         "body": """\
   <p><span class="tag spec">Spec</span> Every term you define falls into a
@@ -656,7 +667,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
 &lt;#hasParent&gt; a owl:ObjectProperty .
 &lt;#birthDate&gt; a owl:DatatypeProperty .</pre>
   <h3>Naming conventions</h3>
-  <p><span class="tag practice">TDCC guideline</span> Capitalization is a
+  <p><span class="tag practice">TDCC guideline</span> Capitalisation is a
   community convention, not an OWL or RDFS rule; nothing stops you from
   naming a class <code>person</code> or a property <code>HasName</code>.
   askwol checks it anyway, because consistent casing is one of the fastest
@@ -665,7 +676,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   block publication.</p>
   <ul>
     <li><strong>Classes start with an uppercase letter</strong> and are usually
-    nouns: <code>Person</code>, <code>Dataset</code>, <code>Organization</code>.</li>
+    nouns: <code>Person</code>, <code>Dataset</code>, <code>Organisation</code>.</li>
     <li><strong>Properties start with a lowercase letter</strong>:
     <code>hasParent</code>, <code>birthDate</code>, <code>title</code>.</li>
   </ul>
@@ -673,7 +684,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   properties look like <code>P2_has_type</code> (the number is the permanent
   identifier; the wording after it can change between versions), and
   Wikidata&rsquo;s are fully opaque, like <code>P19</code>, deliberately avoiding
-  any one language&rsquo;s naming bias. askwol recognizes this pattern, an
+  any one language&rsquo;s naming bias. askwol recognises this pattern, an
   uppercase letter directly followed by a digit, and does not flag it.</p>
   <div class="tip">Object properties read best as verb phrases. A
   <code>has</code> or <code>is</code> prefix, or an <code>of</code>/<code>by</code>
@@ -741,7 +752,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "group": "check",
         "category": "structure",
         "anchor": "datatypes",
-        "title": "Use recognized datatypes",
+        "title": "Use recognised datatypes",
         "toc_label": "Datatypes",
         "body": """\
   <p><span class="tag spec">Spec</span> Datatype property ranges and typed
@@ -754,7 +765,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <a href="https://www.w3.org/TR/rdf-schema/#ch_datatype" target="_blank" rel="noopener"><code>rdfs:Datatype</code></a>.
   <span class="tag practice">TDCC guideline</span> RDF places no closed list
   on datatype IRIs; any IRI is technically legal there. askwol checks
-  against this recognized set instead, because an IRI outside it is almost
+  against this recognised set instead, because an IRI outside it is almost
   never intentional.</p>
   <pre>&lt;#age&gt; rdfs:range xsd:nonNegativeInteger .
 &lt;#born&gt; rdfs:range xsd:date .
@@ -763,7 +774,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <code>xsd:dateTiem</code>) is treated as a brand-new, unknown datatype.
   Filters and validators that expect the real datatype then skip your
   values. askwol lists every datatype it sees and flags the ones it does not
-  recognize.</div>
+  recognise.</div>
 """,
     },
     {
@@ -793,7 +804,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   file and is better managed on its own. Named individuals are left alone:
   many ontologies deliberately define a small, fixed set of them alongside
   their schema (days of week, units of measure, as OWL-Time does), a
-  legitimate modeling pattern rather than accidental instance data. External
+  legitimate modelling pattern rather than accidental instance data. External
   terms are ignored either way. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/non_ontology_terms.ttl" target="_blank" rel="noopener">SHACL shapes</a>.</div>
 """,
     },
@@ -817,7 +828,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <div class="tip">Use language tags (<code>@en</code>, <code>@de</code>)
   to support multilingual ontologies. Consider
   <code>skos:prefLabel</code> and <code>skos:altLabel</code> for richer
-  labeling.</div>
+  labelling.</div>
   <div class="tip">askwol uses <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes</a> to check that each
   <em>internally defined</em> class and property has an
   <code>rdfs:label</code>. Reused external vocabulary terms, and terms you
@@ -1071,8 +1082,8 @@ CHECKS: list[dict[str, str]] = [
      "description": "the ontology's own defined terms should consistently use either hash (`#Term`) or slash (`/Term`), not both."},
     {"report_anchor": "iri-scheme", "title": "IRI scheme", "guide_anchor": "https-http", "category": "basics",
      "description": "each host should be referenced under a single URI scheme. `http://example.org/X` and `https://example.org/X` are different IRIs."},
-    {"report_anchor": "license", "title": "Open license", "guide_anchor": "license", "category": "basics",
-     "description": "the declared `dcterms:license` (or `schema:license`) must be an open license per the Open Definition; CC0 and CC BY are recommended, other open licenses (e.g. CC BY-SA, ODC-By, ODbL) pass with a warning, and a missing or non-open license fails."},
+    {"report_anchor": "license", "title": "Open licence", "guide_anchor": "license", "category": "basics",
+     "description": "the declared `dcterms:license` (or `schema:license`) must be an open licence per the Open Definition; CC0 and CC BY are recommended, other open licences (e.g. CC BY-SA, ODC-By, ODbL) pass with a warning, and a missing or non-open licence fails."},
     {"report_anchor": "namespaces", "title": "Namespaces", "guide_anchor": "resolvable", "category": "reuse",
      "description": "fetches each declared namespace URI, checks HTTP status, and tries to parse it as RDF (Turtle, RDF/XML, JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF links."},
     {"report_anchor": "unused-prefixes", "title": "Unused prefixes", "guide_anchor": "prefixes", "category": "reuse",
@@ -1082,11 +1093,11 @@ CHECKS: list[dict[str, str]] = [
     {"report_anchor": "internal-terms", "title": "Internal term definitions", "guide_anchor": "internal-terms", "category": "structure",
      "description": "flags terms in the ontology's own namespace that are referenced but never defined. Usually a typo or a forgotten declaration."},
     {"report_anchor": "term-inventory", "title": "Term inventory & naming", "guide_anchor": "term-inventory", "category": "structure",
-     "description": "categorizes every internal term (class, object property, datatype property, datatype, individual) and checks capitalization: classes start uppercase, properties lowercase. Coded identifiers are exempt."},
+     "description": "categorises every internal term (class, object property, datatype property, datatype, individual) and checks capitalisation: classes start uppercase, properties lowercase. Coded identifiers are exempt."},
     {"report_anchor": "domains-ranges", "title": "Domains & ranges", "guide_anchor": "domains-ranges", "category": "structure",
      "description": "every internally defined object and datatype property should declare a domain and a range. Object properties range over classes; datatype properties over datatypes."},
     {"report_anchor": "datatypes", "title": "Datatypes", "guide_anchor": "datatypes", "category": "structure",
-     "description": "datatypes used as property ranges and literal datatypes should be recognized XSD built-ins, `rdfs:Literal`, `rdf:langString`, or a locally declared `rdfs:Datatype`. Catches typos like `xsd:stirng`."},
+     "description": "datatypes used as property ranges and literal datatypes should be recognised XSD built-ins, `rdfs:Literal`, `rdf:langString`, or a locally declared `rdfs:Datatype`. Catches typos like `xsd:stirng`."},
     {"report_anchor": "non-ontology-terms", "title": "Non-ontology terms", "guide_anchor": "non-ontology-terms", "category": "structure",
      "description": "an OWL ontology defines schema (classes, properties, datatypes). A `skos:Concept` scheme is subject-matter data, not schema, and belongs in a separate resource. Named individuals are not flagged."},
     {"report_anchor": "labels", "title": "Labels", "guide_anchor": "labels", "category": "docs",

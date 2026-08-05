@@ -266,9 +266,9 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 return [_row('datatypes', _info, 'Datatypes', 'no datatypes used')]
             if dt.unrecognized:
                 return [_row('datatypes', _fail, 'Datatypes',
-                             f'{len(dt.unrecognized)} unrecognized of {dt.total_datatypes}')]
+                             f'{len(dt.unrecognized)} unrecognised of {dt.total_datatypes}')]
             return [_row('datatypes', _ok, 'Datatypes',
-                         f'{dt.total_datatypes} used, all recognized')]
+                         f'{dt.total_datatypes} used, all recognised')]
         if report_anchor == 'labels':
             if not (docs and docs.total_definitions):
                 return [_row('labels', _info, 'Labels', 'no internal definitions to document')]
@@ -800,7 +800,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 elif c.status == Status.WARN:
                     parts.append('<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is an open license but we do not recommend it.</p>')
                 else:
-                    parts.append('<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is not a known open license.</p>')
+                    parts.append('<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is not a known open licence.</p>')
                 parts.append('</div></div>')
             parts.append('</details>')
         parts.append('</section>')
@@ -1078,15 +1078,15 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     if dt and dt.status != Status.SKIP and dt.usages:
         _open_cluster('datatypes')
         dt_status = 'ok' if not dt.unrecognized else 'fail'
-        dt_label = 'all recognized' if dt_status == 'ok' else f'{len(dt.unrecognized)} unrecognized'
+        dt_label = 'all recognised' if dt_status == 'ok' else f'{len(dt.unrecognized)} unrecognised'
         parts.append('<section class="section">')
         parts.append(_section_heading('datatypes', 'Datatypes', dt_status, dt_label))
         parts.append(_guide_link('datatypes'))
-        parts.append('<p class="subtitle">Datatypes used as property ranges and as literal datatypes should be recognized XSD built-ins (<code>xsd:string</code>, <code>xsd:integer</code>, &hellip;), <code>rdfs:Literal</code>, <code>rdf:langString</code>, or a datatype you declare with <code>rdfs:Datatype</code>. An unrecognized datatype is usually a typo.</p>')
-        parts.append(_status_subtitle(dt_status, f'{dt.recognized}/{dt.total_datatypes} recognized &middot; {len(dt.unrecognized)} unrecognized'))
+        parts.append('<p class="subtitle">Datatypes used as property ranges and as literal datatypes should be recognised XSD built-ins (<code>xsd:string</code>, <code>xsd:integer</code>, &hellip;), <code>rdfs:Literal</code>, <code>rdf:langString</code>, or a datatype you declare with <code>rdfs:Datatype</code>. An unrecognised datatype is usually a typo.</p>')
+        parts.append(_status_subtitle(dt_status, f'{dt.recognized}/{dt.total_datatypes} recognised &middot; {len(dt.unrecognized)} unrecognised'))
         summary = f'Show all datatypes ({dt.total_datatypes})'
         if dt.unrecognized:
-            summary += f' &middot; {len(dt.unrecognized)} unrecognized'
+            summary += f' &middot; {len(dt.unrecognized)} unrecognised'
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">{summary}</summary>')
         parts.append('<table><tr><th>Datatype</th><th style="width:60px;">Uses</th><th>Where</th><th>Status</th></tr>')
         for u in sorted(dt.usages, key=lambda x: (x.recognized, x.display_name.lower())):

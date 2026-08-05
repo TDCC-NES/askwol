@@ -1,5 +1,5 @@
 """Validate ontology-level metadata by running it through pyshacl against
-`shapes/ontology_metadata.ttl`, folded into a normalized summary."""
+`shapes/ontology_metadata.ttl`, folded into a normalised summary."""
 
 from __future__ import annotations
 

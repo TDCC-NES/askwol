@@ -125,7 +125,7 @@ app = FastAPI(
         "consistency, unused prefix declarations, owl:imports "
         "resolution, IRI strategy consistency (hash vs slash), IRI scheme "
         "consistency (http vs https), term naming and inventory, domain and "
-        "range declarations, recognized datatypes, non-ontology terms, and "
+        "range declarations, recognised datatypes, non-ontology terms, and "
         "lightweight OWL RL reasoner checks (ontology consistency, "
         "inconsistent individuals, and unsatisfiable classes)."
     ),
@@ -173,8 +173,8 @@ def _stats_bar(value: int, maximum: int) -> str:
 _STATUS_NOTES = {
     "200": "OK, validation succeeded",
     "400": "bad request, missing or unusable input",
-    "401": "unauthorized stats access",
-    "415": "URL didn't return recognized RDF content",
+    "401": "unauthorised stats access",
+    "415": "URL didn't return recognised RDF content",
     "422": "ontology could not be parsed or fetched",
     "503": "usage tracking or stats disabled",
 }
@@ -522,7 +522,7 @@ async def stats_page(
             status_code=503,
         )
     if token != expected and not _is_local_request(request):
-        return HTMLResponse("<p>unauthorized</p>", status_code=401)
+        return HTMLResponse("<p>unauthorised</p>", status_code=401)
 
     page_size = 25
     page = max(1, page)
@@ -559,7 +559,7 @@ async def stats_endpoint(
             status_code=503,
         )
     if token != expected and not _is_local_request(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+        return JSONResponse({"error": "unauthorised"}, status_code=401)
     page_size = 25
     page = max(1, page)
     source_page = max(1, source_page)
@@ -631,7 +631,7 @@ async def validate(
     return response
 
 
-# Recognized ontology file extensions. Used only as a narrow escape hatch for
+# Recognised ontology file extensions. Used only as a narrow escape hatch for
 # generic or absent Content-Type responses (see _validate_url below) - never
 # as the primary signal for what counts as RDF.
 RDF_FILE_EXTENSIONS = frozenset({".ttl", ".rdf", ".owl", ".rdfs", ".jsonld", ".nt", ".n3", ".xml"})
@@ -676,11 +676,11 @@ async def _validate_url(url: str) -> HTMLResponse:
             }.get(ctype)
 
             # This is direct user input ("validate this URL as my ontology"), so be
-            # strict about what counts as RDF: trust a recognized media type above,
+            # strict about what counts as RDF: trust a recognised media type above,
             # or a generic or absent Content-Type whose URL path ends in a known
             # ontology file extension (the raw.githubusercontent.com case). Anything
             # else is rejected outright rather than optimistically parsed - some
-            # servers redirect namespace URIs to catalog/metadata endpoints that
+            # servers redirect namespace URIs to catalogue/metadata endpoints that
             # return non-standard content types (e.g. "text/anot+turtle") which are
             # syntactically valid RDF but aren't the ontology itself.
             path_suffix = Path(parsed_url.path).suffix
@@ -699,7 +699,7 @@ async def _validate_url(url: str) -> HTMLResponse:
                 return HTMLResponse(
                     f"<p>The URL <code>{escape(url)}</code> returned "
                     f"<code>{escape(ctype or '(no content-type)')}</code>, which isn't a "
-                    f"recognized RDF format. Try a direct link to the ontology file "
+                    f"recognised RDF format. Try a direct link to the ontology file "
                     f"(e.g. <code>.ttl</code> or <code>.rdf</code>).</p>",
                     status_code=415,
                 )

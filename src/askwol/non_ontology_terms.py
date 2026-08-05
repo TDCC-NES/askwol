@@ -7,7 +7,7 @@ separate resource, not mixed into the ontology itself.
 Named individuals (owl:NamedIndividual) are deliberately not flagged: many
 ontologies define a small, fixed set of individuals alongside their schema
 (for example OWL-Time's days of week and time units), which is a common,
-legitimate modeling pattern rather than accidental instance data.
+legitimate modelling pattern rather than accidental instance data.
 
 The check itself runs through pyshacl against shapes/non_ontology_terms.ttl;
 this module only computes the display label for whatever it flags.

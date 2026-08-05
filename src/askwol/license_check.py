@@ -1,5 +1,5 @@
-"""Validate ontology license by loading `json/licenses.json`
-and checking if the license is open or recommended."""
+"""Validate ontology licence by loading `json/licenses.json`
+and checking if the licence is open or recommended."""
 
 from __future__ import annotations
 
@@ -20,9 +20,9 @@ RECOMMENDED_IRIS = set([
     "creativecommons.org/licenses/by/4.0",
 ])
 
-# licenses.json (the Open Definition license register) sometimes points its
+# licenses.json (the Open Definition licence register) sometimes points its
 # own `url` field at a registry reference page rather than the URL ontology
-# authors actually cite in dcterms:license. The Open Data Commons licenses are
+# authors actually cite in dcterms:license. The Open Data Commons licences are
 # one such case: the register points at opendefinition.org, while real
 # ontologies (and Open Data Commons' own "how to apply" instructions) cite
 # opendatacommons.org. Map those real-world IRIs back to the register entry.
@@ -36,7 +36,7 @@ KNOWN_OPEN_PREFIX = "purl.org/NET/rdflicense/"
 
 
 def check_license(graph: Graph) -> LicenseReport:
-    """Evaluate whether an ontology is released under an open license."""
+    """Evaluate whether an ontology is released under an open licence."""
 
     open_iris: dict[str, str] = {}
 
@@ -70,9 +70,9 @@ def check_license(graph: Graph) -> LicenseReport:
         if license_iri_cut in open_iris:
             license_name = open_iris[license_iri_cut]
         elif is_known_open_prefix:
-            license_name = "Known open license"
+            license_name = "Known open licence"
         else:
-            license_name = "Unknown non-open license"
+            license_name = "Unknown non-open licence"
 
         checks.append(
             LicenseCheck(

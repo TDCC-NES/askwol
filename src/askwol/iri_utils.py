@@ -1,6 +1,6 @@
 """Shared IRI helpers used across the internal-term checks.
 
-Splitting a URI into its namespace/local-name parts and recognizing
+Splitting a URI into its namespace/local-name parts and recognising
 well-known external vocabularies are needed by several checks
 (definitions, internal terms, non-ontology terms, term inventory, reasoner
 checks). This module is the single source of truth for both, so the

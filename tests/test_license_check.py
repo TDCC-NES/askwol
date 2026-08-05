@@ -1,4 +1,4 @@
-"""Tests for the open license check."""
+"""Tests for the open licence check."""
 
 import pytest
 from rdflib import Graph, Literal, URIRef
@@ -70,7 +70,7 @@ def test_odc_real_world_url_recognized_as_open(license_iri):
     """licenses.json points PDDL/ODC-By/ODbL's `url` at an opendefinition.org
     registry page, but ontologies (and Open Data Commons' own instructions)
     cite the opendatacommons.org form. That real-world form must still be
-    recognized as open."""
+    recognised as open."""
     g = Graph()
     g.add((ONT, RDF.type, OWL.Ontology))
     g.add((ONT, DCTERMS.license, URIRef(license_iri)))
@@ -99,7 +99,7 @@ def test_rdflicense_prefix_is_known_open():
     check = report.checks[0]
     assert check.is_open is True
     assert check.is_recommended is False
-    assert check.name == "Known open license"
+    assert check.name == "Known open licence"
 
 
 def test_schema_license_predicate_is_checked():
@@ -124,4 +124,4 @@ def test_unknown_license_fails(license_value):
     check = report.checks[0]
     assert check.is_open is False
     assert check.is_recommended is False
-    assert check.name == "Unknown non-open license"
+    assert check.name == "Unknown non-open licence"

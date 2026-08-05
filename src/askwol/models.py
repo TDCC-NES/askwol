@@ -296,7 +296,7 @@ class InternalTermEntry(BaseModel):
 
     ``category`` is one of: Class, Object property, Datatype property,
     Annotation property, Property (a generically typed property), Datatype,
-    Named individual, Untyped. ``naming_ok`` reflects the capitalization
+    Named individual, Untyped. ``naming_ok`` reflects the capitalisation
     convention (classes start uppercase, properties start lowercase); it is
     always True for categories the convention does not apply to.
     """
@@ -312,7 +312,7 @@ class InternalTermEntry(BaseModel):
 
 
 class TermInventoryReport(BaseModel):
-    """Categorization of the ontology's own terms plus naming conventions."""
+    """Categorisation of the ontology's own terms plus naming conventions."""
 
     total_terms: int = 0
     category_counts: dict[str, int] = Field(default_factory=dict)
@@ -364,7 +364,7 @@ class DomainRangeReport(BaseModel):
 
 
 class DatatypeUsage(BaseModel):
-    """One datatype used by the ontology, and whether it is recognized."""
+    """One datatype used by the ontology, and whether it is recognised."""
 
     datatype: str
     display_name: str
@@ -376,7 +376,7 @@ class DatatypeUsage(BaseModel):
 
 
 class DatatypeReport(BaseModel):
-    """Inventory of datatypes used, flagging any that are not recognized."""
+    """Inventory of datatypes used, flagging any that are not recognised."""
 
     total_datatypes: int = 0
     usages: list[DatatypeUsage] = Field(default_factory=list)

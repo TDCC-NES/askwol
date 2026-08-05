@@ -1,16 +1,16 @@
-"""Categorize the ontology's own terms and check their structure.
+"""Categorise the ontology's own terms and check their structure.
 
 This module runs a single classification pass over every term defined in the
 ontology's own namespace and drives three checks:
 
 * ``check_term_inventory`` - what category each term falls into (class, object
-  property, datatype property, ...) plus the capitalization convention
+  property, datatype property, ...) plus the capitalisation convention
   (classes start uppercase, properties start lowercase).
 * ``check_domains_ranges`` - whether object and datatype properties declare a
   domain and range, and whether the range is the right kind of thing (a class
   for object properties, a datatype for datatype properties).
 * ``check_datatypes`` - an inventory of the datatypes used (as property ranges
-  and as literal datatypes), flagging any that are not recognized.
+  and as literal datatypes), flagging any that are not recognised.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ CATEGORY_ORDER = [
     UNTYPED,
 ]
 
-# Categories the capitalization convention applies to.
+# Categories the capitalisation convention applies to.
 _PROPERTY_CATEGORIES = {OBJECT_PROPERTY, DATATYPE_PROPERTY, ANNOTATION_PROPERTY, PROPERTY}
 
 _CLASS_TYPES = {OWL.Class, RDFS.Class}
@@ -73,7 +73,7 @@ _GENERIC_PROPERTY_TYPES = {
     OWL.IrreflexiveProperty,
 }
 
-# Datatypes recognized in addition to the XSD built-ins.
+# Datatypes recognised in addition to the XSD built-ins.
 _OTHER_DATATYPES = {
     str(RDFS.Literal),
     str(RDF_LANG_STRING),
@@ -146,7 +146,7 @@ def _classify_internal_terms(graph: Graph) -> dict[str, str]:
 
 
 def check_term_inventory(graph: Graph) -> TermInventoryReport:
-    """Categorize the ontology's own terms and check naming conventions."""
+    """Categorise the ontology's own terms and check naming conventions."""
     if not _ontology_namespaces(graph):
         return TermInventoryReport(status=Status.SKIP, message="no owl:Ontology declaration found")
 
@@ -305,7 +305,7 @@ def _datatype_recognized(graph: Graph, uri: str) -> bool:
 
 
 def check_datatypes(graph: Graph) -> DatatypeReport:
-    """Inventory the datatypes used and flag any that are not recognized.
+    """Inventory the datatypes used and flag any that are not recognised.
 
     Datatypes are gathered from the ranges of datatype properties, from the
     datatypes of typed literals, and from local ``rdfs:Datatype`` declarations.
@@ -362,7 +362,7 @@ def check_datatypes(graph: Graph) -> DatatypeReport:
                 sources=sorted(sources),
                 recognized=recognized,
                 status=Status.OK if recognized else Status.FAIL,
-                message=None if recognized else "Not a recognized datatype (possible typo).",
+                message=None if recognized else "Not a recognised datatype (possible typo).",
             )
         )
 

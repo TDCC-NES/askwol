@@ -475,9 +475,9 @@ def report_as_markdown(report: ValidationReport) -> str:
         w("## Datatypes")
         w("")
         w("Datatypes used as property ranges and literal datatypes. "
-          "Unrecognized datatypes are usually typos.")
+          "Unrecognised datatypes are usually typos.")
         w("")
-        w(f"> {dt.recognized}/{dt.total_datatypes} recognized, {len(dt.unrecognized)} unrecognized")
+        w(f"> {dt.recognized}/{dt.total_datatypes} recognised, {len(dt.unrecognized)} unrecognised")
         w("")
         if dt.unrecognized:
             w("| Datatype | Uses |")
@@ -491,7 +491,7 @@ def report_as_markdown(report: ValidationReport) -> str:
         w("| Datatype | Uses | Where |")
         w("|----------|------|-------|")
         for u in sorted(dt.usages, key=lambda x: x.display_name.lower()):
-            w(f"| {'ok' if u.recognized else 'unrecognized'} `{u.display_name}` | {u.count} | {', '.join(u.sources)} |")
+            w(f"| {'ok' if u.recognized else 'unrecognised'} `{u.display_name}` | {u.count} | {', '.join(u.sources)} |")
         w("")
         w("</details>")
         w("")
@@ -753,8 +753,8 @@ def _overview_line(report: ValidationReport, anchor: str) -> tuple[str, str] | N
         if dt.status == S.SKIP:
             return "info", "no datatypes used"
         if dt.unrecognized:
-            return "fail", f"{len(dt.unrecognized)} unrecognized of {dt.total_datatypes}"
-        return "ok", f"{dt.total_datatypes} used, all recognized"
+            return "fail", f"{len(dt.unrecognized)} unrecognised of {dt.total_datatypes}"
+        return "ok", f"{dt.total_datatypes} used, all recognised"
     if anchor == "non-ontology-terms":
         sk = report.non_ontology_terms
         if not sk:
@@ -1095,12 +1095,12 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
             dr_table.add_row(c.display_name, c.category, _status_badge(c.status), msg)
         console.print(dr_table)
 
-    # Unrecognized datatypes
+    # Unrecognised datatypes
     dt = report.datatypes
     if dt and dt.unrecognized:
         console.print()
-        console.print(f"[red]\u2717 Datatypes  -  {len(dt.unrecognized)} unrecognized[/red]")
-        dt_table = Table(title="Unrecognized datatypes", show_lines=True)
+        console.print(f"[red]\u2717 Datatypes  -  {len(dt.unrecognized)} unrecognised[/red]")
+        dt_table = Table(title="Unrecognised datatypes", show_lines=True)
         dt_table.add_column("Datatype", style="red bold")
         dt_table.add_column("Uses", justify="center")
         dt_table.add_column("Full IRI")

@@ -4,7 +4,7 @@ Shared by the checks that should not flag issues about a term once it is
 deprecated (naming conventions, domain and range, label and comment
 documentation, language tag consistency), and by `term_validator` to note
 when a reused
-external term is deprecated upstream. Three conventions are recognized,
+external term is deprecated upstream. Three conventions are recognised,
 since there is no single official one:
 
 * ``owl:deprecated "true"^^xsd:boolean`` - the OWL 2 standard annotation

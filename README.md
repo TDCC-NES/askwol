@@ -2,7 +2,7 @@
 
 > **Drop in an OWL ontology - get back a class diagram, namespace and term checks, metadata review, and a clean-up report. In seconds.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Licence: MIT](https://img.shields.io/badge/Licence-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://github.com/TDCC-NES/askwol/actions/workflows/tests.yml/badge.svg)](https://github.com/TDCC-NES/askwol/actions/workflows/tests.yml)
 [![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
@@ -179,7 +179,7 @@ server.example.com {
 }
 ```
 
-**Security notes:** askwol fetches arbitrary URLs (namespace resolution + URL upload). Outbound requests to private, loopback, and other internal IP ranges are blocked automatically (SSRF guard in [`resolver.py`](src/askwol/resolver.py)). Each client IP is capped at `ASKWOL_RATE_LIMIT` requests per minute (default 20; set to `0` to disable) on `/validate` and `/api/validate`. Uploads are capped at 20 MB in the app itself; also enforce a request-size limit on the reverse proxy as defense-in-depth.
+**Security notes:** askwol fetches arbitrary URLs (namespace resolution + URL upload). Outbound requests to private, loopback, and other internal IP ranges are blocked automatically (SSRF guard in [`resolver.py`](src/askwol/resolver.py)). Each client IP is capped at `ASKWOL_RATE_LIMIT` requests per minute (default 20; set to `0` to disable) on `/validate` and `/api/validate`. Uploads are capped at 20 MB in the app itself; also enforce a request-size limit on the reverse proxy as defence-in-depth.
 
 ### Usage tracking
 
@@ -240,6 +240,6 @@ check ever stops detecting issues (clean counterpart:
 [`html/ontologies/sample.ttl`](html/ontologies/sample.ttl)). Drop either into
 the upload form at http://localhost:8000/ to see a full report.
 
-## License
+## Licence
 
 MIT - see [LICENSE](LICENSE).

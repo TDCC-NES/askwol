@@ -174,7 +174,7 @@ def test_html_validate_url_rejects_html_response(client, monkeypatch):
 
 @respx.mock
 def test_html_validate_url_rejects_unrecognized_content_type(client, monkeypatch):
-    """A server can redirect a namespace URI to a catalog/metadata endpoint that
+    """A server can redirect a namespace URI to a catalogue/metadata endpoint that
     returns a non-standard content type which still happens to be syntactically
     valid RDF (e.g. OGC's Prez backend serving "text/anot+turtle" for
     http://www.opengis.net/ont/geosparql). This isn't the ontology itself, so

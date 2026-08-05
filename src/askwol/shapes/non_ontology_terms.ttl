@@ -9,7 +9,7 @@
 # belongs in a separate resource. Named individuals (owl:NamedIndividual) are
 # deliberately not flagged: many ontologies define a small, fixed set of
 # individuals alongside their schema (e.g. OWL-Time's days of week and time
-# units), which is a common, legitimate modeling pattern rather than
+# units), which is a common, legitimate modelling pattern rather than
 # accidental instance data left in a schema file.
 <https://w3id.org/askwol/shapes/NonOntologyTermsShape>
     a sh:NodeShape ;
