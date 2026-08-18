@@ -281,6 +281,15 @@ app = FastAPI(
     root_path=ROOT_PATH,
 )
 
+
+@app.middleware("http")
+async def _add_openapi_robots_header(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path == app.openapi_url:
+        response.headers["X-Robots-Tag"] = "noindex"
+    return response
+
+
 # Test-only hook: when set, run_isolated_validation calls this directly
 # in-process instead of spawning a worker subprocess, bypassing all
 # isolation machinery. Namespace/import resolution normally happens inside

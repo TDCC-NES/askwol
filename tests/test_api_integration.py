@@ -64,6 +64,12 @@ def test_guide_renders(client):
     assert "<html" in r.text.lower()
 
 
+def test_openapi_json_has_noindex_header(client):
+    r = client.get(web.app.openapi_url)
+    assert r.status_code == 200
+    assert r.headers["x-robots-tag"] == "noindex"
+
+
 def test_index_renders(client):
     r = client.get("/")
     assert r.status_code == 200
