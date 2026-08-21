@@ -245,7 +245,13 @@
             SELECT $this WHERE {
                 $this rdfs:range ?range .
                 FILTER(isIRI(?range))
-                FILTER(?range = owl:Thing || EXISTS { ?range a owl:Class } || EXISTS { ?range a rdfs:Class })
+                FILTER(
+                    ?range = owl:Thing ||
+                    EXISTS { ?range a owl:Class } || EXISTS { ?range a rdfs:Class } ||
+                    EXISTS { ?range rdfs:subClassOf ?rSuper } || EXISTS { ?rSub rdfs:subClassOf ?range } ||
+                    EXISTS { ?range owl:equivalentClass ?rEquiv } || EXISTS { ?rOther owl:equivalentClass ?range } ||
+                    EXISTS { ?rInstance a ?range }
+                )
             }
         """ ;
     ] .

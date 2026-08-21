@@ -207,6 +207,25 @@ def test_datatype_property_ranging_over_class_fails():
     assert report.issues[0].display_name == "hasLabelText"
 
 
+def test_datatype_property_ranging_over_implicit_class_fails():
+    """A range that's only a class by usage - rdfs:subClassOf, or being the
+    object of rdf:type for an individual - never explicitly typed
+    owl:Class/rdfs:Class. A real-world pattern (e.g. GS1's vocabulary) that
+    must still be caught as a domain/range issue, not miscategorised as an
+    unrecognised datatype (see test_datatypes_excludes_range_that_is_a_class_by_usage_only)."""
+    g = _base_graph()
+    g.add((EX["TypeCode"], RDF.type, OWL.Class))
+    g.add((EX["DiscountTypeCode"], RDFS.subClassOf, EX["TypeCode"]))
+    g.add((EX["DiscountTypeCode-BOGO"], RDF.type, EX["DiscountTypeCode"]))
+    g.add((EX["discountType"], RDF.type, OWL.DatatypeProperty))
+    g.add((EX["discountType"], RDFS.range, EX["DiscountTypeCode"]))
+
+    report = check_domains_ranges(g)
+
+    assert report.status == Status.FAIL
+    assert report.issues[0].display_name == "discountType"
+
+
 def test_missing_domain_and_range_warns():
     g = _base_graph()
     g.add((EX["relatedTo"], RDF.type, OWL.ObjectProperty))
@@ -290,6 +309,21 @@ def test_datatypes_recognizes_custom_datatype():
 
     assert report.status == Status.OK
     assert any(u.display_name == "personAge" and u.recognised for u in report.usages)
+
+
+def test_datatypes_excludes_range_that_is_a_class_by_usage_only():
+    """Mirrors test_datatype_property_ranging_over_implicit_class_fails: this
+    range must NOT show up here as an "unrecognised datatype" - it's a class,
+    not a typo. Left to check_domains_ranges to report instead."""
+    g = _base_graph()
+    g.add((EX["DiscountTypeCode"], RDFS.subClassOf, EX["TypeCode"]))
+    g.add((EX["DiscountTypeCode-BOGO"], RDF.type, EX["DiscountTypeCode"]))
+    g.add((EX["discountType"], RDF.type, OWL.DatatypeProperty))
+    g.add((EX["discountType"], RDFS.range, EX["DiscountTypeCode"]))
+
+    report = check_datatypes(g)
+
+    assert report.status == Status.SKIP
 
 
 def test_datatypes_skips_when_none_used():

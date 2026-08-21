@@ -193,10 +193,29 @@ def check_term_inventory(graph: Graph) -> TermInventoryReport:
 
 
 def _is_class_value(graph: Graph, value: URIRef) -> bool:
+    """True if `value` is a class, either by explicit `owl:Class`/`rdfs:Class`
+    typing or by being used as one elsewhere in the graph: as either side of
+    `rdfs:subClassOf` or `owl:equivalentClass` (both properties only relate
+    classes to classes), or as the object of `rdf:type` for some other
+    resource (the RDFS reading of what makes something a class). Real-world
+    vocabularies often rely on one of these instead of also asserting the
+    redundant explicit type triple."""
     if value in (OWL.Thing, OWL.Nothing):
         return True
     types = set(graph.objects(value, RDF.type))
-    return bool(types & _CLASS_TYPES)
+    if types & _CLASS_TYPES:
+        return True
+    if any(True for _ in graph.objects(value, RDFS.subClassOf)):
+        return True
+    if any(True for _ in graph.subjects(RDFS.subClassOf, value)):
+        return True
+    if any(True for _ in graph.objects(value, OWL.equivalentClass)):
+        return True
+    if any(True for _ in graph.subjects(OWL.equivalentClass, value)):
+        return True
+    if any(True for _ in graph.subjects(RDF.type, value)):
+        return True
+    return False
 
 
 def check_domains_ranges(graph: Graph) -> DomainRangeReport:
