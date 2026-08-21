@@ -134,25 +134,28 @@ def record(
 def stats(
     days: int = 30,
     *,
-    status_page: int = 1,
-    status_page_size: int = 25,
-    source_page: int = 1,
-    source_page_size: int = 25,
+    url_source_page: int = 1,
+    url_source_page_size: int = 25,
+    upload_source_page: int = 1,
+    upload_source_page_size: int = 25,
 ) -> dict[str, Any]:
     """Return aggregated counts for the dashboard.
 
     `avg_duration_ms` is scoped to the last `days` days. `total_events`,
-    `unique_visitors`, `by_day`, `by_status`, and `top_sources` are all-time
-    (not just the recent window) so long-lived sources, statuses, and older
-    activity aren't hidden - `by_status`/`top_sources` are each paginated
-    independently (ranked by event count, descending) so the full list is
-    reachable.
+    `unique_visitors`, `by_day`, `url_sources`, and `upload_sources` are
+    all-time (not just the recent window) so long-lived sources and older
+    activity aren't hidden. Sources are split by `kind`: `url_sources` comes
+    from `validate` events (the Ontology URL field / shareable GET link),
+    `upload_sources` from `validate_upload`/`validate_api` (a file upload,
+    via the web UI or the JSON API - the API only accepts uploads). Each is
+    paginated independently (ranked by event count, descending) so the full
+    list is reachable.
     """
     if _DISABLED:
         return {"disabled": True}
     _init()
-    status_page = max(1, status_page)
-    source_page = max(1, source_page)
+    url_source_page = max(1, url_source_page)
+    upload_source_page = max(1, upload_source_page)
     with _connect() as conn:
         cutoff = f"-{int(days)} days"
         totals = conn.execute(
@@ -165,35 +168,36 @@ def stats(
             "GROUP BY day ORDER BY day DESC"
         ).fetchall()
 
-        status_total = conn.execute(
-            "SELECT COUNT(*) AS n FROM (SELECT COALESCE(status, '(none)') AS status "
-            "FROM events GROUP BY status)"
-        ).fetchone()
-        status_max = conn.execute(
-            "SELECT COUNT(*) AS n FROM events "
-            "GROUP BY COALESCE(status, '(none)') ORDER BY n DESC LIMIT 1"
-        ).fetchone()
-        by_status = conn.execute(
-            "SELECT COALESCE(status, '(none)') AS status, COUNT(*) AS n "
-            "FROM events "
-            "GROUP BY status ORDER BY n DESC LIMIT ? OFFSET ?",
-            (status_page_size, (status_page - 1) * status_page_size),
-        ).fetchall()
-
-        source_total = conn.execute(
+        url_source_total = conn.execute(
             "SELECT COUNT(*) AS n FROM (SELECT source FROM events "
-            "WHERE source IS NOT NULL GROUP BY source)"
+            "WHERE source IS NOT NULL AND kind = 'validate' GROUP BY source)"
         ).fetchone()
-        source_max = conn.execute(
+        url_source_max = conn.execute(
             "SELECT COUNT(*) AS n FROM events "
-            "WHERE source IS NOT NULL "
+            "WHERE source IS NOT NULL AND kind = 'validate' "
             "GROUP BY source ORDER BY n DESC LIMIT 1"
         ).fetchone()
-        top_sources = conn.execute(
+        url_sources = conn.execute(
             "SELECT source, COUNT(*) AS n FROM events "
-            "WHERE source IS NOT NULL "
+            "WHERE source IS NOT NULL AND kind = 'validate' "
             "GROUP BY source ORDER BY n DESC LIMIT ? OFFSET ?",
-            (source_page_size, (source_page - 1) * source_page_size),
+            (url_source_page_size, (url_source_page - 1) * url_source_page_size),
+        ).fetchall()
+
+        upload_source_total = conn.execute(
+            "SELECT COUNT(*) AS n FROM (SELECT source FROM events "
+            "WHERE source IS NOT NULL AND kind IN ('validate_upload', 'validate_api') GROUP BY source)"
+        ).fetchone()
+        upload_source_max = conn.execute(
+            "SELECT COUNT(*) AS n FROM events "
+            "WHERE source IS NOT NULL AND kind IN ('validate_upload', 'validate_api') "
+            "GROUP BY source ORDER BY n DESC LIMIT 1"
+        ).fetchone()
+        upload_sources = conn.execute(
+            "SELECT source, COUNT(*) AS n FROM events "
+            "WHERE source IS NOT NULL AND kind IN ('validate_upload', 'validate_api') "
+            "GROUP BY source ORDER BY n DESC LIMIT ? OFFSET ?",
+            (upload_source_page_size, (upload_source_page - 1) * upload_source_page_size),
         ).fetchall()
 
         avg_duration = conn.execute(
@@ -208,41 +212,100 @@ def stats(
         "unique_visitors": totals["uniq"] or 0,
         "avg_duration_ms": int(avg_duration["ms"]) if avg_duration["ms"] else None,
         "by_day": [dict(r) for r in by_day],
-        "by_status": [dict(r) for r in by_status],
-        "status_total": status_total["n"] or 0,
-        "status_max": status_max["n"] if status_max else 0,
-        "status_page": status_page,
-        "status_page_size": status_page_size,
-        "top_sources": [dict(r) for r in top_sources],
-        "source_total": source_total["n"] or 0,
-        "source_max": source_max["n"] if source_max else 0,
-        "source_page": source_page,
-        "source_page_size": source_page_size,
+        "url_sources": [dict(r) for r in url_sources],
+        "url_source_total": url_source_total["n"] or 0,
+        "url_source_max": url_source_max["n"] if url_source_max else 0,
+        "url_source_page": url_source_page,
+        "url_source_page_size": url_source_page_size,
+        "upload_sources": [dict(r) for r in upload_sources],
+        "upload_source_total": upload_source_total["n"] or 0,
+        "upload_source_max": upload_source_max["n"] if upload_source_max else 0,
+        "upload_source_page": upload_source_page,
+        "upload_source_page_size": upload_source_page_size,
     }
 
 
-def events_count() -> int:
-    """Return the total number of usage events stored in the database."""
+# Sentinel status value for "no status recorded" (a NULL status column),
+# matching the display value usage.distinct_statuses() and web.py's
+# _status_note()/_status_badge() already use for this same case.
+STATUS_NONE = "(none)"
+
+
+def _event_filter_clause(source: str | None, status: str | None) -> tuple[str, list[Any]]:
+    """Build a WHERE clause + params for the optional source/status filters
+    shared by events_count and all_events."""
+    clauses = []
+    params: list[Any] = []
+    if source:
+        clauses.append("source = ?")
+        params.append(source)
+    if status:
+        if status == STATUS_NONE:
+            clauses.append("status IS NULL")
+        else:
+            clauses.append("status = ?")
+            params.append(status)
+    where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+    return where, params
+
+
+def events_count(*, source: str | None = None, status: str | None = None) -> int:
+    """Return the total number of usage events stored in the database,
+    optionally filtered to a single source and/or status."""
     if _DISABLED:
         return 0
     _init()
+    where, params = _event_filter_clause(source, status)
     with _connect() as conn:
-        row = conn.execute("SELECT COUNT(*) AS n FROM events").fetchone()
+        row = conn.execute(f"SELECT COUNT(*) AS n FROM events{where}", params).fetchone()
     return int(row["n"]) if row else 0
 
 
-def all_events(limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
-    """Return a page of usage events, newest first."""
+def all_events(
+    limit: int = 50, offset: int = 0, *, source: str | None = None, status: str | None = None
+) -> list[dict[str, Any]]:
+    """Return a page of usage events, newest first, optionally filtered to a
+    single source and/or status."""
+    if _DISABLED:
+        return []
+    _init()
+    where, params = _event_filter_clause(source, status)
+    with _connect() as conn:
+        rows = conn.execute(
+            f"SELECT ts, kind, source, status, duration_ms, ip_hash FROM events{where} "
+            "ORDER BY ts DESC LIMIT ? OFFSET ?",
+            (*params, int(limit), int(offset)),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def distinct_sources(limit: int = 500) -> list[dict[str, Any]]:
+    """Every distinct source with its all-time event count, ranked by count
+    descending, for populating the All events source filter."""
     if _DISABLED:
         return []
     _init()
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT ts, kind, source, status, duration_ms, ip_hash "
-            "FROM events ORDER BY ts DESC LIMIT ? OFFSET ?",
-            (int(limit), int(offset)),
+            "SELECT source, COUNT(*) AS n FROM events "
+            "WHERE source IS NOT NULL GROUP BY source ORDER BY n DESC LIMIT ?",
+            (limit,),
         ).fetchall()
-    return [dict(row) for row in rows]
+    return [dict(r) for r in rows]
+
+
+def distinct_statuses() -> list[dict[str, Any]]:
+    """Every distinct status with its all-time event count, ranked by count
+    descending, for populating the All events status filter."""
+    if _DISABLED:
+        return []
+    _init()
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT COALESCE(status, '(none)') AS status, COUNT(*) AS n "
+            "FROM events GROUP BY status ORDER BY n DESC"
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def stats_token() -> str | None:

@@ -328,9 +328,7 @@ def _format_int(value: int | None) -> str:
 def _format_duration(value: int | None) -> str:
     if value is None:
         return "n/a"
-    if value < 1000:
-        return f"{value:,} ms"
-    return f"{value / 1000:.1f} s"
+    return f"{value / 1000:.2f} s"
 
 
 def _stats_bar(value: int, maximum: int) -> str:
@@ -582,6 +580,60 @@ def _render_day_chart(by_day: list[dict], max_day: int) -> str:
     )
 
 
+def _render_events_filter(
+    *,
+    source: str | None,
+    status: str | None,
+    source_options: list[dict],
+    status_options: list[dict],
+    token: str | None,
+    url_source_page: int,
+    upload_source_page: int,
+) -> str:
+    """Render the All events source/status filter: a plain GET form (no JS)
+    plus a "Clear filter" link when a filter is active. Options are the
+    all-time distinct sources/statuses with their event counts."""
+
+    def option(value: str, label: str, selected: str | None) -> str:
+        is_selected = " selected" if selected == value else ""
+        return f'<option value="{escape(value)}"{is_selected}>{escape(label)}</option>'
+
+    source_opts = ['<option value="">All sources</option>']
+    for row in source_options:
+        value = str(row["source"])
+        source_opts.append(option(value, f'{value} ({_format_int(int(row["n"]))})', source))
+
+    status_opts = ['<option value="">All statuses</option>']
+    for row in status_options:
+        value = str(row["status"])
+        status_opts.append(option(value, f'{value} ({_format_int(int(row["n"]))})', status))
+
+    hidden = (
+        f'<input type="hidden" name="url_source_page" value="{url_source_page}">'
+        f'<input type="hidden" name="upload_source_page" value="{upload_source_page}">'
+    )
+    if token:
+        hidden += f'<input type="hidden" name="token" value="{escape(str(token))}">'
+
+    clear_link = ""
+    if source or status:
+        params = {"url_source_page": url_source_page, "upload_source_page": upload_source_page}
+        if token:
+            params["token"] = token
+        query = "&".join(f"{key}={quote(str(value))}" for key, value in params.items())
+        clear_link = f'<a class="page-btn" href="?{query}#all-events">Clear filter</a>'
+
+    return (
+        '<form method="get" class="filter-form">'
+        + hidden
+        + f'<label class="filter-field">Source<select name="source">{"".join(source_opts)}</select></label>'
+        + f'<label class="filter-field">Status<select name="status">{"".join(status_opts)}</select></label>'
+        + '<button type="submit" class="page-btn">Filter</button>'
+        + clear_link
+        + '</form>'
+    )
+
+
 def _render_stats_page(data: dict[str, object]) -> str:
     total_events = int(data.get("total_events") or 0)
     unique_visitors = int(data.get("unique_visitors") or 0)
@@ -589,52 +641,48 @@ def _render_stats_page(data: dict[str, object]) -> str:
     token = data.get("token") or None
 
     by_day = list(data.get("by_day") or [])
-    by_status = list(data.get("by_status") or [])
-    top_sources = list(data.get("top_sources") or [])
+    url_sources = list(data.get("url_sources") or [])
+    upload_sources = list(data.get("upload_sources") or [])
     all_events = list(data.get("all_events") or [])
+
+    filter_source = data.get("filter_source") or None
+    filter_status = data.get("filter_status") or None
+    source_options = list(data.get("source_options") or [])
+    status_options = list(data.get("status_options") or [])
 
     page = int(data.get("page") or 1)
     page_size = int(data.get("page_size") or 25)
     total_entries = int(data.get("total_entries") or 0)
 
-    status_page = int(data.get("status_page") or 1)
-    status_page_size = int(data.get("status_page_size") or 25)
-    status_total = int(data.get("status_total") or 0)
+    url_source_page = int(data.get("url_source_page") or 1)
+    url_source_page_size = int(data.get("url_source_page_size") or 25)
+    url_source_total = int(data.get("url_source_total") or 0)
 
-    source_page = int(data.get("source_page") or 1)
-    source_page_size = int(data.get("source_page_size") or 25)
-    source_total = int(data.get("source_total") or 0)
+    upload_source_page = int(data.get("upload_source_page") or 1)
+    upload_source_page_size = int(data.get("upload_source_page_size") or 25)
+    upload_source_total = int(data.get("upload_source_total") or 0)
 
     max_day = max((int(row["n"]) for row in by_day), default=0)
-    max_status = int(data.get("status_max") or 0)
-    max_source = int(data.get("source_max") or 0)
+    max_url_source = int(data.get("url_source_max") or 0)
+    max_upload_source = int(data.get("upload_source_max") or 0)
 
     day_html = _render_day_chart(by_day, max_day)
 
-    status_rows = []
-    for row in by_status:
-        count = int(row["n"])
-        status_rows.append(
-            "<tr>"
-            f"<td>{_status_badge(row['status'])}</td>"
-            f"<td class=\"hint\">{escape(_status_note(row['status']))}</td>"
-            f"<td class=\"num\">{_format_int(count)}</td>"
-            f"<td><span class=\"mini-bar\"><span style=\"width:{_stats_bar(count, max_status)}\"></span></span></td>"
-            "</tr>"
-        )
-    status_html = "".join(status_rows) or '<tr><td colspan="4" class="empty-cell">No events recorded in this period.</td></tr>'
+    def _source_rows(rows: list[dict], maximum: int) -> str:
+        out = []
+        for row in rows:
+            count = int(row["n"])
+            out.append(
+                "<tr>"
+                f"<td class=\"source\">{_source_link(row['source'])}</td>"
+                f"<td class=\"num\">{_format_int(count)}</td>"
+                f"<td><span class=\"mini-bar\"><span style=\"width:{_stats_bar(count, maximum)}\"></span></span></td>"
+                "</tr>"
+            )
+        return "".join(out) or '<tr><td colspan="3" class="empty-cell">No sources yet.</td></tr>'
 
-    source_rows = []
-    for row in top_sources:
-        count = int(row["n"])
-        source_rows.append(
-            "<tr>"
-            f"<td class=\"source\">{_source_link(row['source'])}</td>"
-            f"<td class=\"num\">{_format_int(count)}</td>"
-            f"<td><span class=\"mini-bar\"><span style=\"width:{_stats_bar(count, max_source)}\"></span></span></td>"
-            "</tr>"
-        )
-    source_html = "".join(source_rows) or '<tr><td colspan="3" class="empty-cell">No sources yet.</td></tr>'
+    url_source_html = _source_rows(url_sources, max_url_source)
+    upload_source_html = _source_rows(upload_sources, max_upload_source)
 
     all_rows = []
     for row in all_events:
@@ -654,18 +702,35 @@ def _render_stats_page(data: dict[str, object]) -> str:
             f"<td class=\"source\">{_source_link(row['source'])}</td>"
             "</tr>"
         )
-    all_html = "".join(all_rows) or '<tr><td colspan="6" class="empty-cell">No database entries yet.</td></tr>'
+    all_html = "".join(all_rows) or '<tr><td colspan="6" class="empty-cell">No events match this filter.</td></tr>'
+
+    events_filter = _render_events_filter(
+        source=filter_source, status=filter_status,
+        source_options=source_options, status_options=status_options,
+        token=token, url_source_page=url_source_page, upload_source_page=upload_source_page,
+    )
+
+    filter_params: dict[str, int | str] = {}
+    if filter_source:
+        filter_params["source"] = filter_source
+    if filter_status:
+        filter_params["status"] = filter_status
 
     events_pagination = _render_pagination(
         page=page, page_size=page_size, total=total_entries, shown=len(all_events),
-        param="page", other_pages={"source_page": source_page, "status_page": status_page},
+        param="page", other_pages={"url_source_page": url_source_page, "upload_source_page": upload_source_page, **filter_params},
         token=token, anchor="all-events", prev_label="&larr; Newer", next_label="Older &rarr;",
         first_label="&laquo; Newest", last_label="Oldest &raquo;",
     )
-    source_pagination = _render_pagination(
-        page=source_page, page_size=source_page_size, total=source_total, shown=len(top_sources),
-        param="source_page", other_pages={"page": page, "status_page": status_page},
-        token=token, anchor="top-sources", compact=True,
+    url_source_pagination = _render_pagination(
+        page=url_source_page, page_size=url_source_page_size, total=url_source_total, shown=len(url_sources),
+        param="url_source_page", other_pages={"page": page, "upload_source_page": upload_source_page, **filter_params},
+        token=token, anchor="top-sources-urls", compact=True,
+    )
+    upload_source_pagination = _render_pagination(
+        page=upload_source_page, page_size=upload_source_page_size, total=upload_source_total, shown=len(upload_sources),
+        param="upload_source_page", other_pages={"page": page, "url_source_page": url_source_page, **filter_params},
+        token=token, anchor="top-sources-uploads", compact=True,
     )
 
     return _apply_prefix(f"""<!DOCTYPE html>
@@ -721,6 +786,9 @@ def _render_stats_page(data: dict[str, object]) -> str:
     .status-badge {{ display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-weight: 700; font-size: 0.85em; white-space: nowrap; }}
     .status-ok {{ background: #e3f3e9; color: #1f7a4d; }}
     .status-warn {{ background: #fdf0dc; color: #9a5b12; }}
+    .filter-form {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 0 0 16px; }}
+    .filter-field {{ display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); font-weight: 600; }}
+    .filter-field select {{ padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); font-size: 0.9rem; color: #18312b; background: #fff; max-width: 320px; }}
     .pagination {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-top: 14px; }}
     .page-nav {{ display: flex; gap: 8px; }}
     .page-btn {{ padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-soft, #f9fbfa); color: var(--accent); text-decoration: none; font-weight: 600; font-size: 0.9rem; }}
@@ -755,6 +823,7 @@ def _render_stats_page(data: dict[str, object]) -> str:
 
             <section class="card panel" id="all-events" style="grid-column: span 12;">
                 <h2>All events</h2>
+                {events_filter}
                 <div class="table-wrap">
                     <table>
                         <thead><tr><th>Timestamp</th><th>Visitor</th><th>Kind</th><th>Status</th><th>Duration</th><th>Source</th></tr></thead>
@@ -764,25 +833,26 @@ def _render_stats_page(data: dict[str, object]) -> str:
                 {events_pagination}
             </section>
 
-            <section class="card panel" id="top-sources" style="grid-column: span 6;">
-                <h2>Top sources <span class="hint">(all time)</span></h2>
+            <section class="card panel" id="top-sources-urls" style="grid-column: span 6;">
+                <h2>Top sources: URLs <span class="hint">(all time)</span></h2>
                 <div class="table-wrap">
                     <table class="ranked-table">
                         <thead><tr><th>Source</th><th class="num">Events</th><th class="share-col">Share</th></tr></thead>
-                        <tbody>{source_html}</tbody>
+                        <tbody>{url_source_html}</tbody>
                     </table>
                 </div>
-                {source_pagination}
+                {url_source_pagination}
             </section>
 
-            <section class="card panel" id="by-status" style="grid-column: span 6;">
-                <h2>By status <span class="hint">(all time)</span></h2>
+            <section class="card panel" id="top-sources-uploads" style="grid-column: span 6;">
+                <h2>Top sources: uploads <span class="hint">(all time)</span></h2>
                 <div class="table-wrap">
                     <table class="ranked-table">
-                        <thead><tr><th class="status-col">Status</th><th>Notes</th><th class="num">Events</th><th class="share-col">Share</th></tr></thead>
-                        <tbody>{status_html}</tbody>
+                        <thead><tr><th>Source</th><th class="num">Events</th><th class="share-col">Share</th></tr></thead>
+                        <tbody>{upload_source_html}</tbody>
                     </table>
                 </div>
+                {upload_source_pagination}
             </section>
         </div>
     </div>
@@ -805,8 +875,10 @@ async def stats_page(
     request: Request,
     token: str | None = None,
     page: int = 1,
-    source_page: int = 1,
-    status_page: int = 1,
+    url_source_page: int = 1,
+    upload_source_page: int = 1,
+    source: str | None = None,
+    status: str | None = None,
 ):
     """Internal usage dashboard. Requires ASKWOL_STATS_TOKEN env var to match `?token=`."""
     expected = usage.stats_token()
@@ -819,17 +891,25 @@ async def stats_page(
         return HTMLResponse("<p>unauthorised</p>", status_code=401)
 
     page = max(1, page)
-    source_page = max(1, source_page)
-    status_page = max(1, status_page)
+    url_source_page = max(1, url_source_page)
+    upload_source_page = max(1, upload_source_page)
+    source = source or None
+    status = status or None
     data = usage.stats(
         days=30,
-        source_page=source_page,
-        source_page_size=AGG_PAGE_SIZE,
-        status_page=status_page,
-        status_page_size=AGG_PAGE_SIZE,
+        url_source_page=url_source_page,
+        url_source_page_size=AGG_PAGE_SIZE,
+        upload_source_page=upload_source_page,
+        upload_source_page_size=AGG_PAGE_SIZE,
     )
-    data["total_entries"] = usage.events_count()
-    data["all_events"] = usage.all_events(limit=EVENTS_PAGE_SIZE, offset=(page - 1) * EVENTS_PAGE_SIZE)
+    data["total_entries"] = usage.events_count(source=source, status=status)
+    data["all_events"] = usage.all_events(
+        limit=EVENTS_PAGE_SIZE, offset=(page - 1) * EVENTS_PAGE_SIZE, source=source, status=status,
+    )
+    data["filter_source"] = source
+    data["filter_status"] = status
+    data["source_options"] = usage.distinct_sources()
+    data["status_options"] = usage.distinct_statuses()
     data["page"] = page
     data["page_size"] = EVENTS_PAGE_SIZE
     data["token"] = token
@@ -841,8 +921,10 @@ async def stats_endpoint(
     request: Request,
     token: str | None = None,
     page: int = 1,
-    source_page: int = 1,
-    status_page: int = 1,
+    url_source_page: int = 1,
+    upload_source_page: int = 1,
+    source: str | None = None,
+    status: str | None = None,
 ):
     """Internal usage data. Requires ASKWOL_STATS_TOKEN env var to match `?token=`."""
     expected = usage.stats_token()
@@ -854,19 +936,23 @@ async def stats_endpoint(
     if token != expected and not _is_local_request(request):
         return JSONResponse({"error": "unauthorised"}, status_code=401)
     page = max(1, page)
-    source_page = max(1, source_page)
-    status_page = max(1, status_page)
+    url_source_page = max(1, url_source_page)
+    upload_source_page = max(1, upload_source_page)
+    source = source or None
+    status = status or None
     payload = usage.stats(
         days=30,
-        source_page=source_page,
-        source_page_size=AGG_PAGE_SIZE,
-        status_page=status_page,
-        status_page_size=AGG_PAGE_SIZE,
+        url_source_page=url_source_page,
+        url_source_page_size=AGG_PAGE_SIZE,
+        upload_source_page=upload_source_page,
+        upload_source_page_size=AGG_PAGE_SIZE,
     )
-    payload["total_entries"] = usage.events_count()
+    payload["total_entries"] = usage.events_count(source=source, status=status)
     payload["page"] = page
     payload["page_size"] = EVENTS_PAGE_SIZE
-    payload["all_events"] = usage.all_events(limit=EVENTS_PAGE_SIZE, offset=(page - 1) * EVENTS_PAGE_SIZE)
+    payload["all_events"] = usage.all_events(
+        limit=EVENTS_PAGE_SIZE, offset=(page - 1) * EVENTS_PAGE_SIZE, source=source, status=status,
+    )
     return JSONResponse(payload)
 
 
