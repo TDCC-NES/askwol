@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import json
+import math
 import os
 import sys
 import tempfile
@@ -33,6 +34,11 @@ ROOT_PATH = os.environ.get("ASKWOL_ROOT_PATH", "").rstrip("/")
 # are almost always a few MB at most. Bounds memory and disk use against
 # oversized or abusive uploads.
 MAX_UPLOAD_SIZE = 20 * 1024 * 1024
+
+# "All events" is kept short so paging never has to scroll far back up to
+# the top of the table (the other two /stats tables stay at 25/page).
+EVENTS_PAGE_SIZE = 15
+AGG_PAGE_SIZE = 25
 
 # Per-IP throttle for the two validation endpoints, since each request can
 # trigger many outbound HTTP fetches (namespaces, imports). In-memory only, so
@@ -337,14 +343,34 @@ _STATUS_NOTES = {
     "200": "OK, validation succeeded",
     "400": "bad request, missing or unusable input",
     "401": "unauthorised stats access",
+    "413": "upload or fetched content exceeded the size limit",
     "415": "URL didn't return recognised RDF content",
     "422": "ontology could not be parsed or fetched",
-    "503": "usage tracking or stats disabled",
+    "429": "rate limited, too many requests in a short time",
+    "503": "too many validations running at once, try again shortly",
+    "504": "validation timed out",
 }
 
 
 def _status_note(status: object) -> str:
-    return _STATUS_NOTES.get(str(status) if status is not None else "", "")
+    """A human-readable note for a status code. Always returns non-empty text
+    so a tooltip is available even for codes with no specific entry."""
+    text = str(status) if status is not None else ""
+    note = _STATUS_NOTES.get(text, "")
+    if note:
+        return note
+    return "no status recorded" if text in ("", "(none)") else "unrecognised status code"
+
+
+def _status_badge(status: object) -> str:
+    """Colour-code a status code: green for a successful 2xx response, amber
+    otherwise. Always carries a title tooltip."""
+    text = str(status) if status is not None else ""
+    if not text:
+        return '<span class="hint">unknown</span>'
+    ok = text.isdigit() and text.startswith("2")
+    css_class = "status-badge status-ok" if ok else "status-badge status-warn"
+    return f'<span class="{css_class}" title="{escape(_status_note(status))}">{escape(text)}</span>'
 
 
 def _format_ts(ts: object) -> str:
@@ -403,11 +429,19 @@ def _render_pagination(
     param: str,
     other_pages: dict[str, int],
     token: str | None,
-    prev_label: str = "&larr; Prev",
-    next_label: str = "Next &rarr;",
+    anchor: str,
+    prev_label: str = "&larr;",
+    next_label: str = "&rarr;",
+    first_label: str = "&laquo;",
+    last_label: str = "&raquo;",
+    compact: bool = False,
 ) -> str:
-    """Render a prev/next bar for one table, preserving the other tables'
-    current page numbers (and the token) in the query string."""
+    """Render a first/prev/next/last bar for one table, preserving the other
+    tables' current page numbers (and the token) in the query string. Links
+    include a `#anchor` fragment pointing back at that table's own section,
+    so paging doesn't reset the browser's scroll position to the top of the
+    whole page. `compact=True` drops the "page X of Y" suffix so the whole
+    bar fits on one line in a narrower card."""
     total_pages = max(1, (total + page_size - 1) // page_size)
     first_index = (page - 1) * page_size + 1 if shown else 0
     last_index = (page - 1) * page_size + shown
@@ -417,21 +451,117 @@ def _render_pagination(
         query = "&".join(f"{key}={quote(str(value))}" for key, value in params.items())
         if token:
             query += f"&token={quote(str(token))}"
-        return f"?{query}"
+        return f"?{query}#{anchor}"
 
-    prev_link = (
-        f'<a class="page-btn" href="{href(page - 1)}">{prev_label}</a>'
-        if page > 1 else f'<span class="page-btn disabled">{prev_label}</span>'
-    )
-    next_link = (
-        f'<a class="page-btn" href="{href(page + 1)}">{next_label}</a>'
-        if page < total_pages else f'<span class="page-btn disabled">{next_label}</span>'
+    def link(target: int, label: str, aria: str) -> str:
+        return f'<a class="page-btn" href="{href(target)}" aria-label="{aria}">{label}</a>'
+
+    def disabled(label: str, aria: str) -> str:
+        return f'<span class="page-btn disabled" aria-label="{aria}" aria-disabled="true">{label}</span>'
+
+    at_first, at_last = page <= 1, page >= total_pages
+    first_link = disabled(first_label, "First page") if at_first else link(1, first_label, "First page")
+    prev_link = disabled(prev_label, "Previous page") if at_first else link(page - 1, prev_label, "Previous page")
+    next_link = disabled(next_label, "Next page") if at_last else link(page + 1, next_label, "Next page")
+    last_link = disabled(last_label, "Last page") if at_last else link(total_pages, last_label, "Last page")
+    info_text = (
+        f'{_format_int(first_index)}&ndash;{_format_int(last_index)} of {_format_int(total)}'
+        if compact else
+        f'Showing {_format_int(first_index)}&ndash;{_format_int(last_index)} '
+        f'of {_format_int(total)} &middot; page {_format_int(page)} of {_format_int(total_pages)}'
     )
     return (
-        f'<div class="pagination">{prev_link}'
-        f'<span class="page-info">Showing {_format_int(first_index)}&ndash;{_format_int(last_index)} '
-        f'of {_format_int(total)} &middot; page {_format_int(page)} of {_format_int(total_pages)}</span>'
-        f'{next_link}</div>'
+        f'<div class="pagination">'
+        f'<span class="page-nav">{first_link}{prev_link}</span>'
+        f'<span class="page-info">{info_text}</span>'
+        f'<span class="page-nav">{next_link}{last_link}</span>'
+        f'</div>'
+    )
+
+
+
+def _log_ticks(max_value: int) -> list[int]:
+    """Nice round tick values for a log10 y-axis: 1, then powers of 10 below
+    the max, then the max itself (every displayed count is >= 1)."""
+    ticks = {1, max_value}
+    power = 10
+    while power < max_value:
+        ticks.add(power)
+        power *= 10
+    return sorted(ticks)
+
+
+def _log_y_frac(value: float, max_value: float) -> float:
+    """Fraction from the chart's bottom (0.0) to top (1.0) for a value on a
+    log10 scale anchored at 1, since every displayed count is >= 1."""
+    if max_value <= 1:
+        return 1.0
+    return math.log10(max(value, 1)) / math.log10(max_value)
+
+
+def _render_day_chart(by_day: list[dict], max_day: int) -> str:
+    """Render "Events by day" as an inline SVG line chart: dates on the X
+    axis, event counts on a log-scale Y axis. No JavaScript or external
+    assets; each point carries a native <title> so the count still shows
+    on hover."""
+    if not by_day or max_day <= 0:
+        return '<p class="empty">No events recorded in this period.</p>'
+
+    rows = sorted(by_day, key=lambda row: str(row["day"]))
+    n = len(rows)
+
+    width, height = 880, 260
+    left, right, top, bottom = 44, 12, 14, 44
+    chart_w = width - left - right
+    chart_h = height - top - bottom
+    slot_w = chart_w / n
+    label_step = max(1, round(n / 10))
+
+    points = []
+    labels = []
+    for i, row in enumerate(rows):
+        day = str(row["day"])
+        count = int(row["n"])
+        x = left + slot_w * (i + 0.5)
+        y = top + chart_h * (1 - _log_y_frac(count, max_day))
+        points.append((x, y, day, count))
+        if i % label_step == 0 or i == n - 1:
+            label_y = height - bottom + 16
+            label_text = escape(day[5:] if len(day) >= 7 else day)
+            labels.append(
+                f'<text class="day-axis-label" text-anchor="end" x="{x:.1f}" y="{label_y}" '
+                f'transform="rotate(-40 {x:.1f} {label_y})">{label_text}</text>'
+            )
+
+    polyline = (
+        '<polyline class="day-line" points="'
+        + " ".join(f"{x:.1f},{y:.1f}" for x, y, _, _ in points)
+        + '"></polyline>'
+    )
+    dots = "".join(
+        f'<circle class="day-point" cx="{x:.1f}" cy="{y:.1f}" r="3">'
+        f'<title>{escape(day)}: {_format_int(count)} events</title></circle>'
+        for x, y, day, count in points
+    )
+
+    ticks = []
+    for value in _log_ticks(max_day):
+        y = top + chart_h * (1 - _log_y_frac(value, max_day))
+        ticks.append(f'<line class="day-grid" x1="{left}" x2="{width - right}" y1="{y:.1f}" y2="{y:.1f}"></line>')
+        ticks.append(
+            f'<text class="day-axis-label day-axis-y" text-anchor="end" x="{left - 8}" y="{y + 4:.1f}">'
+            f'{_format_int(value)}</text>'
+        )
+
+    total = sum(int(row["n"]) for row in rows)
+    aria_label = (
+        f"Events per day, log scale: {_format_int(total)} events across {n} days, "
+        f"most recent {_format_int(int(rows[-1]['n']))}."
+    )
+    return (
+        f'<svg class="day-chart" viewBox="0 0 {width} {height}" role="img" aria-label="{escape(aria_label)}">'
+        + "".join(ticks) + polyline + dots + "".join(labels)
+        + "</svg>"
     )
 
 
@@ -463,24 +593,14 @@ def _render_stats_page(data: dict[str, object]) -> str:
     max_status = int(data.get("status_max") or 0)
     max_source = int(data.get("source_max") or 0)
 
-    day_rows = []
-    for row in by_day:
-        count = int(row["n"])
-        day_rows.append(
-            "<div class=\"bar-row\">"
-            f"<div class=\"bar-label\">{escape(str(row['day']))}</div>"
-            f"<div class=\"bar-track\"><span style=\"width:{_stats_bar(count, max_day)}\"></span></div>"
-            f"<div class=\"bar-value\">{_format_int(count)}</div>"
-            "</div>"
-        )
-    day_html = "".join(day_rows) or '<p class="empty">No events recorded in this period.</p>'
+    day_html = _render_day_chart(by_day, max_day)
 
     status_rows = []
     for row in by_status:
         count = int(row["n"])
         status_rows.append(
             "<tr>"
-            f"<td>{escape(str(row['status']))}</td>"
+            f"<td>{_status_badge(row['status'])}</td>"
             f"<td class=\"hint\">{escape(_status_note(row['status']))}</td>"
             f"<td class=\"num\">{_format_int(count)}</td>"
             f"<td><span class=\"mini-bar\"><span style=\"width:{_stats_bar(count, max_status)}\"></span></span></td>"
@@ -502,12 +622,7 @@ def _render_stats_page(data: dict[str, object]) -> str:
 
     all_rows = []
     for row in all_events:
-        status = str(row['status']) if row['status'] is not None else ''
-        note = _status_note(row['status'])
-        status_cell = (
-            f"<span title=\"{escape(note)}\">{escape(status)}</span>"
-            if note else escape(status)
-        )
+        status_cell = _status_badge(row['status'])
         visitor = str(row['ip_hash']) if row.get('ip_hash') else ''
         visitor_cell = (
             f"<code title=\"Salted hash of the visitor IP (raw IP is never stored)\">{escape(visitor)}</code>"
@@ -528,17 +643,13 @@ def _render_stats_page(data: dict[str, object]) -> str:
     events_pagination = _render_pagination(
         page=page, page_size=page_size, total=total_entries, shown=len(all_events),
         param="page", other_pages={"source_page": source_page, "status_page": status_page},
-        token=token, prev_label="&larr; Newer", next_label="Older &rarr;",
+        token=token, anchor="all-events", prev_label="&larr; Newer", next_label="Older &rarr;",
+        first_label="&laquo; Newest", last_label="Oldest &raquo;",
     )
     source_pagination = _render_pagination(
         page=source_page, page_size=source_page_size, total=source_total, shown=len(top_sources),
         param="source_page", other_pages={"page": page, "status_page": status_page},
-        token=token,
-    )
-    status_pagination = _render_pagination(
-        page=status_page, page_size=status_page_size, total=status_total, shown=len(by_status),
-        param="status_page", other_pages={"page": page, "source_page": source_page},
-        token=token,
+        token=token, anchor="top-sources", compact=True,
     )
 
     return _apply_prefix(f"""<!DOCTYPE html>
@@ -569,11 +680,14 @@ def _render_stats_page(data: dict[str, object]) -> str:
     .metric .value {{ margin-top: 8px; font-size: 2rem; font-weight: 800; color: var(--accent-strong); }}
     .panel {{ padding: 18px; }}
     .panel h2 {{ margin: 0 0 12px; font-size: 1.1rem; }}
-    .bar-row {{ display: grid; gap: 10px; grid-template-columns: 110px 1fr 72px; align-items: center; padding: 6px 0; }}
-    .bar-label, .source {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
-    .bar-track {{ height: 14px; background: #edf2ef; border-radius: 999px; overflow: hidden; }}
-    .bar-track span {{ display: block; height: 100%; min-width: 4px; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #4f907d); }}
-    .bar-value, .num {{ text-align: right; font-variant-numeric: tabular-nums; }}
+    .source {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    .num {{ text-align: right; font-variant-numeric: tabular-nums; }}
+    .day-chart {{ width: 100%; height: auto; overflow: visible; }}
+    .day-line {{ fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }}
+    .day-point {{ fill: var(--accent); }}
+    .day-point:hover {{ fill: var(--accent-strong); }}
+    .day-grid {{ stroke: #e2ece7; stroke-width: 1; }}
+    .day-axis-label {{ fill: var(--muted); font-size: 9px; }}
     table {{ width: 100%; border-collapse: collapse; }}
     th, td {{ padding: 10px 8px; border-top: 1px solid var(--border); text-align: left; vertical-align: top; }}
     th {{ color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
@@ -584,15 +698,19 @@ def _render_stats_page(data: dict[str, object]) -> str:
     .table-wrap {{ overflow-x: auto; }}
     .ranked-table {{ table-layout: fixed; }}
     .ranked-table .source {{ max-width: none; }}
-    .ranked-table .status-col {{ width: 76px; }}
+    .ranked-table .status-col {{ width: 100px; }}
     .ranked-table .num {{ width: 78px; }}
     .ranked-table .share-col {{ width: 70px; }}
     .hint {{ color: var(--muted); font-size: 0.9em; }}
+    .status-badge {{ display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-weight: 700; font-size: 0.85em; white-space: nowrap; }}
+    .status-ok {{ background: #e3f3e9; color: #1f7a4d; }}
+    .status-warn {{ background: #fdf0dc; color: #9a5b12; }}
     .pagination {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-top: 14px; }}
+    .page-nav {{ display: flex; gap: 8px; }}
     .page-btn {{ padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-soft, #f9fbfa); color: var(--accent); text-decoration: none; font-weight: 600; font-size: 0.9rem; }}
     .page-btn.disabled {{ color: #b3c1bc; border-color: #eaf0ed; cursor: default; }}
     .page-info {{ color: var(--muted); font-size: 0.9rem; }}
-    @media (max-width: 900px) {{ .summary {{ grid-template-columns: 1fr; }} .bar-row {{ grid-template-columns: 1fr; }} .bar-value {{ text-align: left; }} }}
+    @media (max-width: 900px) {{ .summary {{ grid-template-columns: 1fr; }} }}
 </style>
 </head>
 <body>
@@ -620,9 +738,8 @@ def _render_stats_page(data: dict[str, object]) -> str:
                 {day_html}
             </section>
 
-            <section class="card panel" style="grid-column: span 12;">
+            <section class="card panel" id="all-events" style="grid-column: span 12;">
                 <h2>All events</h2>
-                <p class="lede">Newest first. The visitor column is a salted hash of the IP address; the raw IP is never stored.</p>
                 <div class="table-wrap">
                     <table>
                         <thead><tr><th>Timestamp</th><th>Visitor</th><th>Kind</th><th>Status</th><th>Duration</th><th>Source</th></tr></thead>
@@ -632,7 +749,7 @@ def _render_stats_page(data: dict[str, object]) -> str:
                 {events_pagination}
             </section>
 
-            <section class="card panel" style="grid-column: span 6;">
+            <section class="card panel" id="top-sources" style="grid-column: span 6;">
                 <h2>Top sources <span class="hint">(all time)</span></h2>
                 <div class="table-wrap">
                     <table class="ranked-table">
@@ -643,7 +760,7 @@ def _render_stats_page(data: dict[str, object]) -> str:
                 {source_pagination}
             </section>
 
-            <section class="card panel" style="grid-column: span 6;">
+            <section class="card panel" id="by-status" style="grid-column: span 6;">
                 <h2>By status <span class="hint">(all time)</span></h2>
                 <div class="table-wrap">
                     <table class="ranked-table">
@@ -651,7 +768,6 @@ def _render_stats_page(data: dict[str, object]) -> str:
                         <tbody>{status_html}</tbody>
                     </table>
                 </div>
-                {status_pagination}
             </section>
         </div>
     </div>
@@ -687,21 +803,20 @@ async def stats_page(
     if token != expected and not _is_local_request(request):
         return HTMLResponse("<p>unauthorised</p>", status_code=401)
 
-    page_size = 25
     page = max(1, page)
     source_page = max(1, source_page)
     status_page = max(1, status_page)
     data = usage.stats(
         days=30,
         source_page=source_page,
-        source_page_size=page_size,
+        source_page_size=AGG_PAGE_SIZE,
         status_page=status_page,
-        status_page_size=page_size,
+        status_page_size=AGG_PAGE_SIZE,
     )
     data["total_entries"] = usage.events_count()
-    data["all_events"] = usage.all_events(limit=page_size, offset=(page - 1) * page_size)
+    data["all_events"] = usage.all_events(limit=EVENTS_PAGE_SIZE, offset=(page - 1) * EVENTS_PAGE_SIZE)
     data["page"] = page
-    data["page_size"] = page_size
+    data["page_size"] = EVENTS_PAGE_SIZE
     data["token"] = token
     return HTMLResponse(_render_stats_page(data))
 
@@ -723,21 +838,20 @@ async def stats_endpoint(
         )
     if token != expected and not _is_local_request(request):
         return JSONResponse({"error": "unauthorised"}, status_code=401)
-    page_size = 25
     page = max(1, page)
     source_page = max(1, source_page)
     status_page = max(1, status_page)
     payload = usage.stats(
         days=30,
         source_page=source_page,
-        source_page_size=page_size,
+        source_page_size=AGG_PAGE_SIZE,
         status_page=status_page,
-        status_page_size=page_size,
+        status_page_size=AGG_PAGE_SIZE,
     )
     payload["total_entries"] = usage.events_count()
     payload["page"] = page
-    payload["page_size"] = page_size
-    payload["all_events"] = usage.all_events(limit=page_size, offset=(page - 1) * page_size)
+    payload["page_size"] = EVENTS_PAGE_SIZE
+    payload["all_events"] = usage.all_events(limit=EVENTS_PAGE_SIZE, offset=(page - 1) * EVENTS_PAGE_SIZE)
     return JSONResponse(payload)
 
 
