@@ -213,9 +213,7 @@ def _is_class_value(graph: Graph, value: URIRef) -> bool:
         return True
     if any(True for _ in graph.subjects(OWL.equivalentClass, value)):
         return True
-    if any(True for _ in graph.subjects(RDF.type, value)):
-        return True
-    return False
+    return any(True for _ in graph.subjects(RDF.type, value))
 
 
 def check_domains_ranges(graph: Graph) -> DomainRangeReport:
@@ -318,9 +316,7 @@ def _datatype_recognised(graph: Graph, uri: str) -> bool:
         return _local_name(uri) in XSD_BUILTIN_TYPES
     if uri in _OTHER_DATATYPES:
         return True
-    if (URIRef(uri), RDF.type, RDFS.Datatype) in graph:
-        return True
-    return False
+    return (URIRef(uri), RDF.type, RDFS.Datatype) in graph
 
 
 def check_datatypes(graph: Graph) -> DatatypeReport:

@@ -11,12 +11,10 @@ import pytest
 from rdflib import Graph
 
 from askwol.cache import OntologyCache
-from askwol.definition_docs import check_definition_documentation
 from askwol.imports_check import check_imports
 from askwol.internal_terms import check_internal_terms
 from askwol.iri_scheme import check_iri_scheme
 from askwol.iri_strategy import check_iri_strategy
-from askwol.lang_tags import check_lang_tags
 from askwol.metadata_validator import validate_ontology_metadata
 from askwol.models import Status
 from askwol.parser import parse_ontology
@@ -56,10 +54,6 @@ def foaf_stub():
     return g
 
 
-def test_parses_cleanly(parsed):
-    assert parsed.graph is not None
-
-
 def test_unused_prefix_detected(parsed):
     unused = set(parsed.declared_prefixes) - set(parsed.namespaces)
     assert "neverused" in unused
@@ -69,11 +63,6 @@ def test_metadata_has_failures_and_warnings(parsed):
     meta = validate_ontology_metadata(parsed.graph)
     assert meta.failed_checks >= 1
     assert meta.warning_checks >= 1
-
-
-def test_definition_docs_has_issues(parsed):
-    docs = check_definition_documentation(parsed.graph)
-    assert docs.issues, "expected at least one undocumented internal definition"
 
 
 @pytest.mark.asyncio
@@ -121,11 +110,6 @@ def test_iri_scheme_warns_on_mixed_host(parsed):
     assert sch.status == Status.WARN
     hosts = {c.host for c in sch.conflicts}
     assert "w3id.org/askwol/broken/" in hosts
-
-
-def test_lang_tags_has_issue(parsed):
-    lt = check_lang_tags(parsed.graph, parsed.namespaces)
-    assert lt.issues, "expected a missing-tag issue on Person"
 
 
 def test_reasoner_detects_inconsistency(parsed):

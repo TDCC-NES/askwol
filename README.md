@@ -205,7 +205,7 @@ docker compose up -d
 curl "http://127.0.0.1:8000/stats?token=$(grep ASKWOL_STATS_TOKEN .env | cut -d= -f2)"
 ```
 
-Returns aggregated counts for the last 30 days: total events, unique IP hashes, events per day, per status, and the top requested sources.
+Returns aggregated usage counts: total events, unique IP hashes, and events per day (all-time), plus the most-validated sources, split into URLs and uploaded files.
 
 ### Python API
 

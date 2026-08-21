@@ -779,7 +779,6 @@ def _render_stats_page(data: dict[str, object]) -> str:
     .table-wrap {{ overflow-x: auto; }}
     .ranked-table {{ table-layout: fixed; }}
     .ranked-table .source {{ max-width: none; }}
-    .ranked-table .status-col {{ width: 100px; }}
     .ranked-table .num {{ width: 78px; }}
     .ranked-table .share-col {{ width: 70px; }}
     .hint {{ color: var(--muted); font-size: 0.9em; }}

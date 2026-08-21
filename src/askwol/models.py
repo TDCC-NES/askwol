@@ -110,7 +110,6 @@ class LicenseCheck(BaseModel):
     is_open: bool
     is_recommended: bool
     status: Status
-    #message: str | None = None
 
 
 class LicenseReport(BaseModel):
@@ -120,13 +119,9 @@ class LicenseReport(BaseModel):
 
     @property
     def status(self) -> str:
-        if len(self.checks) == 0:
+        if len(self.checks) == 0 or any(c.status == Status.FAIL for c in self.checks):
             return Status.FAIL
-        elif len([c for c in self.checks if c.status == Status.FAIL]) > 0:
-            return Status.FAIL
-        elif len([c for c in self.checks if c.status == Status.WARN]) > 0:
-            return Status.WARN
-        elif len(self.checks) > 1:
+        elif any(c.status == Status.WARN for c in self.checks) or len(self.checks) > 1:
             return Status.WARN
         return Status.OK
 
