@@ -123,7 +123,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
         <button type="button" class="chip" data-url="http://xmlns.com/foaf/spec/index.rdf">FOAF</button>
         <button type="button" class="chip" data-url="https://www.w3.org/ns/prov.ttl">PROV-O</button>
         <button type="button" class="chip" data-url="https://www.w3.org/2006/time">Time</button>
-        <button type="button" class="chip" data-url="https://opengeospatial.github.io/ogc-geosparql/geosparql11/geo.ttl">GeoSPARQL</button>
+        <button type="button" class="chip" data-url="https://raw.githubusercontent.com/opengeospatial/geosemantics-semantic-resources/refs/heads/main/resources/geosparql-swg/geosparql-1.1/ontologies/geo.ttl">GeoSPARQL</button>
         <button type="button" class="chip" data-url="https://www.w3.org/TR/owl-guide/wine.rdf">Wine</button>
         <button type="button" class="chip" data-url="https://cidoc-crm.org/rdfs/7.1.3/CIDOC_CRM_v7.1.3.rdfs">CIDOC CRM</button>
         <button type="button" class="chip" data-url="https://lod-4tu.tudelft.nl/ontologies/sample.ttl">sample ontology</button>

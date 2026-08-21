@@ -108,7 +108,8 @@ def _friendly_http_status(code: int) -> str:
 # Maps the namespace (without fragment) to a direct RDF download URL.
 NAMESPACE_REDIRECTS: dict[str, str] = {
     "http://www.opengis.net/ont/geosparql#":
-        "https://opengeospatial.github.io/ogc-geosparql/geosparql11/geo.ttl",
+        "https://raw.githubusercontent.com/opengeospatial/geosemantics-semantic-resources/"
+        "refs/heads/main/resources/geosparql-swg/geosparql-1.1/ontologies/geo.ttl",
 }
 
 # Ordered list of Accept headers to try  -  most specific first
