@@ -141,11 +141,12 @@ def stats(
 ) -> dict[str, Any]:
     """Return aggregated counts for the dashboard.
 
-    `total_events`, `unique_visitors`, `by_day`, and `avg_duration_ms` are
-    scoped to the last `days` days. `by_status` and `top_sources` cover all
-    events ever recorded (not just the recent window) so long-lived sources
-    and statuses aren't hidden - each is paginated independently (ranked by
-    event count, descending) so the full list is reachable.
+    `avg_duration_ms` is scoped to the last `days` days. `total_events`,
+    `unique_visitors`, `by_day`, `by_status`, and `top_sources` are all-time
+    (not just the recent window) so long-lived sources, statuses, and older
+    activity aren't hidden - `by_status`/`top_sources` are each paginated
+    independently (ranked by event count, descending) so the full list is
+    reachable.
     """
     if _DISABLED:
         return {"disabled": True}
@@ -155,16 +156,13 @@ def stats(
     with _connect() as conn:
         cutoff = f"-{int(days)} days"
         totals = conn.execute(
-            "SELECT COUNT(*) AS n, COUNT(DISTINCT ip_hash) AS uniq "
-            "FROM events WHERE ts >= datetime('now', ?)",
-            (cutoff,),
+            "SELECT COUNT(*) AS n, COUNT(DISTINCT ip_hash) AS uniq FROM events"
         ).fetchone()
 
         by_day = conn.execute(
             "SELECT substr(ts, 1, 10) AS day, COUNT(*) AS n "
-            "FROM events WHERE ts >= datetime('now', ?) "
-            "GROUP BY day ORDER BY day DESC",
-            (cutoff,),
+            "FROM events "
+            "GROUP BY day ORDER BY day DESC"
         ).fetchall()
 
         status_total = conn.execute(

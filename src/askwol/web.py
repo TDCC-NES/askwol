@@ -482,13 +482,29 @@ def _render_pagination(
 
 def _log_ticks(max_value: int) -> list[int]:
     """Nice round tick values for a log10 y-axis: 1, then powers of 10 below
-    the max, then the max itself (every displayed count is >= 1)."""
-    ticks = {1, max_value}
+    the max, then the max itself (every displayed count is >= 1). Merges a
+    candidate into the next one if they'd land within 8% of the chart's log
+    range of each other (e.g. 100 and 106), so labels never overlap."""
+    ticks = sorted({1, max_value} | {p for p in _powers_of_ten_below(max_value)})
+    if max_value <= 1:
+        return ticks
+    threshold = 0.08 * math.log10(max_value)
+    merged = [ticks[0]]
+    for value in ticks[1:]:
+        if math.log10(value) - math.log10(merged[-1]) < threshold:
+            merged[-1] = value  # keep the larger, more specific value
+        else:
+            merged.append(value)
+    return merged
+
+
+def _powers_of_ten_below(max_value: int) -> list[int]:
+    powers = []
     power = 10
     while power < max_value:
-        ticks.add(power)
+        powers.append(power)
         power *= 10
-    return sorted(ticks)
+    return powers
 
 
 def _log_y_frac(value: float, max_value: float) -> float:
@@ -497,6 +513,7 @@ def _log_y_frac(value: float, max_value: float) -> float:
     if max_value <= 1:
         return 1.0
     return math.log10(max(value, 1)) / math.log10(max_value)
+
 
 
 def _render_day_chart(by_day: list[dict], max_day: int) -> str:
@@ -569,7 +586,6 @@ def _render_stats_page(data: dict[str, object]) -> str:
     total_events = int(data.get("total_events") or 0)
     unique_visitors = int(data.get("unique_visitors") or 0)
     avg_duration = data.get("avg_duration_ms")
-    days = int(data.get("days") or 30)
     token = data.get("token") or None
 
     by_day = list(data.get("by_day") or [])
@@ -724,7 +740,6 @@ def _render_stats_page(data: dict[str, object]) -> str:
         <div class="hero">
             <span class="kicker">Internal dashboard</span>
             <h1>Ask Wol usage dashboard</h1>
-            <p class="lede">Read-only validation activity for the last {days} days.</p>
         </div>
         <div class="grid">
             <section class="card summary" aria-label="Usage summary">
