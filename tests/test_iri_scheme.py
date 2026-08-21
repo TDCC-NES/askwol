@@ -23,8 +23,8 @@ def test_ok_when_each_host_uses_one_scheme():
     assert r.total_hosts >= 2
     assert r.conflicts == []
     hosts = {h.host: h.scheme for h in r.hosts}
-    assert hosts.get("example.org") == "https"
-    assert hosts.get("other.org") == "http"
+    assert hosts.get("example.org/") == "https"
+    assert hosts.get("other.org/") == "http"
 
 
 def test_warns_on_mixed_scheme_for_same_host():
@@ -35,11 +35,41 @@ def test_warns_on_mixed_scheme_for_same_host():
     assert r.status == Status.WARN
     assert len(r.conflicts) == 1
     c = r.conflicts[0]
-    assert c.host == "example.org"
+    assert c.host == "example.org/"
     assert c.http_count >= 1 and c.https_count >= 1
     assert c.http_examples and c.https_examples
     # A conflicting host is excluded from the plain hosts list.
-    assert all(h.host != "example.org" for h in r.hosts)
+    assert all(h.host != "example.org/" for h in r.hosts)
+
+
+def test_different_vocabularies_sharing_a_host_are_not_conflicts():
+    """Regression: purl.org hosts many unrelated vocabularies under
+    different paths. Different namespaces on the same host, even under
+    different schemes, must not be flagged - only the SAME namespace path
+    under both schemes counts as a conflict."""
+    g = Graph()
+    g.add((URIRef("http://purl.org/dc/terms/isReplacedBy"), RDF.type, OWL.AnnotationProperty))
+    g.add((URIRef("http://purl.org/ontology/bibo/Article"), RDF.type, OWL.Class))
+    g.add((URIRef("https://purl.org/ontology/modalia#Discipline"), RDF.type, OWL.Class))
+    r = check_iri_scheme(g, {})
+    assert r.status == Status.OK
+    assert r.conflicts == []
+    hosts = {h.host: h.scheme for h in r.hosts}
+    assert hosts.get("purl.org/dc/terms/") == "http"
+    assert hosts.get("purl.org/ontology/bibo/") == "http"
+    assert hosts.get("purl.org/ontology/modalia#") == "https"
+
+
+def test_same_namespace_path_under_both_schemes_is_still_a_conflict():
+    """The narrower, path-aware grouping must still catch a genuine
+    conflict: the SAME namespace referenced under both schemes."""
+    g = Graph()
+    g.add((URIRef("http://purl.org/dc/terms/isReplacedBy"), RDF.type, OWL.AnnotationProperty))
+    g.add((URIRef("https://purl.org/dc/terms/relation"), RDF.type, OWL.AnnotationProperty))
+    r = check_iri_scheme(g, {})
+    assert r.status == Status.WARN
+    assert len(r.conflicts) == 1
+    assert r.conflicts[0].host == "purl.org/dc/terms/"
 
 
 def test_namespace_contributes_to_host_grouping():
@@ -49,7 +79,7 @@ def test_namespace_contributes_to_host_grouping():
     # introduces https://example.org which should trigger a conflict.
     r = check_iri_scheme(g, {"ex": "https://example.org/"})
     assert r.status == Status.WARN
-    assert r.conflicts[0].host == "example.org"
+    assert r.conflicts[0].host == "example.org/"
 
 
 def test_host_comparison_is_case_insensitive():
@@ -58,4 +88,4 @@ def test_host_comparison_is_case_insensitive():
     g.add((URIRef("http://example.org/B"), RDF.type, OWL.Class))
     r = check_iri_scheme(g, {})
     assert r.status == Status.WARN
-    assert r.conflicts[0].host == "example.org"
+    assert r.conflicts[0].host == "example.org/"

@@ -120,7 +120,7 @@ def test_iri_scheme_warns_on_mixed_host(parsed):
     sch = check_iri_scheme(parsed.graph, parsed.namespaces)
     assert sch.status == Status.WARN
     hosts = {c.host for c in sch.conflicts}
-    assert "w3id.org" in hosts
+    assert "w3id.org/askwol/broken/" in hosts
 
 
 def test_lang_tags_has_issue(parsed):

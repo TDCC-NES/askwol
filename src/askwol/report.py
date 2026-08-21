@@ -171,21 +171,21 @@ def report_as_markdown(report: ValidationReport) -> str:
                     w("</details>")
                     w("")
 
-    # IRI scheme consistency (http vs https) per host
+    # IRI scheme consistency (http vs https) per namespace
     sch = report.iri_scheme
     if sch is not None and sch.status != Status.SKIP:
         w("## IRI scheme (http vs https)")
         w("")
         w("In RDF, `http://example.org/X` and `https://example.org/X` are **different IRIs**. "
-          "Within one ontology, each host should appear under exactly one scheme.")
+          "Within one ontology, each namespace should appear under exactly one scheme.")
         w("")
         if sch.status == Status.WARN:
-            w(f"> **{len(sch.conflicts)}** host(s) are referenced under both `http://` and `https://` in the same ontology.")
+            w(f"> **{len(sch.conflicts)}** namespace(s) are referenced under both `http://` and `https://` in the same ontology.")
             w("")
             w("<details>")
-            w(f"<summary>Show conflicting hosts ({len(sch.conflicts)})</summary>")
+            w(f"<summary>Show conflicting namespaces ({len(sch.conflicts)})</summary>")
             w("")
-            w("| Host | http:// count | https:// count |")
+            w("| Namespace | http:// count | https:// count |")
             w("|------|---------------|----------------|")
             for c in sch.conflicts:
                 w(f"| `{c.host}` | {c.http_count} | {c.https_count} |")
@@ -193,14 +193,14 @@ def report_as_markdown(report: ValidationReport) -> str:
             w("</details>")
             w("")
         else:
-            w(f"> **{sch.total_hosts}** host(s) referenced, each under a single scheme "
+            w(f"> **{sch.total_hosts}** namespace(s) referenced, each under a single scheme "
               f"({sch.http_only_hosts} http://, {sch.https_only_hosts} https://).")
             w("")
         if sch.hosts:
             w("<details>")
-            w(f"<summary>Show hosts ({len(sch.hosts)})</summary>")
+            w(f"<summary>Show namespaces ({len(sch.hosts)})</summary>")
             w("")
-            w("| Host | Scheme | Count |")
+            w("| Namespace | Scheme | Count |")
             w("|------|--------|-------|")
             for h in sch.hosts:
                 w(f"| `{h.host}` | {h.scheme}:// | {h.count} |")

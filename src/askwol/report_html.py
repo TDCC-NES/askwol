@@ -680,29 +680,29 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                         parts.append('</ul></details>')
         parts.append('</section>')
 
-    # IRI scheme consistency (http vs https) per host
+    # IRI scheme consistency (http vs https) per namespace
     sch = report.iri_scheme
     if sch is not None:
         _open_cluster('iri-scheme')
         if sch.status == Status.SKIP:
             sc_status, sc_label = 'info', 'skipped'
         elif sch.status == Status.WARN:
-            sc_status, sc_label = 'warn', f'{len(sch.conflicts)} mixed host(s)'
+            sc_status, sc_label = 'warn', f'{len(sch.conflicts)} mixed namespace(s)'
         else:
             sc_status, sc_label = 'ok', 'consistent'
         parts.append('<section class="section">')
         parts.append(_section_heading('iri-scheme', 'IRI scheme (http vs https)', sc_status, sc_label))
         parts.append(_guide_link('iri-scheme'))
-        parts.append('<p class="subtitle">In RDF, <code>http://example.org/X</code> and <code>https://example.org/X</code> are <strong>different IRIs</strong>. Within one ontology, each host should appear under exactly one scheme. Mixing schemes breaks SPARQL joins, <code>owl:sameAs</code>, and any tool that compares URIs as strings.</p>')
+        parts.append('<p class="subtitle">In RDF, <code>http://example.org/X</code> and <code>https://example.org/X</code> are <strong>different IRIs</strong>. Within one ontology, each namespace should appear under exactly one scheme. Mixing schemes breaks SPARQL joins, <code>owl:sameAs</code>, and any tool that compares URIs as strings.</p>')
 
         if sch.status == Status.SKIP:
             parts.append(_status_subtitle('info', sch.message or 'no http(s) IRIs found'))
         elif sch.status == Status.WARN:
             parts.append(_status_subtitle(
                 'warn',
-                f'<strong>{len(sch.conflicts)}</strong> host(s) are referenced under both <code>http://</code> and <code>https://</code> in the same ontology.',
+                f'<strong>{len(sch.conflicts)}</strong> namespace(s) are referenced under both <code>http://</code> and <code>https://</code> in the same ontology.',
             ))
-            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show conflicting hosts ({len(sch.conflicts)})</summary>')
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show conflicting namespaces ({len(sch.conflicts)})</summary>')
             for c in sch.conflicts:
                 parts.append(f'<h3 style="margin:1em 0 0.3em;font-size:1em;"><code>{escape(c.host)}</code></h3>')
                 parts.append(
@@ -727,12 +727,12 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         else:
             parts.append(_status_subtitle(
                 'ok',
-                f'<strong>{sch.total_hosts}</strong> host(s) referenced, each under a single scheme '
+                f'<strong>{sch.total_hosts}</strong> namespace(s) referenced, each under a single scheme '
                 f'({sch.http_only_hosts} <code>http://</code>, {sch.https_only_hosts} <code>https://</code>).',
             ))
         if sch.hosts:
-            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show hosts ({len(sch.hosts)})</summary>')
-            parts.append('<table><tr><th>Host</th><th>Scheme</th><th>Count</th></tr>')
+            parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show namespaces ({len(sch.hosts)})</summary>')
+            parts.append('<table><tr><th>Namespace</th><th>Scheme</th><th>Count</th></tr>')
             for h in sch.hosts:
                 parts.append(
                     f'<tr><td><code>{escape(h.host)}</code></td>'

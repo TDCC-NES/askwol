@@ -423,17 +423,19 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "group": "check",
         "category": "basics",
         "anchor": "https-http",
-        "title": "Use http or https, but be consistent per host",
+        "title": "Use http or https, but be consistent per namespace",
         "toc_label": "IRI scheme (http vs https)",
         "body": """\
   <p><strong>What askwol checks:</strong> every IRI used in the ontology
   (in subject, predicate, or object position, plus every bound namespace)
-  is grouped by host. The check <strong>passes</strong> when each host
-  appears under exactly one URI scheme and <strong>warns</strong> when the
-  same host is referenced under both <code>http://</code> and
-  <code>https://</code>. The report lists the conflicting hosts with
-  examples of each scheme so you can pick one canonical form and migrate
-  the others.</p>
+  is grouped by namespace (the base IRI up to the last <code>/</code> or
+  <code>#</code>), not just by host, so two unrelated vocabularies that
+  happen to share a host are never compared to each other. The check
+  <strong>passes</strong> when each namespace appears under exactly one URI
+  scheme and <strong>warns</strong> when the same namespace is referenced
+  under both <code>http://</code> and <code>https://</code>. The report
+  lists the conflicting namespaces with examples of each scheme so you can
+  pick one canonical form and migrate the others.</p>
 
   <p><span class="tag spec">Spec</span> <code>http://example.org/ont/Person</code>
   and <code>https://example.org/ont/Person</code> are
@@ -1081,7 +1083,7 @@ CHECKS: list[dict[str, str]] = [
     {"report_anchor": "iri-strategy", "title": "IRI strategy", "guide_anchor": "iri-strategy", "category": "basics",
      "description": "the ontology's own defined terms should consistently use either hash (`#Term`) or slash (`/Term`), not both."},
     {"report_anchor": "iri-scheme", "title": "IRI scheme", "guide_anchor": "https-http", "category": "basics",
-     "description": "each host should be referenced under a single URI scheme. `http://example.org/X` and `https://example.org/X` are different IRIs."},
+     "description": "each namespace (the base IRI, not just the host) should be referenced under a single URI scheme. `http://example.org/X` and `https://example.org/X` are different IRIs."},
     {"report_anchor": "license", "title": "Open licence", "guide_anchor": "license", "category": "basics",
      "description": "the declared `dcterms:license` (or `schema:license`) must be an open licence per the Open Definition; CC0 and CC BY are recommended, other open licences (e.g. CC BY-SA, ODC-By, ODbL) pass with a warning, and a missing or non-open licence fails."},
     {"report_anchor": "namespaces", "title": "Namespaces", "guide_anchor": "resolvable", "category": "reuse",
