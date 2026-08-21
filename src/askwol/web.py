@@ -14,7 +14,7 @@ import time
 import uuid
 from html import escape
 from pathlib import Path
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urlencode, urlparse
 
 import httpx
 from fastapi import FastAPI, File, Form, Request, UploadFile
@@ -860,9 +860,38 @@ async def guide():
     return HTMLResponse(_apply_prefix(GUIDE_HTML))
 
 @app.get("/validate", include_in_schema=False)
-async def validate_get():
-    """Redirect browser GETs to the home form instead of a 405 error."""
-    return RedirectResponse(url="./", status_code=303)
+async def validate_get(request: Request, url: str | None = None):
+    """Bookmarkable/shareable form of URL-based validation. `POST /validate`
+    redirects here (Post/Redirect/Get) when given a URL, so the address bar
+    ends up on a link that reproduces the same result for anyone it's shared
+    with. Bare GETs with no `url` (e.g. an old bookmark) just go to the form."""
+    if not url or not url.strip():
+        return RedirectResponse(url="./", status_code=303)
+
+    source = url.strip()
+    started = time.perf_counter()
+    client_ip = _client_ip(request)
+
+    if _rate_limited(client_ip):
+        response = HTMLResponse(
+            "<p>Too many requests. Please wait a minute and try again.</p>",
+            status_code=429,
+        )
+    else:
+        response = await _validate_url(source)
+
+    usage.record(
+        "validate",
+        source=source,
+        status=str(response.status_code),
+        duration_ms=int((time.perf_counter() - started) * 1000),
+        ip=client_ip,
+    )
+    # Shared links must always re-validate rather than serve a stale copy,
+    # and shouldn't accumulate in search engines as if they were content pages.
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Robots-Tag"] = "noindex"
+    return response
 
 
 @app.post("/validate", include_in_schema=False)
@@ -871,7 +900,12 @@ async def validate(
     file: UploadFile | None = File(None),
     url: str | None = Form(None),
 ):
-    """Validate an ontology from file upload or URL."""
+    """Validate an uploaded file directly, or (Post/Redirect/Get) redirect a
+    submitted URL to its own GET /validate?url=... link - see validate_get."""
+    if url and url.strip():
+        query = urlencode({"url": url.strip()})
+        return RedirectResponse(url=f"validate?{query}", status_code=303)
+
     started = time.perf_counter()
     client_ip = _client_ip(request)
     source: str | None = None
@@ -883,9 +917,6 @@ async def validate(
             "<p>Too many requests. Please wait a minute and try again.</p>",
             status_code=429,
         )
-    elif url and url.strip():
-        source = url.strip()
-        response = await _validate_url(source)
     elif file and file.filename:
         source = file.filename
         kind = "validate_upload"
@@ -912,6 +943,7 @@ async def validate(
 # generic or absent Content-Type responses (see _validate_url below) - never
 # as the primary signal for what counts as RDF.
 RDF_FILE_EXTENSIONS = frozenset({".ttl", ".rdf", ".owl", ".rdfs", ".jsonld", ".nt", ".n3", ".xml"})
+
 
 
 async def _validate_url(url: str) -> HTMLResponse:
