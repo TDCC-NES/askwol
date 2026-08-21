@@ -331,6 +331,13 @@ def _format_duration(value: int | None) -> str:
     return f"{value / 1000:.2f} s"
 
 
+def _format_duration_seconds(value: int | None) -> str:
+    """Whole seconds, no unit (the "s" lives in the column header instead)."""
+    if value is None:
+        return "n/a"
+    return str(round(value / 1000))
+
+
 def _stats_bar(value: int, maximum: int) -> str:
     if maximum <= 0:
         return "0%"
@@ -591,7 +598,7 @@ def _render_events_filter(
     upload_source_page: int,
 ) -> str:
     """Render the All events source/status filter: a plain GET form (no JS)
-    plus a "Clear filter" link when a filter is active. Options are the
+    plus a "Clear filter(s)" link when a filter is active. Options are the
     all-time distinct sources/statuses with their event counts."""
 
     def option(value: str, label: str, selected: str | None) -> str:
@@ -621,7 +628,7 @@ def _render_events_filter(
         if token:
             params["token"] = token
         query = "&".join(f"{key}={quote(str(value))}" for key, value in params.items())
-        clear_link = f'<a class="page-btn" href="?{query}#all-events">Clear filter</a>'
+        clear_link = f'<a class="page-btn" href="?{query}#all-events">Clear filter(s)</a>'
 
     return (
         '<form method="get" class="filter-form">'
@@ -698,7 +705,7 @@ def _render_stats_page(data: dict[str, object]) -> str:
             f"<td>{visitor_cell}</td>"
             f"<td>{escape(str(row['kind']))}</td>"
             f"<td>{status_cell}</td>"
-            f"<td>{escape(_format_duration(row.get('duration_ms')))}</td>"
+            f"<td class=\"num\">{escape(_format_duration_seconds(row.get('duration_ms')))}</td>"
             f"<td class=\"source\">{_source_link(row['source'])}</td>"
             "</tr>"
         )
@@ -825,7 +832,7 @@ def _render_stats_page(data: dict[str, object]) -> str:
                 {events_filter}
                 <div class="table-wrap">
                     <table>
-                        <thead><tr><th>Timestamp</th><th>Visitor</th><th>Kind</th><th>Status</th><th>Duration</th><th>Source</th></tr></thead>
+                        <thead><tr><th>Timestamp</th><th>Visitor</th><th>Kind</th><th>Status</th><th class="num">Duration (s)</th><th>Source</th></tr></thead>
                         <tbody>{all_html}</tbody>
                     </table>
                 </div>
