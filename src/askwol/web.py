@@ -283,7 +283,7 @@ app = FastAPI(
         "lightweight OWL RL reasoner checks (ontology consistency, "
         "inconsistent individuals, and unsatisfiable classes)."
     ),
-    version="0.1.0",
+    version="0.1.1",
     root_path=ROOT_PATH,
 )
 

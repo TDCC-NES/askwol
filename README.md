@@ -2,7 +2,8 @@
 
 > **Drop in an OWL ontology - get back a class diagram, namespace and term checks, metadata review, and a clean-up report. In seconds.**
 
-[![Licence: MIT](https://img.shields.io/badge/Licence-MIT-blue.svg)](LICENSE)
+[![Licence: MIT](https://img.shields.io/badge/Licence-MIT-blue.svg)](https://github.com/TDCC-NES/askwol/blob/main/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/askwol)](https://pypi.org/project/askwol/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://github.com/TDCC-NES/askwol/actions/workflows/tests.yml/badge.svg)](https://github.com/TDCC-NES/askwol/actions/workflows/tests.yml)
 [![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
@@ -14,15 +15,9 @@
 
 ## Why askwol?
 
-The W3C originally planned to call their Web Ontology Language **WOL**. Tim Finin [proposed rearranging it to **OWL**](http://lists.w3.org/Archives/Public/www-webont-wg/2001Dec/0169.html), since *"owls are associated with wisdom."* Fittingly, [Owl](https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)) from Milne's *Winnie-the-Pooh* [famously misspells his own name](https://lists.w3.org/Archives/Public/www-webont-wg/2002Sep/0301.html) as **"Wol."**
+The W3C originally planned to call their Web Ontology Language **WOL**. Tim Finin [proposed rearranging it to **OWL**](http://lists.w3.org/Archives/Public/www-webont-wg/2001Dec/0169.html), since *"owls are associated with wisdom."* Fittingly, [Owl](https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)) from Milne's *Winnie-the-Pooh* (see [E. H. Shepard's original illustration](https://commons.wikimedia.org/wiki/File:Winnie-the-Pooh_67.png)) [famously misspells his own name](https://lists.w3.org/Archives/Public/www-webont-wg/2002Sep/0301.html) as **"Wol."**
 
 So the name went WOL → OWL → and, for a tool that *asks* Owl for a wise second opinion on your ontology, back to **askwol**. Wollie, to friends.
-
-<p align="center">
-  <a href="https://commons.wikimedia.org/wiki/File:Winnie-the-Pooh_67.png">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Winnie-the-Pooh_67.png/250px-Winnie-the-Pooh_67.png" alt="Owl by E.H. Shepard (1926, public domain)" width="180">
-  </a>
-</p>
 
 ## What do you get?
 
@@ -32,11 +27,19 @@ See the full, always-up-to-date list of checks on the [live app](https://lod-4tu
 
 ## Quick start
 
-The fastest way (no clone needed):
+Install from [PyPI](https://pypi.org/project/askwol/) with [pipx](https://pipx.pypa.io/stable/) (Python 3.10+):
 
 ```bash
-pipx install git+https://github.com/TDCC-NES/askwol.git
+pipx install askwol
 askwol check your-ontology.ttl
+```
+
+For the Python API or local Web UI, install into a virtual environment instead:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate   # may differ depending on your shell
+pip install askwol
 ```
 
 Or for development:
@@ -178,7 +181,7 @@ server.example.com {
 }
 ```
 
-**Security notes:** askwol fetches arbitrary URLs (namespace resolution + URL upload). Outbound requests to private, loopback, and other internal IP ranges are blocked automatically (SSRF guard in [`resolver.py`](src/askwol/resolver.py)). Each client IP is capped at `ASKWOL_RATE_LIMIT` requests per minute (default 20; set to `0` to disable) on `/validate` and `/api/validate`. Uploads are capped at 20 MB in the app itself; also enforce a request-size limit on the reverse proxy as defence-in-depth.
+**Security notes:** askwol fetches arbitrary URLs (namespace resolution + URL upload). Outbound requests to private, loopback, and other internal IP ranges are blocked automatically (SSRF guard in [`resolver.py`](https://github.com/TDCC-NES/askwol/blob/main/src/askwol/resolver.py)). Each client IP is capped at `ASKWOL_RATE_LIMIT` requests per minute (default 20; set to `0` to disable) on `/validate` and `/api/validate`. Uploads are capped at 20 MB in the app itself; also enforce a request-size limit on the reverse proxy as defence-in-depth.
 
 **Validation limits:** each validation runs in its own isolated process, never inline in a web worker, so a slow or hung ontology can be killed without affecting other requests. A hard timeout (`ASKWOL_VALIDATION_TIMEOUT`, default 300 seconds) kills a job outright and returns a `504`. A global concurrency limit (`ASKWOL_MAX_CONCURRENT_VALIDATIONS`, default 2; keep at or below the host's CPU core count) caps how many validations run at once, and rejects excess requests immediately with a `503` instead of queueing them. Generous size caps (`ASKWOL_MAX_TRIPLES` default 500000, `ASKWOL_MAX_NAMESPACES` default 500, `ASKWOL_MAX_IMPORTS` default 200) reject oversized ontologies right after parsing, before any expensive check runs. `/validate`, `/api/validate`, and the CLI all share the same validation pipeline and the same limits. If your reverse proxy sets its own timeout for these routes, set it comfortably above `ASKWOL_VALIDATION_TIMEOUT` so askwol's own timeout response is what clients actually see.
 
@@ -236,11 +239,11 @@ pytest tests/ -v
 
 The test suite covers every check on good and bad inputs, HTML report
 rendering, and the FastAPI routes via `TestClient`, plus a pinned smoke test
-on [`html/ontologies/broken.ttl`](html/ontologies/broken.ttl) that fails if any
+on [`html/ontologies/broken.ttl`](https://github.com/TDCC-NES/askwol/blob/main/html/ontologies/broken.ttl) that fails if any
 check ever stops detecting issues (clean counterpart:
-[`html/ontologies/sample.ttl`](html/ontologies/sample.ttl)). Drop either into
+[`html/ontologies/sample.ttl`](https://github.com/TDCC-NES/askwol/blob/main/html/ontologies/sample.ttl)). Drop either into
 the upload form at http://localhost:8000/ to see a full report.
 
 ## Licence
 
-MIT - see [LICENSE](LICENSE).
+MIT - see [LICENSE](https://github.com/TDCC-NES/askwol/blob/main/LICENSE).

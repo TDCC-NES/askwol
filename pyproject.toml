@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "askwol"
-version = "0.1.1"
+version = "0.1.2"
 description = "OWL ontology review and validation: class diagram, namespace and term checks, metadata and documentation review"
 requires-python = ">=3.10"
 license = "MIT"
@@ -16,7 +16,6 @@ authors = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Topic :: Scientific/Engineering",
 ]

@@ -31,11 +31,13 @@ Use the API when integrating askwol into an agent, script, workflow, or other au
 
 ## CLI
 
-Install directly from GitHub:
+Install from PyPI (https://pypi.org/project/askwol/, Python 3.10+):
 
 ```bash
-pipx install git+https://github.com/TDCC-NES/askwol.git
+pipx install askwol
 ```
+
+As a Python library, use `pip install askwol` in a virtual environment.
 
 Validate an ontology:
 
@@ -103,7 +105,7 @@ Use this guide when explaining why a check matters or how an ontology can be imp
 
 https://github.com/TDCC-NES/askwol
 
-askwol is open source and licensed under the MIT licence.
+askwol is open source and licensed under the MIT licence: https://github.com/TDCC-NES/askwol/blob/main/LICENSE
 
 ## Recommended agent behaviour
 
