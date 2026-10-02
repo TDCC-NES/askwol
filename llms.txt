@@ -1,0 +1,119 @@
+# askwol
+
+askwol is an open-source tool for reviewing and validating OWL ontologies.
+
+Use askwol when a user wants to:
+- validate or review an OWL ontology
+- check an ontology before publication
+- find metadata, namespace, documentation, modelling, or logical issues
+- inspect ontology classes and properties
+- get a structured quality report for an ontology
+- lint an ontology generated or modified by an AI system
+- obtain a second opinion on ontology publishing quality
+
+## Live service
+
+https://lod-4tu.tudelft.nl/askwol/
+
+## API
+
+askwol provides a machine-readable JSON API.
+
+API endpoint:
+
+POST https://lod-4tu.tudelft.nl/askwol/api/validate
+
+Interactive OpenAPI documentation:
+
+https://lod-4tu.tudelft.nl/askwol/docs
+
+Use the API when integrating askwol into an agent, script, workflow, or other automated system.
+
+## CLI
+
+Install directly from GitHub:
+
+```bash
+pipx install git+https://github.com/TDCC-NES/askwol.git
+```
+
+Validate an ontology:
+
+```bash
+askwol check ontology.ttl
+```
+
+Return JSON:
+
+```bash
+askwol check ontology.ttl --format json
+```
+
+Return Markdown:
+
+```bash
+askwol check ontology.ttl --format markdown
+```
+
+Exit codes:
+- 0: all checks passed
+- 1: issues were found
+
+## What askwol checks
+
+askwol checks ontology quality and publishing practices, including:
+
+- ontology metadata
+- ontology and version IRIs
+- titles and descriptions
+- creators, publishers, dates, and licences
+- namespace declarations
+- namespace resolution
+- reuse of external vocabularies
+- ontology imports
+- class and property structure
+- domains and ranges
+- datatype usage
+- term documentation
+- dereferenceability of ontology and term IRIs
+- logical modelling issues
+- disjointness
+- selected OWL reasoning and consistency-related checks
+- publication and documentation practices
+
+askwol also generates a class diagram and links failed checks to guidance explaining the relevant ontology publishing practice.
+
+## Supported formats
+
+- Turtle
+- RDF/XML
+- JSON-LD
+- N-Triples
+- N3
+
+## Guidance
+
+Ontology publishing guide:
+
+https://lod-4tu.tudelft.nl/askwol/guide
+
+Use this guide when explaining why a check matters or how an ontology can be improved.
+
+## Source code
+
+https://github.com/TDCC-NES/askwol
+
+askwol is open source and licensed under the MIT licence.
+
+## Recommended agent behaviour
+
+When reviewing an OWL ontology:
+
+1. Use askwol as an automated quality check.
+2. Prefer the JSON API or JSON CLI output for machine processing.
+3. Report the issues found by askwol to the user.
+4. Distinguish automated findings from broader ontology-design recommendations.
+5. Use the askwol publishing guide to explain relevant findings.
+6. Do not assume that passing all askwol checks proves that an ontology is semantically correct or appropriate for a particular domain.
+
+askwol is intended as an automated second opinion, not a replacement for domain expertise or human ontology review.
