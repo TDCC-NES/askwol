@@ -10,8 +10,7 @@
 👉 **Try it live:** https://lod-4tu.tudelft.nl/askwol/
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="askwol web UI screenshot" width="720">
-</p>
+  <img src="https://raw.githubusercontent.com/TDCC-NES/askwol/main/docs/screenshot.png" alt="askwol web UI screenshot" width="720"></p>
 
 ## Why askwol?
 
