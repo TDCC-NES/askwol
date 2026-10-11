@@ -8,6 +8,7 @@ Namespace resolution is stubbed out by pre-populating the global ontology
 cache, so the tests do not hit the network.
 """
 
+import re
 from pathlib import Path
 
 import httpx
@@ -74,6 +75,36 @@ def test_index_renders(client):
     r = client.get("/")
     assert r.status_code == 200
     assert "<html" in r.text.lower()
+
+
+def test_index_form_guards_against_double_submit(client):
+    """The form confirms the click, ignores repeat submits while a validation
+    runs (each one would be processed and counted server-side), and recovers
+    when the user cancels or returns to the page."""
+    html = client.get("/").text
+    assert 'id="validate-form"' in html
+    # Guarded on the form's submit event, which also covers Enter in the URL field.
+    assert "form.addEventListener('submit'" in html
+    assert "if (busy)" in html
+    # Recovery: back/forward cache restore, and a way out of the busy state.
+    assert "addEventListener('pageshow'" in html
+    assert "window.stop()" in html
+    # Accessible feedback: live status text and an indeterminate progress bar.
+    assert 'role="status"' in html
+    assert 'role="progressbar"' in html
+    # Indeterminate until the server reports a step; the value is set from JS.
+    bar = re.search(r'<div class="progress"[^>]*>', html).group(0)
+    assert "aria-valuenow" not in bar
+    assert "prefers-reduced-motion" in html
+    # Step progress is polled from this endpoint (prefixed behind a sub-path).
+    assert 'data-progress-url="validate/progress"' in html
+
+
+def test_index_form_action_is_prefixed_behind_a_sub_path(client, monkeypatch):
+    monkeypatch.setattr(web, "ROOT_PATH", "/askwol")
+    html = client.get("/").text
+    assert 'id="validate-form" action="/askwol/validate"' in html
+    assert 'data-progress-url="/askwol/validate/progress"' in html
 
 
 def test_api_validate_returns_all_check_sections(client):

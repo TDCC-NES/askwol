@@ -12,15 +12,20 @@ import tempfile
 import threading
 import time
 import uuid
+from collections.abc import Awaitable
 from html import escape
 from pathlib import Path
+from typing import TypeVar
 from urllib.parse import quote, urlencode, urlparse
 
 import httpx
 from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from starlette.datastructures import MutableHeaders
+from starlette.staticfiles import StaticFiles
 
-from askwol import usage
+from askwol import progress, usage
+from askwol.branding import FAVICON_LINK, STATIC_DIR
 from askwol.models import ValidationReport
 from askwol.report_html import render_report
 from askwol.resolver import block_private_network_requests
@@ -149,6 +154,11 @@ class ValidationTimeoutError(Exception):
     """Raised when a validation job exceeds VALIDATION_TIMEOUT."""
 
 
+class ClientDisconnectedError(Exception):
+    """Raised when the client closes the connection while its request is still
+    being worked on, so there is nobody left to send a response to."""
+
+
 async def _try_acquire_validation_slot() -> bool:
     global _validation_slots_in_use
     async with _validation_slots_lock:
@@ -175,6 +185,22 @@ async def _drain_phase_updates(request_id: str, stream: asyncio.StreamReader) ->
         phase = data.get("phase")
         if phase:
             usage.job_phase(request_id, phase)
+            progress.report(phase)
+
+
+async def _stop_process(proc: asyncio.subprocess.Process) -> None:
+    """Stop a worker process: ask it to exit, kill it if it won't, and reap it."""
+    if proc.returncode is not None:
+        return
+    try:
+        proc.terminate()
+    except ProcessLookupError:  # exited between the check and the signal
+        return
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=5)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
 
 
 async def run_isolated_validation(
@@ -193,6 +219,10 @@ async def run_isolated_validation(
     plain error result rather than propagating, so a bug in one job can
     never take down the request. Job start, phase, and outcome are logged
     via askwol.usage so a job that never finishes can still be identified.
+
+    If the awaiting request is cancelled (its client disconnected), the child
+    is stopped, the concurrency slot is freed, and the job is logged as
+    "cancelled" before the cancellation propagates.
     """
     request_id = uuid.uuid4().hex[:12]
     usage.job_started(request_id, kind=kind, source=display_name)
@@ -205,6 +235,9 @@ async def run_isolated_validation(
         raise ValidationBusyError()
 
     started = time.perf_counter()
+    # The worker only reports "parsing" once its imports are done; say so now
+    # so the progress display doesn't linger on the previous step meanwhile.
+    progress.report("parsing")
 
     def _fail(outcome: str, status: str) -> tuple[ValidationReport, str]:
         usage.job_finished(
@@ -215,6 +248,8 @@ async def run_isolated_validation(
         failed_report.parse_errors.append(_OWL_ERROR_MESSAGE)
         return failed_report, ""
 
+    proc: asyncio.subprocess.Process | None = None
+    tasks: tuple[asyncio.Task, ...] = ()
     try:
         cmd = [*WORKER_CMD, str(tmp_path), "--display-name", display_name]
         if base_uri:
@@ -226,17 +261,13 @@ async def run_isolated_validation(
         stdout_task = asyncio.create_task(proc.stdout.read())
         phase_task = asyncio.create_task(_drain_phase_updates(request_id, proc.stderr))
         wait_task = asyncio.create_task(proc.wait())
+        tasks = (stdout_task, phase_task, wait_task)
 
         try:
             await asyncio.wait_for(asyncio.gather(stdout_task, phase_task, wait_task), timeout=VALIDATION_TIMEOUT)
         except asyncio.TimeoutError:
-            proc.terminate()
-            try:
-                await asyncio.wait_for(proc.wait(), timeout=5)
-            except asyncio.TimeoutError:
-                proc.kill()
-                await proc.wait()
-            for task in (stdout_task, phase_task, wait_task):
+            await _stop_process(proc)
+            for task in tasks:
                 task.cancel()
             usage.job_finished(
                 request_id, outcome="timeout", status="504",
@@ -252,6 +283,18 @@ async def run_isolated_validation(
         payload = json.loads(stdout)
         report = ValidationReport.model_validate(payload["report"])
         mermaid = payload.get("mermaid", "")
+    except asyncio.CancelledError:
+        # The client went away, so nobody is waiting for this result: stop the
+        # worker instead of letting it run to completion.
+        if proc is not None:
+            await _stop_process(proc)
+        for task in tasks:
+            task.cancel()
+        usage.job_finished(
+            request_id, outcome="cancelled", status="499",
+            duration_ms=int((time.perf_counter() - started) * 1000),
+        )
+        raise
     except ValidationTimeoutError:
         raise
     except Exception:
@@ -266,6 +309,53 @@ async def run_isolated_validation(
     else:
         usage.job_finished(request_id, outcome="ok", status="200", duration_ms=duration_ms)
     return report, mermaid
+
+
+# How often a running validation checks that its client is still connected.
+DISCONNECT_POLL_SECONDS = 0.5
+
+_T = TypeVar("_T")
+
+
+async def _unless_client_disconnects(request: Request, work: Awaitable[_T]) -> _T:
+    """Await `work`, but stop it as soon as the client goes away.
+
+    A plain Starlette handler keeps running after its client disconnects (the
+    user pressed Stop or Reload, closed the tab, or an API client timed out),
+    which burns CPU, holds one of the few concurrency slots and, for the
+    browser, then counts a request nobody saw the result of. This races the
+    work against a watcher that polls ``request.is_disconnected()``; if the
+    client leaves first the work is cancelled - and given the chance to clean
+    up, e.g. stop its worker process - and ClientDisconnectedError is raised.
+
+    Only works if the ASGI server reports the disconnect and nothing in between
+    (a BaseHTTPMiddleware, a proxy that doesn't pass the abort on) swallows it;
+    otherwise this degrades to simply awaiting the work.
+    """
+    task = asyncio.ensure_future(work)
+
+    async def _client_left() -> bool:
+        try:
+            while not await request.is_disconnected():
+                await asyncio.sleep(DISCONNECT_POLL_SECONDS)
+        except Exception:  # noqa: BLE001 - any failure to check means "can't tell"
+            return False  # stop watching rather than cancel valid work
+        return True
+
+    watcher = asyncio.ensure_future(_client_left())
+    try:
+        await asyncio.wait({task, watcher}, return_when=asyncio.FIRST_COMPLETED)
+        if task.done():
+            return task.result()
+        if not watcher.result():
+            return await task
+        task.cancel()
+        await asyncio.wait({task})  # let its cleanup (stopping the worker, freeing the slot) finish
+        raise ClientDisconnectedError()
+    finally:
+        watcher.cancel()
+        if not task.done():  # we were cancelled ourselves
+            task.cancel()
 
 
 app = FastAPI(
@@ -283,17 +373,49 @@ app = FastAPI(
         "lightweight OWL RL reasoner checks (ontology consistency, "
         "inconsistent individuals, and unsatisfiable classes)."
     ),
-    version="0.1.1",
+    version="0.1.2",
     root_path=ROOT_PATH,
 )
 
 
-@app.middleware("http")
-async def _add_openapi_robots_header(request: Request, call_next):
-    response = await call_next(request)
-    if request.url.path == app.openapi_url:
-        response.headers["X-Robots-Tag"] = "noindex"
-    return response
+class _NoindexOpenapiMiddleware:
+    """Adds ``X-Robots-Tag: noindex`` to the OpenAPI JSON.
+
+    A plain ASGI middleware on purpose, not ``@app.middleware("http")``:
+    Starlette's BaseHTTPMiddleware hides the client's disconnect from
+    ``request.is_disconnected()``, which the validation routes rely on to stop
+    work that nobody is waiting for any more (see _unless_client_disconnects).
+    """
+
+    def __init__(self, asgi_app):
+        self.app = asgi_app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or Request(scope).url.path != app.openapi_url:
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_header(message):
+            if message["type"] == "http.response.start":
+                MutableHeaders(scope=message)["X-Robots-Tag"] = "noindex"
+            await send(message)
+
+        await self.app(scope, receive, send_with_header)
+
+
+app.add_middleware(_NoindexOpenapiMiddleware)
+
+
+class _CachedStaticFiles(StaticFiles):
+    """Static files that browsers may keep for a week; the brand images rarely change."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "public, max-age=604800"
+        return response
+
+
+app.mount("/static", _CachedStaticFiles(directory=STATIC_DIR), name="static")
 
 
 # Test-only hook: when set, run_isolated_validation calls this directly
@@ -317,6 +439,8 @@ def _apply_prefix(html: str) -> str:
         .replace('href="guide"', f'href="{ROOT_PATH}/guide"')
         .replace('href="docs"', f'href="{ROOT_PATH}/docs"')
         .replace('action="validate"', f'action="{ROOT_PATH}/validate"')
+        .replace('="static/', f'="{ROOT_PATH}/static/')
+        .replace('data-progress-url="validate/progress"', f'data-progress-url="{ROOT_PATH}/validate/progress"')
         .replace('href="/#reasoner"', f'href="{ROOT_PATH}/#reasoner"')
     )
 
@@ -746,6 +870,7 @@ def _render_stats_page(data: dict[str, object]) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ask Wol: usage dashboard</title>
+{FAVICON_LINK}
 <meta name="color-scheme" content="light">
 <style>
     :root {{ --accent: #285c4d; --accent-soft: #dcebe6; --accent-strong: #12362f; --border: #d7e2de; --muted: #5d6b66; --bg: #f4f7f5; --card: #ffffff; }}
@@ -966,6 +1091,14 @@ async def stats_endpoint(
 async def guide():
     return HTMLResponse(_apply_prefix(GUIDE_HTML))
 
+
+def _abandoned_response() -> Response:
+    """Stand-in for the response of a request whose client has gone (499 is
+    nginx's "client closed request"). There is nobody to deliver it to, and the
+    request is deliberately not recorded as usage: the user never saw a result."""
+    return Response(status_code=499)
+
+
 @app.get("/validate", include_in_schema=False)
 async def validate_get(request: Request, url: str | None = None):
     """Bookmarkable/shareable form of URL-based validation. `POST /validate`
@@ -985,7 +1118,11 @@ async def validate_get(request: Request, url: str | None = None):
             status_code=429,
         )
     else:
-        response = await _validate_url(source)
+        try:
+            with progress.track(client_ip, source, steps=progress.URL_FLOW):
+                response = await _unless_client_disconnects(request, _validate_url(source))
+        except ClientDisconnectedError:
+            return _abandoned_response()
 
     usage.record(
         "validate",
@@ -1027,7 +1164,11 @@ async def validate(
     elif file and file.filename:
         source = file.filename
         kind = "validate_upload"
-        response = await _validate_upload(file)
+        try:
+            with progress.track(client_ip, source, steps=progress.UPLOAD_FLOW):
+                response = await _unless_client_disconnects(request, _validate_upload(file))
+        except ClientDisconnectedError:
+            return _abandoned_response()
     else:
         source = "(no input)"
         response = HTMLResponse(
@@ -1044,6 +1185,18 @@ async def validate(
         ip=client_ip,
     )
     return response
+
+
+@app.get("/validate/progress", include_in_schema=False)
+async def validate_progress(request: Request, source: str = ""):
+    """Current step of the caller's own running validation of `source`, polled
+    by the form page while its /validate request is pending. Deliberately not
+    rate limited (a poll per second per waiting user) and read-only: it only
+    looks up this client's job in memory."""
+    return JSONResponse(
+        progress.snapshot(_client_ip(request), source),
+        headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex"},
+    )
 
 
 # Recognised ontology file extensions. Used only as a narrow escape hatch for
@@ -1217,13 +1370,17 @@ async def validate_api(
                 tmp_path = Path(tmp.name)
             try:
                 try:
-                    report, _mermaid = await run_isolated_validation(tmp_path, source, kind="validate_api")
+                    report, _mermaid = await _unless_client_disconnects(
+                        request, run_isolated_validation(tmp_path, source, kind="validate_api"),
+                    )
                     status_code = 422 if report.parse_errors else 200
                     response = JSONResponse(content=report.model_dump(mode="json"), status_code=status_code)
                 except ValidationBusyError:
                     response = JSONResponse(content={"detail": _OWL_BUSY_MESSAGE}, status_code=503)
                 except ValidationTimeoutError:
                     response = JSONResponse(content={"detail": _OWL_TIMEOUT_MESSAGE}, status_code=504)
+                except ClientDisconnectedError:
+                    return _abandoned_response()
             finally:
                 tmp_path.unlink(missing_ok=True)
 

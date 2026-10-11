@@ -42,23 +42,39 @@ UPLOAD_HTML = """<!DOCTYPE html>
 {
   "@context": "https://schema.org",
   "@type": "WebApplication",
-  "name": "askwol",
-  "description": "A free, open-source OWL ontology reviewer: class diagram, namespace and term checks, metadata and documentation review, and a clean-up report.",
+  "name": "Ask Wol",
+  "alternateName": "askwol",
+  "description": "A free, open-source OWL ontology checker and reviewer: class diagram, namespace and term checks, metadata and documentation review, and a clean-up report.",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "Any",
-  "url": "https://github.com/TDCC-NES/askwol",
-  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
-  "author": {"@type": "Organization", "name": "TDCC-NES Ontology Engineers", "url": "https://tdcc.nl/nes-ontology-engineers/"},
+  "url": "https://lod-4tu.tudelft.nl/askwol/",
+  "sameAs": [
+    "https://github.com/TDCC-NES/askwol",
+    "https://pypi.org/project/askwol/"
+  ],
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "EUR"
+  },
+  "author": {
+    "@type": "Organization",
+    "name": "TDCC-NES Ontology Engineers",
+    "url": "https://tdcc.nl/nes/ontology-engineers/"
+  },
   "license": "https://github.com/TDCC-NES/askwol/blob/main/LICENSE"
 }
 </script>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F989;</text></svg>">
+<!--ICONS-->
 <style>
   :root { --accent: #4a7c59; --accent-dark: #3d6a4a; --border: #e5e7eb; --muted: #6b7280; --bg-soft: #f9fafb; }
   * { box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; max-width: 720px; margin: 50px auto; padding: 0 20px; color: #1f2937; line-height: 1.6; }
-  h1 { margin: 0.4em 0 0.1em; font-weight: 700; font-size: 2.4em; letter-spacing: -0.02em; display: flex; align-items: center; gap: 0.35em; }
-  h1 .owl { font-size: 1.4em; line-height: 1; }
+  h1 { margin: 0.4em 0 0.1em; display: flex; align-items: center; gap: 0.9rem; font-size: 1rem; line-height: 1.2; }
+  h1 .logo { height: 3.5rem; width: auto; flex: none; }
+  h1 .brand { display: block; font-size: 2rem; font-weight: 600; letter-spacing: -0.01em; }
+  h1 .tagline { display: block; margin-top: 0.2em; font-size: 1.05rem; font-weight: 400; color: var(--muted); }
+  h1 .beta-badge { font-size: 0.4em; margin-left: 0.6em; }
   h2 { color: #374151; margin-top: 1.8em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; font-weight: 600; }
   .cluster-h { color: var(--accent-dark); font-size: 1.15em; font-weight: 700; margin: 1.5em 0 0.3em; }
   .checks-list { margin: 0.2em 0 0.8em; padding-left: 1.4em; }
@@ -97,9 +113,39 @@ UPLOAD_HTML = """<!DOCTYPE html>
   button.submit { padding: 0.65em 1.8em; font-size: 1em; cursor: pointer; background: var(--accent); color: white; border: none; border-radius: 6px; font-weight: 500; font-family: inherit; transition: background 0.15s; }
   button.submit:hover { background: var(--accent-dark); }
 
+  /* Busy state while a validation is running. The button uses aria-disabled
+     (not disabled) so it keeps focus and full contrast; repeat submits are
+     ignored in JS. */
+  button.submit[aria-disabled="true"] { cursor: progress; }
+  .is-busy .tabs, .is-busy .tab-panel { opacity: 0.55; }
+  .working-status { margin: 0; font-size: 0.95em; color: #374151; }
+  .is-busy .working { margin-top: 1.2em; padding: 0.9em 1em; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 8px; }
+  .is-busy .working-status { margin-bottom: 0.8em; }
+  .progress { position: relative; height: 6px; overflow: hidden; background: #dfe8e2; border-radius: 999px; }
+  .progress::before { content: ""; position: absolute; top: 0; bottom: 0; left: -35%; width: 35%; background: var(--accent); border-radius: 999px; animation: progress-slide 1.4s ease-in-out infinite; }
+  @keyframes progress-slide { from { left: -35%; } to { left: 100%; } }
+  @keyframes progress-pulse { 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) {
+    .progress::before { left: 0; width: 100%; animation: progress-pulse 2s ease-in-out infinite; }
+  }
+  .working-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 0.6em; font-size: 0.85em; color: var(--muted); }
+  .working-cancel { padding: 0; background: none; border: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+  .working-cancel:hover { color: var(--accent-dark); }
+  .working-hint { margin: 0.7em 0 0; font-size: 0.85em; color: var(--muted); }
+  .working-hint:empty { display: none; }
+  /* Step mode: one segment per pipeline step, the current one animated. */
+  .progress--steps { display: flex; gap: 3px; height: 8px; overflow: visible; background: none; }
+  .progress--steps::before { display: none; }
+  .progress--steps > span { position: relative; flex: 1; overflow: hidden; background: #dfe8e2; border-radius: 999px; }
+  .progress--steps > span.done { background: var(--accent); }
+  .progress--steps > span.current::after { content: ""; position: absolute; top: 0; bottom: 0; left: -35%; width: 35%; background: var(--accent); border-radius: 999px; animation: progress-slide 1.4s ease-in-out infinite; }
+  /* After the step rules above so it wins at equal specificity. */
+  @media (prefers-reduced-motion: reduce) {
+    .progress--steps > span.current::after { left: 0; width: 100%; animation: progress-pulse 2s ease-in-out infinite; }
+  }
+
   .about { margin-top: 2.5em; padding-top: 1.5em; border-top: 1px solid var(--border); color: #4b5563; font-size: 0.95em; }
-  .about .wol-link { float: right; display: block; margin: 0 0 1em 1.5em; }
-  .about img { width: 140px; border-radius: 6px; display: block; cursor: pointer; }
+  .about .wollie { float: right; width: 140px; height: auto; margin: 0 0 1em 1.5em; }
   .footer { margin-top: 2em; font-size: 0.85em; color: #9ca3af; text-align: center; }
 </style>
 </head>
@@ -110,12 +156,15 @@ UPLOAD_HTML = """<!DOCTYPE html>
     <a href="guide">Publishing guide</a> &middot;
     <a href="docs">API docs</a>
   </p>
-  <h1><span class="owl" aria-hidden="true">&#x1F989;</span> Ask Wol <span class="beta-badge">Beta</span></h1>
+<h1>
+  <img class="logo" src="static/wollie-h1.png" alt="" width="43" height="56">
+  <span><span class="brand">Ask Wol <span class="beta-badge">Beta</span></span> <span class="tagline">OWL Ontology Checker &amp; Reviewer</span></span>
+</h1>
   <p>Your friendly owl (Wollie, to friends) for instant <a href="https://www.w3.org/OWL/">OWL</a>
   ontology reviews: a visual class diagram, namespace and term checks,
   metadata and documentation review, and a clean-up report.</p>
 
-  <form class="card" action="validate" method="post" enctype="multipart/form-data">
+  <form class="card" id="validate-form" action="validate" method="post" enctype="multipart/form-data" data-progress-url="validate/progress">
     <div class="tabs" role="tablist">
       <button type="button" class="tab active" data-tab="url" role="tab">From URL</button>
       <button type="button" class="tab" data-tab="file" role="tab">Upload file</button>
@@ -145,6 +194,18 @@ UPLOAD_HTML = """<!DOCTYPE html>
     <div class="actions">
       <button type="submit" class="submit">Ask Wol</button>
     </div>
+
+    <div class="working">
+      <p class="working-status" id="working-status" role="status"></p>
+      <div id="working-body" hidden>
+        <div class="progress" id="working-bar" role="progressbar" aria-label="Checking your ontology"></div>
+        <p class="working-hint" id="working-hint"></p>
+        <div class="working-meta">
+          <span id="working-elapsed" aria-hidden="true"></span>
+          <button type="button" class="working-cancel" id="working-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
   </form>
   <script>
     // Tab switching: also clears the inactive panel's value so server gets only one input
@@ -166,6 +227,170 @@ UPLOAD_HTML = """<!DOCTYPE html>
         urlInput.focus();
       });
     });
+  </script>
+  <script>
+    // Busy state for the validation form. A validation takes seconds to
+    // minutes and the browser keeps showing this page until the report
+    // arrives, so confirm the click was accepted, ignore repeat submits while
+    // the request is in flight, and make sure the form is usable again if the
+    // user cancels or comes back to this page.
+    (function() {
+      const form = document.getElementById('validate-form');
+      const submitBtn = form.querySelector('button.submit');
+      const statusEl = document.getElementById('working-status');
+      const bodyEl = document.getElementById('working-body');
+      const elapsedEl = document.getElementById('working-elapsed');
+      const cancelBtn = document.getElementById('working-cancel');
+      const barEl = document.getElementById('working-bar');
+      const hintEl = document.getElementById('working-hint');
+      const urlField = document.getElementById('url-input');
+      const fileField = document.getElementById('file-input');
+      const lockable = form.querySelectorAll('.tabs, .tab-panel');
+      const idleLabel = submitBtn.textContent;
+
+      // [seconds waited, expectation text]. Shown under the bar, or on the
+      // live status line when there is no step information. The status line is
+      // a live region, so text only changes at these thresholds and when the
+      // step changes; the elapsed counter ticks silently.
+      const MESSAGES = [
+        [0, 'Wol is checking your ontology. Most checks finish within 30 seconds.'],
+        [20, 'Still working. Large ontologies, or slow remote servers, can take a minute or more.'],
+        [60, 'Still working. This one is taking longer than usual. Wol will stop and tell you if it takes too long.']
+      ];
+
+      let busy = false;
+      let startedAt = 0;
+      let timer = null;
+      let pollTimer = null;
+      let pollRun = 0;
+      let source = '';
+      let steps = null;  // latest step info from the server, or null if none yet
+
+      function setText(el, text) { if (el.textContent !== text) el.textContent = text; }
+
+      function expectation() {
+        const secs = Math.floor((Date.now() - startedAt) / 1000);
+        let text = MESSAGES[0][1];
+        MESSAGES.forEach(function(m) { if (secs >= m[0]) text = m[1]; });
+        return text;
+      }
+
+      function tick() {
+        elapsedEl.textContent = Math.floor((Date.now() - startedAt) / 1000) + ' s';
+        if (steps) setText(hintEl, expectation()); else setText(statusEl, expectation());
+      }
+
+      // The server reports which pipeline step the job is in; show one
+      // segment per step (completed steps filled, current one animated)
+      // rather than a percentage, since the steps take very uneven time.
+      function renderSteps() {
+        barEl.classList.add('progress--steps');
+        if (barEl.children.length !== steps.total) {
+          barEl.textContent = '';
+          for (let i = 0; i < steps.total; i++) barEl.appendChild(document.createElement('span'));
+        }
+        const done = steps.finishing ? steps.total : steps.step - 1;
+        Array.prototype.forEach.call(barEl.children, function(seg, i) {
+          seg.className = i < done ? 'done' : (i === done ? 'current' : '');
+        });
+        const text = steps.finishing
+          ? 'Almost done: preparing your report'
+          : 'Step ' + steps.step + ' of ' + steps.total + ': ' + steps.label;
+        barEl.setAttribute('aria-valuemin', '0');
+        barEl.setAttribute('aria-valuemax', String(steps.total));
+        barEl.setAttribute('aria-valuenow', String(done));
+        barEl.setAttribute('aria-valuetext', text);
+        setText(statusEl, text);
+        tick();
+      }
+
+      function clearSteps() {
+        steps = null;
+        barEl.classList.remove('progress--steps');
+        barEl.textContent = '';
+        ['aria-valuemin', 'aria-valuemax', 'aria-valuenow', 'aria-valuetext'].forEach(function(a) { barEl.removeAttribute(a); });
+        setText(hintEl, '');
+      }
+
+      // The form page stays alive while its validation request is pending, so
+      // it can ask the server which step that request is on. Any failure just
+      // leaves the plain busy indicator in place.
+      function poll(run) {
+        if (!busy || run !== pollRun) return;
+        fetch(form.dataset.progressUrl + '?source=' + encodeURIComponent(source), { cache: 'no-store' })
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(p) {
+            if (!p || !busy || run !== pollRun) return;
+            if (p.state === 'running') steps = { step: p.step, total: p.steps, label: p.label, finishing: false };
+            else if (p.state === 'finishing') steps = { step: p.steps, total: p.steps, label: '', finishing: true };
+            else return;  // not started on the server yet: keep what is shown
+            renderSteps();
+          })
+          .catch(function() {})
+          .then(function() {
+            if (busy && run === pollRun && !(steps && steps.finishing)) pollTimer = setTimeout(function() { poll(run); }, 1000);
+          });
+      }
+
+      // Same name the server tracks the job under: the typed URL or the file name.
+      function currentSource() {
+        if (!urlField.disabled) return urlField.value.trim();
+        return fileField.files.length ? fileField.files[0].name : '';
+      }
+
+      function setBusy(on) {
+        busy = on;
+        form.classList.toggle('is-busy', on);
+        pollRun++;
+        clearTimeout(pollTimer);
+        if (on) {
+          form.setAttribute('aria-busy', 'true');
+          submitBtn.setAttribute('aria-disabled', 'true');
+          submitBtn.textContent = 'Checking\u2026';
+          bodyEl.hidden = false;
+          startedAt = Date.now();
+          source = currentSource();
+          tick();
+          timer = setInterval(tick, 1000);
+          if (window.fetch && form.dataset.progressUrl && source) {
+            const run = pollRun;
+            pollTimer = setTimeout(function() { poll(run); }, 700);
+          }
+        } else {
+          clearInterval(timer);
+          form.removeAttribute('aria-busy');
+          submitBtn.removeAttribute('aria-disabled');
+          submitBtn.textContent = idleLabel;
+          bodyEl.hidden = true;
+          clearSteps();
+          statusEl.textContent = '';
+          elapsedEl.textContent = '';
+          lockable.forEach(function(el) { el.inert = false; });
+        }
+      }
+
+      // The submit event (not a click handler) also covers Enter in the URL
+      // field, and only fires once the browser's own validation has passed.
+      form.addEventListener('submit', function(e) {
+        if (busy) { e.preventDefault(); return; }
+        setBusy(true);
+        // Locked after the event so the form data is read before any control
+        // is touched; the guard above is what actually blocks repeat submits.
+        setTimeout(function() { if (busy) lockable.forEach(function(el) { el.inert = true; }); }, 0);
+      });
+
+      // Back/forward may restore this page, frozen mid-wait, from the
+      // back/forward cache.
+      window.addEventListener('pageshow', function() { if (busy) setBusy(false); });
+
+      // Esc or the browser's Stop button fires no event on this page, so
+      // offer a way out of the busy state.
+      cancelBtn.addEventListener('click', function() {
+        window.stop();
+        setBusy(false);
+        submitBtn.focus();
+      });
+    })();
   </script>
 
   <h2 id="what-do-you-get">What do you get?</h2>
@@ -192,10 +417,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
   </ul>
 
   <div class="about">
-    <a class="wol-link" href="https://commons.wikimedia.org/wiki/File:Winnie-the-Pooh_67.png" target="_blank" rel="noopener" title="Open the image on Wikimedia Commons">
-      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Winnie-the-Pooh_67.png/250px-Winnie-the-Pooh_67.png"
-           alt="Owl by E.H. Shepard (1926)">
-    </a>
+    <img class="wollie" src="static/wollie-about.png" alt="Wollie, a hand-drawn owl" width="140" height="183">
     <h2 style="margin-top:0; border:none; padding:0;">Why &ldquo;askwol&rdquo;?</h2>
     <p>
       The W3C originally called their language <strong>WOL</strong>. Tim Finin
@@ -1228,6 +1450,7 @@ def render_checks_api_description() -> str:
 
 
 UPLOAD_HTML = UPLOAD_HTML.replace("<!--CHECKS_OVERVIEW-->", _render_checks_overview())
+UPLOAD_HTML = UPLOAD_HTML.replace("<!--ICONS-->", PAGE_ICON_LINKS)
 
 
 def _render_guide_toc() -> str:
@@ -1317,7 +1540,10 @@ GUIDE_HTML = f"""<!DOCTYPE html>
 <meta property="og:site_name" content="askwol">
 <meta property="og:title" content="Ask Wol: OWL publishing guide">
 <meta property="og:description" content="A practical guide to publishing OWL ontologies: IRI strategy, resolvable namespaces, vocabulary reuse, documentation, language tags, and reasoner checks.">
-<meta property="og:image" content="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Winnie-the-Pooh_67.png/250px-Winnie-the-Pooh_67.png">
+<meta property="og:image" content="https://lod-4tu.tudelft.nl/askwol/static/wollie-og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Wollie, a hand-drawn owl">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Ask Wol: OWL publishing guide">
 <meta name="twitter:description" content="A practical guide to publishing OWL ontologies: IRI strategy, resolvable namespaces, vocabulary reuse, documentation, language tags, and reasoner checks.">
@@ -1327,17 +1553,17 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   "@type": "TechArticle",
   "headline": "OWL ontology publishing guide",
   "description": "A practical guide to publishing OWL ontologies: IRI strategy, http vs https, resolvable namespaces, external and internal term definitions, labels and comments, language tags, reasoner checks, and prefix hygiene.",
-  "author": {{"@type": "Organization", "name": "TDCC-NES Ontology Engineers", "url": "https://tdcc.nl/nes-ontology-engineers/"}},
+  "author": {{"@type": "Organization", "name": "TDCC-NES Ontology Engineers", "url": "https://tdcc.nl/nes/ontology-engineers/"}},
   "publisher": {{"@type": "Organization", "name": "TDCC-NES Ontology Engineers"}},
   "isPartOf": {{"@type": "WebApplication", "name": "askwol"}}
 }}
 </script>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F989;</text></svg>">
+{PAGE_ICON_LINKS}
 <style>
   * {{ box-sizing: border-box; }}
   body {{ font-family: system-ui, sans-serif; max-width: 720px; margin: 50px auto; padding: 0 20px; color: #333; line-height: 1.7; }}
-  h1 {{ margin: 0.4em 0 0.1em; font-weight: 700; font-size: 2.4em; letter-spacing: -0.02em; display: flex; align-items: center; gap: 0.35em; }}
-  h1 .owl {{ font-size: 1.4em; line-height: 1; }}
+  h1 {{ margin: 0.4em 0 0.1em; display: flex; align-items: center; gap: 0.9rem; font-size: 1.9rem; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; }}
+  h1 .logo {{ height: 3rem; width: auto; flex: none; }}
   h2 {{ color: #555; margin-top: 2em; border-bottom: 1px solid #eee; padding-bottom: 0.2em; }}
   h3 {{ color: #666; margin-top: 1.5em; }}
   .cluster-band {{ color: #4a7c59; font-size: 0.82em; font-weight: 700; margin: 2.2em 0 0; padding-bottom: 0.2em; border-bottom: 2px solid #cfe0d5; letter-spacing: 0.06em; text-transform: uppercase; }}
@@ -1371,7 +1597,7 @@ GUIDE_HTML = f"""<!DOCTYPE html>
     <a href="guide">Publishing guide</a> &middot;
     <a href="docs">API docs</a>
   </p>
-  <h1><span class="owl" aria-hidden="true">&#x1F989;</span> How to Publish an Ontology</h1>
+  <h1><img class="logo" src="static/wollie-h1.png" alt="" width="43" height="56"><span>How to Publish an OWL Ontology</span></h1>
   <p>A practical checklist for building OWL ontologies that are
   interoperable, resolvable, and maintainable. These are the things
   <a href="./">askwol</a> checks, and why they matter.</p>

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from html import escape
 
+from askwol.branding import FAVICON_LINK
 from askwol.models import NamespaceReport, Status, ValidationReport
 from askwol.templates import CHECK_CATEGORIES, CHECKS
 
@@ -64,7 +65,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         source_html = f'<code>{source}</code>'
     parts = [
         "<!DOCTYPE html><html><head><title>Ask Wol: results</title>",
-        '<link rel="icon" href="data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\'><text y=\'.9em\' font-size=\'90\'>&#x1F989;</text></svg>">',
+        FAVICON_LINK,
         "<style>",
         "  body { font-family: system-ui, sans-serif; max-width: 780px; margin: 40px auto; padding: 0 20px; color: #333; line-height: 1.5; overflow-wrap: anywhere; word-break: break-word; }",
         "  h1 { margin-bottom: 0.2em; font-size: 1.5em; }",

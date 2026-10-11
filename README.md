@@ -15,7 +15,7 @@
 
 ## Why askwol?
 
-The W3C originally planned to call their Web Ontology Language **WOL**. Tim Finin [proposed rearranging it to **OWL**](http://lists.w3.org/Archives/Public/www-webont-wg/2001Dec/0169.html), since *"owls are associated with wisdom."* Fittingly, [Owl](https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)) from Milne's *Winnie-the-Pooh* (see [E. H. Shepard's original illustration](https://commons.wikimedia.org/wiki/File:Winnie-the-Pooh_67.png)) [famously misspells his own name](https://lists.w3.org/Archives/Public/www-webont-wg/2002Sep/0301.html) as **"Wol."**
+The W3C originally planned to call their Web Ontology Language **WOL**. Tim Finin [proposed rearranging it to **OWL**](http://lists.w3.org/Archives/Public/www-webont-wg/2001Dec/0169.html), since *"owls are associated with wisdom."* Fittingly, [Owl](https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)) from Milne's *Winnie-the-Pooh* [famously misspells his own name](https://lists.w3.org/Archives/Public/www-webont-wg/2002Sep/0301.html) as **"Wol."**
 
 So the name went WOL → OWL → and, for a tool that *asks* Owl for a wise second opinion on your ontology, back to **askwol**. Wollie, to friends.
 
@@ -185,11 +185,13 @@ server.example.com {
 
 **Validation limits:** each validation runs in its own isolated process, never inline in a web worker, so a slow or hung ontology can be killed without affecting other requests. A hard timeout (`ASKWOL_VALIDATION_TIMEOUT`, default 300 seconds) kills a job outright and returns a `504`. A global concurrency limit (`ASKWOL_MAX_CONCURRENT_VALIDATIONS`, default 2; keep at or below the host's CPU core count) caps how many validations run at once, and rejects excess requests immediately with a `503` instead of queueing them. Generous size caps (`ASKWOL_MAX_TRIPLES` default 500000, `ASKWOL_MAX_NAMESPACES` default 500, `ASKWOL_MAX_IMPORTS` default 200) reject oversized ontologies right after parsing, before any expensive check runs. `/validate`, `/api/validate`, and the CLI all share the same validation pipeline and the same limits. If your reverse proxy sets its own timeout for these routes, set it comfortably above `ASKWOL_VALIDATION_TIMEOUT` so askwol's own timeout response is what clients actually see.
 
+**Cancelled requests:** if the client disconnects while a validation is running (the user presses Stop or Cancel, reloads, or closes the tab, or an API client times out), askwol stops the job: the worker process is killed, its concurrency slot is freed immediately, and nothing is recorded as usage. This only works if the disconnect reaches askwol. nginx (with its default `proxy_ignore_client_abort off`) and Caddy pass a client abort on to the upstream; Apache's `mod_proxy` may not notice it while waiting for the backend, in which case validations simply run to completion as before. Cancelled jobs are kept in the `validation_jobs` table with outcome `cancelled` (status `499`, nginx's "client closed request").
+
 ### Usage tracking
 
 A lightweight, privacy-friendly tracker logs each validation request to a local SQLite database. No cookies, no JavaScript, no third-party services. IPs are hashed with a per-database secret so they cannot be recovered from the stored data.
 
-Recorded per event: timestamp, request kind (`validate`, `validate_upload`, or `validate_api`), source (the submitted URL or filename), HTTP status, duration in ms, and a truncated SHA-256 hash of the client IP.
+Recorded per event: timestamp, request kind (`validate`, `validate_upload`, or `validate_api`), source (the submitted URL or filename), HTTP status, duration in ms, and a truncated SHA-256 hash of the client IP. Requests the client abandons before a result is produced (see "Cancelled requests" above) are not recorded, so a reload or a repeated click does not count twice.
 
 Environment variables:
 

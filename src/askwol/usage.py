@@ -345,7 +345,8 @@ def job_phase(request_id: str, phase: str) -> None:
 
 
 def job_finished(request_id: str, *, outcome: str, status: str | None, duration_ms: int) -> None:
-    """Record a job's outcome: one of 'ok', 'error', 'timeout', or 'rejected'."""
+    """Record a job's outcome: one of 'ok', 'error', 'timeout', 'rejected', or
+    'cancelled' (the client disconnected, so the job was stopped)."""
     if _DISABLED:
         return
     try:
