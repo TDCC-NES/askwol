@@ -880,7 +880,8 @@ def _render_stats_page(data: dict[str, object]) -> str:
     .topnav {{ display: flex; gap: 12px; flex-wrap: wrap; align-items: center; color: var(--muted); font-size: 0.95rem; margin-bottom: 22px; }}
     .topnav a {{ color: var(--accent); text-decoration: none; font-weight: 600; }}
     .brand {{ display: inline-flex; align-items: center; gap: 12px; width: fit-content; padding: 8px 14px; border-radius: 999px; background: rgba(220, 235, 230, 0.9); color: var(--accent-strong); font-weight: 800; letter-spacing: 0.02em; }}
-    .brand-mark {{ display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(180deg, #335f53, var(--accent)); color: #fff; font-size: 1rem; }}
+    .brand-mark {{ display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #fff; border: 1px solid var(--border); }}
+    .brand-mark img {{ height: 24px; width: auto; }}
     .hero {{ display: grid; gap: 10px; margin-bottom: 22px; margin-top: 14px; }}
     .kicker {{ display: inline-flex; width: fit-content; padding: 5px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-strong); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }}
     h1 {{ margin: 0; font-size: clamp(2rem, 4vw, 3.3rem); line-height: 1.03; letter-spacing: -0.04em; }}
@@ -931,7 +932,7 @@ def _render_stats_page(data: dict[str, object]) -> str:
 <body>
     <div class="shell">
         <div class="topnav">
-            <span class="brand"><span class="brand-mark" aria-hidden="true">🦉</span> Ask Wol usage</span>
+            <span class="brand"><span class="brand-mark" aria-hidden="true"><img src="static/wollie-h1.png" alt="" width="18" height="24"></span> Ask Wol usage</span>
             <a href="./">Home</a>
             <a href="guide">Publishing guide</a>
             <a href="docs">API docs</a>

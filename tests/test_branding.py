@@ -84,6 +84,15 @@ def test_favicon_is_embedded_on_every_kind_of_page(client, monkeypatch):
         assert "&#x1F989;" not in html.split("<body", 1)[0], f"{name}: old emoji favicon"
 
 
+def test_stats_page_uses_wollie_instead_of_the_owl_emoji(client, monkeypatch):
+    monkeypatch.setenv("ASKWOL_STATS_TOKEN", "t")
+    monkeypatch.setattr(web, "ROOT_PATH", "/askwol")
+    html = client.get("/stats", params={"token": "t"}).text
+    assert "\U0001f989" not in html
+    assert '<img src="/askwol/static/wollie-h1.png"' in html
+    assert client.get("/static/wollie-h1.png").status_code == 200
+
+
 def test_static_urls_are_prefixed_behind_a_sub_path(client, monkeypatch):
     monkeypatch.setattr(web, "ROOT_PATH", "/askwol")
     html = client.get("/").text
