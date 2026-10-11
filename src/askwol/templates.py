@@ -12,13 +12,16 @@ from __future__ import annotations
 import re
 from html import escape, unescape
 
+from askwol.branding import PAGE_ICON_LINKS
+
 
 UPLOAD_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ask Wol: OWL ontology reviewer</title>
+<title>OWL Ontology Checker & Reviewer | Ask Wol</title>
+<link rel="canonical" href="https://lod-4tu.tudelft.nl/askwol/">
 <meta name="description" content="askwol is a free, open-source OWL ontology reviewer. Get an instant class diagram plus namespace, term, metadata, documentation, IRI, language-tag, and reasoner checks for your RDF or OWL ontology.">
 <meta name="keywords" content="OWL, ontology, RDF, Semantic Web, ontology validator, ontology review, SHACL, linked data, knowledge graph, Turtle, JSON-LD">
 <meta name="author" content="TDCC-NES Ontology Engineers">
@@ -28,7 +31,10 @@ UPLOAD_HTML = """<!DOCTYPE html>
 <meta property="og:site_name" content="askwol">
 <meta property="og:title" content="Ask Wol: OWL ontology reviewer">
 <meta property="og:description" content="Instant OWL ontology review: class diagram, namespace and term checks, metadata and documentation review, and a clean-up report.">
-<meta property="og:image" content="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Winnie-the-Pooh_67.png/250px-Winnie-the-Pooh_67.png">
+<meta property="og:image" content="https://lod-4tu.tudelft.nl/askwol/static/wollie-og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Wollie, a hand-drawn owl">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Ask Wol: OWL ontology reviewer">
 <meta name="twitter:description" content="Instant OWL ontology review: class diagram, namespace and term checks, metadata and documentation review, and a clean-up report.">
@@ -205,7 +211,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
     <h2 style="border:none; padding:0; margin-top:1.2em;">About</h2>
     <p>
       <i>askwol</i> is developed and maintained by the
-      <a href="https://tdcc.nl/nes-ontology-engineers/">TDCC-NES Ontology Engineers</a>
+      <a href="https://tdcc.nl/nes/ontology-engineers/">TDCC-NES Ontology Engineers</a>
       (<strong>Kathrin F&uuml;llenbach</strong> and <strong>Dani Metilli</strong>), funded by
       <a href="https://www.openscience.nl/en/">Open Science NL</a>. We help with ontology
       selection and reuse, co-development, knowledge graph design, and training.
@@ -222,7 +228,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
 
   <p class="footer">
     <strong>External links:</strong>
-    <a href="https://tdcc.nl/nes-ontology-engineers/" target="_blank" rel="noopener">TDCC-NES ontology engineers</a> &middot;
+    <a href="https://tdcc.nl/nes/ontology-engineers/" target="_blank" rel="noopener">TDCC-NES ontology engineers</a> &middot;
     <a href="https://www.w3.org/OWL/" target="_blank" rel="noopener">W3C OWL</a> &middot;
     <a href="https://www.w3.org/TR/owl2-primer/" target="_blank" rel="noopener">OWL 2 Primer</a> &middot;
     <a href="https://www.w3.org/TR/owl2-syntax/" target="_blank" rel="noopener">OWL 2 Specification</a>
@@ -1300,7 +1306,8 @@ GUIDE_HTML = f"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ask Wol: OWL publishing guide</title>
+<title>How to Publish an OWL Ontology | Ask Wol</title>
+<link rel="canonical" href="https://lod-4tu.tudelft.nl/askwol/guide">
 <meta name="description" content="A practical guide to publishing OWL ontologies: IRI strategy, http vs https, resolvable namespaces, external and internal term definitions, labels and comments, language tags, reasoner checks, and prefix hygiene.">
 <meta name="keywords" content="OWL, ontology, RDF, Semantic Web, publishing guide, IRI strategy, SHACL, namespaces, language tags, OWL reasoner, best practices">
 <meta name="author" content="TDCC-NES Ontology Engineers">
@@ -1397,7 +1404,7 @@ GUIDE_HTML = f"""<!DOCTYPE html>
 
   <p class="footer">
     <strong>External links:</strong>
-    <a href="https://tdcc.nl/nes-ontology-engineers/" target="_blank" rel="noopener">TDCC-NES ontology engineers</a> &middot;
+    <a href="https://tdcc.nl/nes/ontology-engineers/" target="_blank" rel="noopener">TDCC-NES ontology engineers</a> &middot;
     <a href="https://www.w3.org/OWL/" target="_blank" rel="noopener">W3C OWL</a> &middot;
     <a href="https://www.w3.org/TR/owl2-primer/" target="_blank" rel="noopener">OWL 2 Primer</a> &middot;
     <a href="https://www.w3.org/TR/owl2-syntax/" target="_blank" rel="noopener">OWL 2 Specification</a>

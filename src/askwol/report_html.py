@@ -1262,7 +1262,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('</section>')
 
     parts.append('<p class="footer">askwol is in beta - some checks may be incomplete or produce false positives. Found a bug or have an idea? <a href="https://github.com/TDCC-NES/askwol/issues" target="_blank" rel="noopener">Open an issue</a> or email <a href="mailto:nes@tdcc.nl">nes@tdcc.nl</a>.</p>')
-    parts.append('<p class="footer"><strong>External links:</strong> <a href="https://tdcc.nl/nes-ontology-engineers/" target="_blank" rel="noopener">TDCC-NES ontology engineers</a> &middot; <a href="https://www.w3.org/OWL/" target="_blank" rel="noopener">W3C OWL</a> &middot; <a href="https://www.w3.org/TR/owl2-primer/" target="_blank" rel="noopener">OWL 2 Primer</a></p>')
+    parts.append('<p class="footer"><strong>External links:</strong> <a href="https://tdcc.nl/nes/ontology-engineers/" target="_blank" rel="noopener">TDCC-NES ontology engineers</a> &middot; <a href="https://www.w3.org/OWL/" target="_blank" rel="noopener">W3C OWL</a> &middot; <a href="https://www.w3.org/TR/owl2-primer/" target="_blank" rel="noopener">OWL 2 Primer</a></p>')
     if mermaid:
         # Classic (non-module) script so "Copy Mermaid" works even if the
         # module below fails to load (blocked CDN) or the diagram fails to
