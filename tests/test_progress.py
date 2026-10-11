@@ -16,7 +16,7 @@ import pytest
 from fastapi.responses import HTMLResponse
 from httpx import ASGITransport
 
-from askwol import progress, web
+from askwol import progress, usage, web
 from askwol.models import ValidationReport
 
 IP = "203.0.113.7"
@@ -146,6 +146,89 @@ async def test_a_newer_request_for_the_same_source_is_not_clobbered_by_an_older_
     await older
     assert progress.snapshot(IP, "a.ttl")["state"] == "running"
     await newer
+
+
+# --- shared between worker processes ------------------------------------------
+# Another worker process has none of this process's memory, so these tests wipe
+# it (progress._latest.clear()) to stand in for "a poll answered by a worker
+# that isn't running the job".
+
+
+def test_another_worker_process_can_see_a_running_job():
+    with progress.track(IP, "a.ttl", steps=progress.URL_FLOW):
+        progress.report("checks")
+        progress._latest.clear()
+        assert progress.snapshot(IP, "a.ttl") == {
+            "state": "running", "step": 3, "steps": 5, "label": progress.LABELS["checks"],
+        }
+
+
+def test_another_worker_process_sees_a_finished_job_and_then_nothing(monkeypatch):
+    with progress.track(IP, "a.ttl", steps=progress.UPLOAD_FLOW):
+        pass
+    progress._latest.clear()
+    assert progress.snapshot(IP, "a.ttl") == {"state": "finishing", "steps": 4}
+
+    monkeypatch.setattr(progress, "FINISHED_TTL_SECONDS", -1)
+    assert progress.snapshot(IP, "a.ttl") == {"state": "waiting"}
+
+
+def test_a_dropped_job_is_gone_for_other_worker_processes_too():
+    with pytest.raises(RuntimeError), progress.track(IP, "a.ttl", steps=progress.UPLOAD_FLOW):
+        raise RuntimeError("boom")
+    progress._latest.clear()
+    assert progress.snapshot(IP, "a.ttl") == {"state": "waiting"}
+
+
+def test_other_worker_processes_only_see_the_callers_own_job():
+    with progress.track(IP, "a.ttl", steps=progress.UPLOAD_FLOW):
+        progress._latest.clear()
+        assert progress.snapshot("198.51.100.1", "a.ttl") == {"state": "waiting"}
+        assert progress.snapshot(IP, "b.ttl") == {"state": "waiting"}
+
+
+@pytest.mark.asyncio
+async def test_an_older_request_finishing_does_not_erase_a_newer_ones_shared_state():
+    async def request(hold: float) -> None:
+        with progress.track(IP, "a.ttl", steps=progress.UPLOAD_FLOW):
+            await asyncio.sleep(hold)
+
+    older = asyncio.create_task(request(0.2))
+    await asyncio.sleep(0.05)
+    newer = asyncio.create_task(request(0.6))
+    await older
+    progress._latest.clear()  # as seen from another worker process
+    assert progress.snapshot(IP, "a.ttl")["state"] == "running"
+    await newer
+
+
+def test_the_shared_store_holds_neither_the_ip_nor_the_source_name():
+    with progress.track(IP, "my-secret-ontology.ttl", steps=progress.UPLOAD_FLOW):
+        usage._init()
+        raw = usage._DB_PATH.read_bytes()
+        with usage._connect() as conn:
+            rows = [tuple(r) for r in conn.execute("SELECT * FROM progress_jobs")]
+    assert len(rows) == 1
+    assert IP.encode() not in raw
+    assert b"my-secret-ontology" not in raw
+
+
+def test_progress_still_works_inside_one_process_when_usage_tracking_is_disabled(monkeypatch):
+    monkeypatch.setattr(usage, "_DISABLED", True)
+    with progress.track(IP, "a.ttl", steps=progress.UPLOAD_FLOW):
+        progress.report("reasoner")
+        assert progress.snapshot(IP, "a.ttl")["step"] == 3
+    assert progress.snapshot(IP, "a.ttl") == {"state": "finishing", "steps": 4}
+
+
+def test_stale_jobs_left_by_a_dead_process_are_cleaned_up(monkeypatch):
+    usage._init()
+    key = usage.progress_key(IP, "old.ttl")
+    usage.progress_put(key, "dead-process", "parsing,checks", "parsing", now=0.0)  # last touched in 1970
+    assert usage.progress_get(key) is not None
+    with progress.track(IP, "new.ttl", steps=progress.UPLOAD_FLOW):  # starting any job prunes
+        pass
+    assert usage.progress_get(key) is None
 
 
 # --- the endpoint and the wiring --------------------------------------------

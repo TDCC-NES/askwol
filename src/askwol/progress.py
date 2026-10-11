@@ -11,8 +11,13 @@ shareable result URL (or in a cookie, which askwol avoids). The cost is that
 two people behind one IP validating the very same source at the same moment
 share a progress display, which is harmless.
 
-State is in memory and per process, like the rate limiter. It is best-effort:
-if a job is missing, the page simply falls back to a plain busy indicator.
+State is kept in two places. Each process holds the jobs it is running in memory
+(the fast path, and all there is when usage tracking is disabled), and every
+change is also written to the shared SQLite usage database, so a poll that is
+answered by a different worker process than the one running the job still finds
+it. The database copy is keyed by a hash, never by the raw IP or source. All of
+it is best-effort: if a job cannot be found, the page simply falls back to a
+plain busy indicator.
 """
 
 from __future__ import annotations
@@ -21,8 +26,11 @@ import contextlib
 import contextvars
 import threading
 import time
+import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
+
+from askwol import usage
 
 # The steps the pipeline reports, in order (see pipeline.run_full_validation).
 # A URL submission has an extra first step: fetching the ontology.
@@ -41,6 +49,8 @@ LABELS = {
 # A finished job stays visible briefly so a poll that lands while the report
 # is still being sent reads "finishing" instead of "no such job".
 FINISHED_TTL_SECONDS = 5.0
+# A job nobody has updated for this long was left behind by a process that died.
+STALE_JOB_SECONDS = 3600.0
 MAX_JOBS = 1000
 MAX_SOURCE_LENGTH = 2048
 
@@ -51,6 +61,8 @@ class Job:
     steps: tuple[str, ...]
     phase: str | None
     finished_at: float | None = None
+    owner: str = ""  # identifies this request's row in the shared store
+    store_key: str | None = None  # hashed key of that row, None if there is no store
 
 
 _lock = threading.Lock()
@@ -85,10 +97,15 @@ def track(client_ip: str | None, source: str | None, *, steps: tuple[str, ...]) 
     if key is None:
         yield None
         return
-    job = Job(key=key, steps=steps, phase=steps[0])
+    job = Job(key=key, steps=steps, phase=steps[0], owner=uuid.uuid4().hex)
     with _lock:
         _prune(time.monotonic())
         _latest[key] = job
+    job.store_key = usage.progress_key(*key)
+    if job.store_key:
+        now = time.time()
+        usage.progress_prune(now - 2 * FINISHED_TTL_SECONDS, now - STALE_JOB_SECONDS)
+        usage.progress_put(job.store_key, job.owner, ",".join(steps), steps[0], now)
     token = current.set(job)
     try:
         yield job
@@ -99,10 +116,14 @@ def track(client_ip: str | None, source: str | None, *, steps: tuple[str, ...]) 
         with _lock:
             if _latest.get(key) is job:
                 del _latest[key]
+        if job.store_key:
+            usage.progress_drop(job.store_key, job.owner)
         raise
     finally:
         current.reset(token)
         job.finished_at = time.monotonic()
+        if job.store_key:
+            usage.progress_finish(job.store_key, job.owner, time.time())
 
 
 def report(phase: str) -> None:
@@ -111,23 +132,35 @@ def report(phase: str) -> None:
     job = current.get()
     if job is not None and phase in job.steps:
         job.phase = phase
+        if job.store_key:
+            usage.progress_set_phase(job.store_key, job.owner, phase, time.time())
+
+
+def _describe(steps: tuple[str, ...], phase: str | None, finished: bool) -> dict[str, object]:
+    if finished:
+        return {"state": "finishing", "steps": len(steps)}
+    step = steps.index(phase) + 1 if phase in steps else 1
+    return {"state": "running", "step": step, "steps": len(steps), "label": LABELS.get(steps[step - 1], "")}
 
 
 def snapshot(client_ip: str | None, source: str | None) -> dict[str, object]:
-    """What the browser's poll gets back for its (IP, source) job."""
+    """What the browser's poll gets back for its (IP, source) job. Asks this
+    process first; if it isn't running that job, asks the shared store, since
+    another worker process may be."""
     key = _key(client_ip, source)
+    if key is None:
+        return {"state": "waiting"}
     with _lock:
         _prune(time.monotonic())
-        job = _latest.get(key) if key else None
-    if job is None:
+        job = _latest.get(key)
+    if job is not None:
+        return _describe(job.steps, job.phase, job.finished_at is not None)
+
+    store_key = usage.progress_key(*key)
+    row = usage.progress_get(store_key) if store_key else None
+    if row is None:
         return {"state": "waiting"}
-    steps = len(job.steps)
-    if job.finished_at is not None:
-        return {"state": "finishing", "steps": steps}
-    step = job.steps.index(job.phase) + 1 if job.phase in job.steps else 1
-    return {
-        "state": "running",
-        "step": step,
-        "steps": steps,
-        "label": LABELS.get(job.steps[step - 1], ""),
-    }
+    finished_at = row["finished_at"]
+    if finished_at is not None and time.time() - finished_at > FINISHED_TTL_SECONDS:
+        return {"state": "waiting"}
+    return _describe(tuple(row["steps"].split(",")), row["phase"], finished_at is not None)

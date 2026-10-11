@@ -77,6 +77,17 @@ def _init() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS idx_validation_jobs_started ON validation_jobs(started_at);
                 CREATE INDEX IF NOT EXISTS idx_validation_jobs_outcome ON validation_jobs(outcome);
+
+                -- Live step progress, shared by every worker process (see askwol.progress).
+                -- Keyed by a hash of (client, source); the raw values are never stored.
+                CREATE TABLE IF NOT EXISTS progress_jobs (
+                    key         TEXT PRIMARY KEY,
+                    owner       TEXT NOT NULL,
+                    steps       TEXT NOT NULL,
+                    phase       TEXT,
+                    updated_at  REAL NOT NULL,
+                    finished_at REAL
+                );
                 """
             )
             row = conn.execute(
@@ -379,3 +390,91 @@ def stuck_jobs(older_than_seconds: int = 600) -> list[dict[str, Any]]:
             (f"-{int(older_than_seconds)} seconds",),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+# --- live step progress, shared between worker processes ---------------------
+# Best-effort like the rest of this module: a database problem must never break
+# a validation, it only means the progress display falls back to a plain
+# busy indicator.
+
+
+def progress_key(client_ip: str, source: str) -> str | None:
+    """Opaque key for a (client, source) pair. Salted with the same per-database
+    secret as the visitor hashes, so the raw IP and source name never reach the
+    database. None when tracking is disabled."""
+    if _DISABLED:
+        return None
+    try:
+        _init()
+    except Exception:  # noqa: BLE001 - tracking must never break the app
+        return None
+    return hashlib.sha256(f"{_ip_secret}:{client_ip}\n{source}".encode()).hexdigest()[:32]
+
+
+def progress_put(key: str, owner: str, steps: str, phase: str, now: float) -> None:
+    try:
+        with _connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO progress_jobs(key, owner, steps, phase, updated_at, finished_at) "
+                "VALUES (?, ?, ?, ?, ?, NULL)",
+                (key, owner, steps, phase, now),
+            )
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def progress_set_phase(key: str, owner: str, phase: str, now: float) -> None:
+    try:
+        with _connect() as conn:
+            conn.execute(
+                "UPDATE progress_jobs SET phase = ?, updated_at = ? WHERE key = ? AND owner = ?",
+                (phase, now, key, owner),
+            )
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def progress_finish(key: str, owner: str, now: float) -> None:
+    try:
+        with _connect() as conn:
+            conn.execute(
+                "UPDATE progress_jobs SET finished_at = ? WHERE key = ? AND owner = ?",
+                (now, key, owner),
+            )
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def progress_drop(key: str, owner: str) -> None:
+    """Remove a job, but only if it is still the one `owner` registered (a newer
+    request for the same source may have replaced it)."""
+    try:
+        with _connect() as conn:
+            conn.execute("DELETE FROM progress_jobs WHERE key = ? AND owner = ?", (key, owner))
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def progress_get(key: str) -> dict[str, Any] | None:
+    try:
+        with _connect() as conn:
+            row = conn.execute(
+                "SELECT steps, phase, finished_at FROM progress_jobs WHERE key = ?", (key,)
+            ).fetchone()
+    except Exception:  # noqa: BLE001
+        return None
+    return dict(row) if row else None
+
+
+def progress_prune(finished_before: float, updated_before: float) -> None:
+    """Drop jobs that finished long ago, and ones nobody has touched for ages
+    (left behind by a process that died mid-validation)."""
+    try:
+        with _connect() as conn:
+            conn.execute(
+                "DELETE FROM progress_jobs WHERE (finished_at IS NOT NULL AND finished_at < ?) "
+                "OR updated_at < ?",
+                (finished_before, updated_before),
+            )
+    except Exception:  # noqa: BLE001
+        pass
