@@ -125,7 +125,7 @@ def check_definition_documentation(graph: Graph) -> DefinitionDocumentationRepor
                     term_type=term_type,
                     has_label=has_label,
                     has_comment=has_comment,
-                    status=Status.FAIL,
+                    status=Status.WARN,
                     message=message,
                 )
             )

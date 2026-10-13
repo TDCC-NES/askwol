@@ -5,9 +5,21 @@ from __future__ import annotations
 from rich.console import Console
 from rich.table import Table
 
-from askwol.models import Severity, SeveritySummary, Status, ValidationReport
-from askwol.report_html import CATEGORIES, CHECKS, _CHECK_NUMBERS, _CLUSTER_NUMBERS
-from askwol.severity import SEVERITY_ORDER, SEVERITY_PLURAL_LABELS, severity_of
+from askwol.models import Status, ValidationReport
+from askwol.severity import (
+    RULE_SEVERITY,
+    SEVERITY_ORDER,
+    SEVERITY_STYLES,
+    Finding,
+    Rule,
+    Severity,
+    SeveritySummary,
+    count_label,
+    worst_severity,
+)
+from askwol.templates import CHECK_CATEGORIES, CHECK_NUMBERS, CHECKS, CLUSTER_NUMBERS
+
+CATEGORIES = CHECK_CATEGORIES
 
 
 def report_as_json(report: ValidationReport) -> str:
@@ -17,9 +29,20 @@ def report_as_json(report: ValidationReport) -> str:
 _CHECK_TITLES = {c["report_anchor"]: c["title"].replace("&amp;", "&") for c in CHECKS}
 
 
-def _md_severity(anchor: str, status: Status) -> str:
-    severity = severity_of(anchor, status)
-    return severity.value if severity else status.value
+def _md_severity(rule: Rule) -> str:
+    return RULE_SEVERITY[rule].value
+
+
+def _check_rollup(summary: SeveritySummary) -> list[tuple[Severity, str, int]]:
+    """Count each check's findings separately for each severity."""
+    rollup: list[tuple[Severity, str, int]] = []
+    for severity in SEVERITY_ORDER:
+        for check in CHECKS:
+            anchor = check["report_anchor"]
+            count = sum(f.severity == severity for f in summary.for_check(anchor))
+            if count:
+                rollup.append((severity, anchor, count))
+    return rollup
 
 
 def report_as_markdown(report: ValidationReport) -> str:
@@ -46,28 +69,25 @@ def report_as_markdown(report: ValidationReport) -> str:
     html_ns = [ns for ns in report.namespaces if ns.resolution.status == Status.OK and not ns.resolution.is_valid_rdf]
     fail_ns = [ns for ns in report.namespaces if ns.resolution.status == Status.FAIL]
 
-    ok_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.OK)
-    fail_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.FAIL)
-    warn_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.WARN)
-    skip_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.SKIP)
+    external_terms = report.external_term_checks
+    ok_terms = sum(1 for _, t in external_terms if t.status == Status.OK)
+    fail_terms = sum(1 for _, t in external_terms if t.status == Status.FAIL)
+    warn_terms = sum(1 for _, t in external_terms if t.status == Status.WARN)
+    skip_terms = sum(1 for _, t in external_terms if t.status == Status.SKIP)
 
     w("| | Count |")
     w("|---|---|")
-    w(f"| Namespaces checked | {report.total_namespaces} |")
+    w(f"| Namespaces checked | {sum(ns.resolution.status != Status.SKIP for ns in report.namespaces)} |")
     w(f"| Namespaces with RDF | {len(ok_ns)} |")
     if html_ns:
         w(f"| Namespaces returning HTML (no RDF) | {len(html_ns)} |")
     if fail_ns:
         w(f"| Namespaces unreachable | {len(fail_ns)} |")
-    w(f"| Total terms used | {report.total_terms} |")
+    w(f"| External terms to check | {len(external_terms)} |")
     w(f"| Terms confirmed in vocabulary | {ok_terms} |")
     meta = report.ontology_metadata
     if meta and meta.total_checks:
-        w(f"| Ontology metadata checks OK | {meta.passed_checks}/{meta.total_checks} |")
-        if meta.failed_checks:
-            w(f"| **Required metadata missing** | **{meta.failed_checks}** |")
-        if meta.warning_checks:
-            w(f"| Recommended metadata missing | {meta.warning_checks} |")
+        w(f"| Ontology metadata present | {meta.passed_checks}/{meta.total_checks} |")
     docs = report.definition_docs
     if docs and docs.total_definitions:
         w(f"| Definitions with a label | {docs.with_label}/{docs.total_definitions} |")
@@ -79,7 +99,7 @@ def report_as_markdown(report: ValidationReport) -> str:
             w(f"| **Internal terms referenced but not defined** | **{len(it.undefined)}** |")
     reasoner = report.reasoner
     if reasoner:
-        w(f"| Ontology consistency | {'ok' if reasoner.consistent else 'problem found'} |")
+        w(f"| Contradictions | {'detected' if reasoner.inconsistent_individuals else 'none detected'} |")
         if reasoner.unsatisfiable_classes:
             w(f"| Unsatisfiable classes | {len(reasoner.unsatisfiable_classes)} |")
     if fail_terms:
@@ -91,22 +111,18 @@ def report_as_markdown(report: ValidationReport) -> str:
     w("")
 
     summary = report.severity_summary
-    w(f"> **{'No errors found.' if summary.valid else 'Errors found.'}**  "
-      + "  ".join(
-          f"{_SEVERITY_STYLE[sev][1]} {summary.count(sev)} {SEVERITY_PLURAL_LABELS[sev]}"
-          for sev in SEVERITY_ORDER
-      ))
+    counts = "  ".join(
+        f"{SEVERITY_STYLES[sev].glyph} {count_label(sev, summary.count(sev))}" for sev in SEVERITY_ORDER
+    )
+    w(f"> {counts}")
     w("")
-    w("> Errors are formal logic or modelling problems; warnings are likely mistakes or serious "
-      "interoperability problems; recommendations are publishing best practice. "
-      "Unmet recommendations do not make an ontology invalid.")
-    w("")
-    if summary.findings:
-        w("| Level | Check |")
-        w("|-------|-------|")
-        for f in summary.findings:
-            title = _CHECK_TITLES[f.check]
-            w(f"| {_SEVERITY_STYLE[f.severity][1]} {_SEVERITY_STYLE[f.severity][2].capitalize()} | {title} |")
+    rollup = _check_rollup(summary)
+    if rollup:
+        w("| Level | Check | Findings |")
+        w("|-------|-------|----------|")
+        for severity, anchor, n in rollup:
+            style = SEVERITY_STYLES[severity]
+            w(f"| {style.glyph} {style.label} | {_CHECK_TITLES[anchor]} | {n} |")
         w("")
 
     # Imports
@@ -117,7 +133,9 @@ def report_as_markdown(report: ValidationReport) -> str:
         w("Every `owl:imports` target declared in the ontology header is fetched over HTTP "
           "and parsed as RDF, the same way a reasoner would follow it.")
         w("")
-        if imp.broken:
+        if imp.skipped:
+            w(f"> {len(imp.checks)} declared import(s), resolution skipped")
+        elif imp.broken:
             w(f"> {len(imp.broken)} of {len(imp.checks)} declared import(s) do not resolve")
         elif imp.checks:
             w(f"> {len(imp.checks)} declared import(s), all resolve")
@@ -129,7 +147,8 @@ def report_as_markdown(report: ValidationReport) -> str:
             w("|--------|--------|--------|")
             for c in imp.checks:
                 res = c.resolution
-                status_label = "ok" if res.status == Status.OK else _md_severity("imports", res.status)
+                status_label = ("not checked" if res.status == Status.SKIP else
+                                "ok" if res.status == Status.OK else _md_severity(Rule.IMPORT_UNRESOLVED))
                 bits = []
                 if res.http_status:
                     bits.append(f"HTTP {res.http_status}")
@@ -271,8 +290,9 @@ def report_as_markdown(report: ValidationReport) -> str:
         w("| Prefix | URI | Terms | Verified |")
         w("|--------|-----|-------|----------|")
         for ns in ok_ns:
-            ok = ns.valid_terms
-            total = ns.total_terms
+            terms = report.external_terms_for_namespace(ns)
+            ok = sum(t.status == Status.OK for t in terms)
+            total = len(terms)
             check = "all" if ok == total else f"{ok}/{total}"
             w(f"| `{ns.prefix}` | {ns.uri} | {total} | {check} |")
         w("")
@@ -288,7 +308,7 @@ def report_as_markdown(report: ValidationReport) -> str:
         w("|--------|-----|-------|-------------|")
         for ns in html_ns:
             ct = ns.resolution.content_type or "unknown"
-            w(f"| `{ns.prefix}` | {ns.uri} | {ns.total_terms} | `{ct}` |")
+            w(f"| `{ns.prefix}` | {ns.uri} | {len(report.external_terms_for_namespace(ns))} | `{ct}` |")
         w("")
 
     if fail_ns:
@@ -308,11 +328,9 @@ def report_as_markdown(report: ValidationReport) -> str:
     if report.namespaces:
         w("## External term definitions")
         w("")
-        w("Every term you reuse from an external vocabulary must actually be defined in that vocabulary. "
-          "askwol looks each one up in the resolved namespace; a term that is missing there is usually a "
-          "typo or made-up reuse of an established prefix. A term that exists but is marked deprecated there "
-          "(`owl:deprecated`, `owl:DeprecatedClass`/`owl:DeprecatedProperty`, or a `vs:term_status` of "
-          "\"deprecated\"/\"archaic\") is flagged so you don't build on a term the source vocabulary is phasing out.")
+        w("External terms used as subjects are checked against the retrieved vocabulary. "
+          "Terms not found there and terms marked deprecated are reported. "
+          "Unknown datatypes are reported under Datatypes.")
         w("")
         term_summary_bits = [f"{ok_terms} confirmed"]
         if fail_terms:
@@ -321,13 +339,18 @@ def report_as_markdown(report: ValidationReport) -> str:
             term_summary_bits.append(f"{warn_terms} deprecated upstream")
         if skip_terms:
             term_summary_bits.append(f"{skip_terms} skipped (namespace unavailable)")
-        w(f"> {', '.join(term_summary_bits)} of {report.total_terms} total.")
+        if report.external_terms_unchecked:
+            w("> Not checked (namespaces not resolved).")
+        elif not external_terms:
+            w("> No external terms to check.")
+        else:
+            w(f"> {', '.join(term_summary_bits)} of {len(external_terms)} total.")
         w("")
 
-        failed_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.FAIL]
-        deprecated_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.WARN]
-        skipped_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.SKIP]
-        ok_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.OK]
+        failed_terms_flat = [(ns, t) for ns, t in external_terms if t.status == Status.FAIL]
+        deprecated_terms_flat = [(ns, t) for ns, t in external_terms if t.status == Status.WARN]
+        skipped_terms_flat = [(ns, t) for ns, t in external_terms if t.status == Status.SKIP]
+        ok_terms_flat = [(ns, t) for ns, t in external_terms if t.status == Status.OK]
 
         if failed_terms_flat:
             w("<details>")
@@ -401,11 +424,11 @@ def report_as_markdown(report: ValidationReport) -> str:
         w("<details>")
         w(f"<summary>Show metadata checks ({meta.total_checks})</summary>")
         w("")
-        w("| Property | Level | Status |")
+        w("| Property | Group | Status |")
         w("|----------|-------|--------|")
         for check in meta.checks:
-            status_label = "ok" if check.status == Status.OK else _md_severity("ontology-metadata", check.status) + " (missing)"
-            w(f"| `{check.property}` | {check.severity} | {status_label} |")
+            status_label = "ok" if check.status == Status.OK else _md_severity(Rule.METADATA_MISSING) + " (missing)"
+            w(f"| `{check.property}` | {check.tier} | {status_label} |")
         w("")
         w("</details>")
         w("")
@@ -480,11 +503,14 @@ def report_as_markdown(report: ValidationReport) -> str:
             summary += f" &middot; {len(dr.issues)} to review"
         w(f"<summary>{summary}</summary>")
         w("")
-        w("| Property | Category | Domain | Range | Issue |")
-        w("|----------|----------|--------|-------|-------|")
+        w("| Property | Category | Domain | Range | Findings |")
+        w("|----------|----------|--------|-------|----------|")
         for c in sorted(dr.checks, key=lambda x: (x.category, x.display_name.lower())):
             category = c.category + (f" (deprecated: {c.deprecated})" if c.deprecated else "")
-            msg = (c.message or "").replace("<code>", "`").replace("</code>", "`") if c.status != Status.OK else ""
+            msg = "<br>".join(
+                f"{f.severity.value}: {(f.message or '').replace('<code>', '`').replace('</code>', '`')}"
+                for f in c.findings()
+            )
             w(f"| `{c.display_name}` | {category} | {'yes' if c.has_domain else 'no'} | {'yes' if c.has_range else 'no'} | {msg} |")
         w("")
         w("</details>")
@@ -532,7 +558,8 @@ def report_as_markdown(report: ValidationReport) -> str:
         w("| Term | Type | Label |")
         w("|------|------|-------|")
         for check in sorted(docs.checks, key=lambda c: (c.has_label, c.display_name.lower())):
-            w(f"| `{check.display_name}` | {check.term_type} | {'ok' if check.has_label else 'missing'} |")
+            label = "ok" if check.has_label else f"{_md_severity(Rule.LABEL_MISSING)}: missing"
+            w(f"| `{check.display_name}` | {check.term_type} | {label} |")
         w("")
         w("</details>")
         w("")
@@ -549,7 +576,8 @@ def report_as_markdown(report: ValidationReport) -> str:
         w("| Term | Type | Comment |")
         w("|------|------|---------|")
         for check in sorted(docs.checks, key=lambda c: (c.has_comment, c.display_name.lower())):
-            w(f"| `{check.display_name}` | {check.term_type} | {'ok' if check.has_comment else 'missing'} |")
+            comment = "ok" if check.has_comment else f"{_md_severity(Rule.COMMENT_MISSING)}: missing"
+            w(f"| `{check.display_name}` | {check.term_type} | {comment} |")
         w("")
         w("</details>")
         w("")
@@ -559,12 +587,14 @@ def report_as_markdown(report: ValidationReport) -> str:
     if reasoner and reasoner.checks:
         w("## Reasoner checks")
         w("")
-        w("These checks run on the current ontology only. owl:imports are not followed.")
+        w("Limited OWL RL checks on the current document; imports excluded.")
         w("")
         w("| Check | Status | Detail |")
         w("|-------|--------|--------|")
         for check in reasoner.checks:
-            status_label = "ok" if check.status == Status.OK else _md_severity("reasoner", check.status)
+            severity = worst_severity(reasoner.findings_for_check(check.key))
+            status_label = ("not checked" if check.status == Status.SKIP else
+                            severity.value if severity else "ok")
             w(f"| {check.label} | {status_label} | {check.message or ''} |")
         w("")
 
@@ -595,7 +625,8 @@ def report_as_markdown(report: ValidationReport) -> str:
     elif lt and lt.status == Status.WARN:
         w("## Language tag consistency")
         w("")
-        w("> **Warning:** labels or definitions are present, but none of them carry a language tag (e.g. `\"Person\"@en`).")
+        w(f"> **{SEVERITY_STYLES[RULE_SEVERITY[Rule.LANG_TAG_MISSING]].label}:** "
+          "labels or definitions are present, but none carry a language tag (e.g. `\"Person\"@en`).")
         w("")
 
     # Non-ontology terms
@@ -618,117 +649,93 @@ def report_as_markdown(report: ValidationReport) -> str:
     return "\n".join(lines)
 
 
-def _kind_badge(kind: str, anchor: str | None = None) -> str:
-    if kind in ("fail", "warn") and anchor and severity_of(anchor, Status(kind)):
-        return _status_badge(Status(kind), anchor)
-    return {
-        "ok": "[green]OK[/green]",
-        "fail": "[red]FAIL[/red]",
-        "warn": "[yellow]WARN[/yellow]",
-        "info": "[dim]-[/dim]",
-        "skip": "[dim]SKIP[/dim]",
-    }[kind]
+def _overview_badge(report: ValidationReport, anchor: str, applicable: bool) -> str:
+    """OK, "-" (not applicable), or the badge of the worst finding of the check."""
+    if not applicable:
+        return "[dim]-[/dim]"
+    worst = worst_severity(report.severity_summary.for_check(anchor))
+    return "[green]OK[/green]" if worst is None else _severity_badge(worst)
 
 
-def _overview_line(report: ValidationReport, anchor: str) -> tuple[str, str] | None:
-    """Return (kind, detail) for one check anchor, mirroring the HTML overview.
+def _overview_line(report: ValidationReport, anchor: str) -> tuple[bool, str] | None:
+    """Return (applicable, detail) for one check anchor, mirroring the HTML overview.
 
     Returns None when the check did not run (so it is omitted from the table),
-    matching the behaviour of the web report's summary.
+    matching the behaviour of the web report's summary. The status badge is
+    not decided here: it comes from the check's findings.
     """
     S = Status
     if anchor == "ontology-metadata":
         meta = report.ontology_metadata
         if not (meta and meta.checks):
             return None
-        if meta.failed_checks:
-            kind = "fail"
-        elif meta.warning_checks:
-            kind = "warn"
-        else:
-            kind = "ok"
-        bits = [f"{meta.passed_checks}/{meta.total_checks} present"]
-        if meta.failed_checks:
-            bits.append(f"{meta.failed_checks} required missing")
-        if meta.warning_checks:
-            bits.append(f"{meta.warning_checks} recommended missing")
-        return kind, ", ".join(bits)
+        return True, f"{meta.passed_checks}/{meta.total_checks} present"
     if anchor == "imports":
         imp = report.imports
         if not imp:
             return None
-        if imp.broken:
-            return "fail", f"{len(imp.broken)} of {len(imp.checks)} do not resolve"
         if not imp.checks:
-            return "ok", "no owl:imports declared"
-        return "ok", f"{len(imp.checks)} declared, all resolve"
+            return True, "no owl:imports declared"
+        if imp.skipped:
+            return False, "resolution skipped"
+        return True, f"{len(imp.checks) - len(imp.broken)}/{len(imp.checks)} declared imports resolve"
     if anchor == "iri-strategy":
         iri = report.iri_strategy
         if not iri:
             return None
         if iri.status == S.SKIP:
-            return "info", "skipped"
-        if iri.status == S.WARN:
-            mixed = [ns for ns in iri.namespaces if ns.strategy == "mixed"]
-            hash_n = sum(ns.hash_count for ns in mixed)
-            slash_n = sum(ns.slash_count for ns in mixed)
-            detail = f"mixed: {hash_n} hash + {slash_n} slash"
-            if len(iri.namespaces) > 1:
-                detail += f" in {len(mixed)} of {len(iri.namespaces)} base IRI(s)"
-            return "warn", detail
+            return False, "skipped"
         if len(iri.namespaces) == 1:
             ns = iri.namespaces[0]
+            if ns.strategy == "mixed":
+                return True, f"mixed: {ns.hash_count} hash + {ns.slash_count} slash"
             count = ns.hash_count if ns.strategy == "hash" else ns.slash_count
-            return "ok", f"{ns.strategy} style, {count} term(s)"
-        return "ok", f"{len(iri.namespaces)} base IRIs, each consistent"
+            return True, f"{ns.strategy} style, {count} term(s)"
+        return True, f"{len(iri.namespaces)} base IRIs checked"
     if anchor == "iri-scheme":
         sch = report.iri_scheme
         if not sch:
             return None
         if sch.status == S.SKIP:
-            return "info", "skipped"
-        if sch.status == S.WARN:
-            return "warn", f"{len(sch.conflicts)} host(s) on both http and https"
-        return "ok", f"{sch.total_hosts} host(s), single scheme each"
+            return False, "skipped"
+        return True, f"{sch.total_hosts} host(s) checked"
     if anchor == "license":
         lcns = report.license
         if not lcns:
             return None
-        license_count = len(lcns.checks)
-        recommended_count = len(lcns.recommended_licenses)
-        open_count = len(lcns.open_licenses)
-        non_open_count = len(lcns.non_open_licenses)
-        recommended_str = f'{recommended_count} recommended' if recommended_count else ''
-        open_str = f'{", " if recommended_count else ""}{open_count} open' if open_count else ''
-        non_open_str = f'{", " if recommended_count or open_count else ""}{non_open_count} non-open' if non_open_count else ''
-        plural = "s" if license_count > 1 else ""
-        if lcns.status == S.FAIL:
-            if not license_count:
-                return "fail", "no licence declared"
-            else:
-                return "fail", f"{license_count} licence{plural} declared, {recommended_str}{open_str}{non_open_str}"
-        if lcns.status == S.WARN:
-            return "warn", f"{license_count} licence{plural} declared, {recommended_str}{open_str}{non_open_str}"
-        return "ok", "1 recommended licence declared"
+        if not lcns.license_count:
+            return True, "no licence declared"
+        kinds = [
+            f"{n} {label}" for n, label in (
+                (len(lcns.recommended_licenses), "recommended"),
+                (len(lcns.open_licenses), "open"),
+                (len(lcns.non_open_licenses), "non-open"),
+            ) if n
+        ]
+        plural = "s" if lcns.license_count > 1 else ""
+        return True, f"{lcns.license_count} licence{plural} declared, {', '.join(kinds)}"
     if anchor == "namespaces":
         total = len(report.namespaces)
         if total == 0:
             return None
-        if all(ns.resolution.status == S.SKIP for ns in report.namespaces):
-            return "info", "resolution skipped"
+        if report.namespace_resolution_skipped:
+            return False, "resolution skipped"
         ok = sum(1 for ns in report.namespaces if ns.resolution.status == S.OK)
-        return ("ok" if ok == total else "fail"), f"{ok}/{total} resolved"
+        return True, f"{ok}/{total} resolved"
     if anchor == "unused-prefixes":
         if report.unused_prefixes:
-            return "warn", f"{len(report.unused_prefixes)} declared but unused"
-        return "ok", "none"
+            return True, f"{len(report.unused_prefixes)} declared but unused"
+        return True, "none"
     if anchor == "external-terms":
-        total = sum(len(ns.terms) for ns in report.namespaces)
+        terms = report.external_term_checks
+        total = len(terms)
+        ok = sum(1 for _, t in terms if t.status == S.OK)
+        fail = sum(1 for _, t in terms if t.status == S.FAIL)
+        warn = sum(1 for _, t in terms if t.status == S.WARN)
+        if report.external_terms_unchecked:
+            return False, "not checked (namespaces not resolved)"
         if total == 0:
-            return None
-        ok = sum(1 for ns in report.namespaces for t in ns.terms if t.status == S.OK)
-        fail = sum(1 for ns in report.namespaces for t in ns.terms if t.status == S.FAIL)
-        warn = sum(1 for ns in report.namespaces for t in ns.terms if t.status == S.WARN)
+            return False, "no external terms to check"
         skipped = total - ok - fail - warn
         bits = [f"{ok} confirmed"]
         if fail:
@@ -737,96 +744,66 @@ def _overview_line(report: ValidationReport, anchor: str) -> tuple[str, str] | N
             bits.append(f"{warn} deprecated")
         if skipped:
             bits.append(f"{skipped} skipped")
-        status = "fail" if fail else ("warn" if warn else "ok")
-        return status, ", ".join(bits)
+        return True, ", ".join(bits)
     if anchor == "internal-terms":
         it = report.internal_terms
         if not it:
             return None
         if it.status == S.SKIP:
-            return "info", "not applicable"
-        if it.undefined:
-            return "fail", f"{len(it.undefined)} referenced but never defined"
-        return "ok", f"{it.defined}/{it.total_referenced} defined"
+            return False, "not applicable"
+        return True, f"{it.defined}/{it.total_referenced} defined"
     if anchor == "term-inventory":
         inv = report.term_inventory
         if not inv:
             return None
         if inv.status == S.SKIP:
-            return "info", "no terms in the ontology's own namespace"
-        if inv.naming_issues:
-            return "warn", f"{inv.total_terms} terms, {len(inv.naming_issues)} naming issue(s)"
-        return "ok", f"{inv.total_terms} terms, naming consistent"
+            return False, "no terms in the ontology's own namespace"
+        return True, f"{inv.total_terms} terms"
     if anchor == "domains-ranges":
         dr = report.domains_ranges
         if not dr:
             return None
         if dr.status == S.SKIP:
-            return "info", "no object or datatype properties"
-        if dr.status == S.FAIL:
-            fails = sum(1 for c in dr.issues if c.status == S.FAIL)
-            return "fail", f"{fails} property(ies) with a domain or range problem"
-        if dr.status == S.WARN:
-            return "warn", f"{len(dr.issues)} missing a domain or range"
-        return "ok", f"{dr.total_properties} property(ies), all sound"
+            return False, "no object or datatype properties"
+        return True, f"{dr.total_properties} property(ies) checked"
     if anchor == "datatypes":
         dt = report.datatypes
         if not dt:
             return None
         if dt.status == S.SKIP:
-            return "info", "no datatypes used"
-        if dt.unrecognised:
-            return "fail", f"{len(dt.unrecognised)} unrecognised of {dt.total_datatypes}"
-        return "ok", f"{dt.total_datatypes} used, all recognised"
+            return False, "no datatypes used"
+        return True, f"{dt.total_datatypes} used"
     if anchor == "non-ontology-terms":
         sk = report.non_ontology_terms
         if not sk:
             return None
         if sk.status == S.SKIP:
-            return "info", "not applicable"
+            return False, "not applicable"
         if sk.terms:
-            return "warn", f"{len(sk.terms)} that belong in a separate resource"
-        return "ok", "only schema terms defined"
-    if anchor == "labels":
+            return True, f"{len(sk.terms)} that belong in a separate resource"
+        return True, "only schema terms defined"
+    if anchor in ("labels", "comments"):
         docs = report.definition_docs
         if not docs:
             return None
         if not docs.total_definitions:
-            return "info", "no internal definitions to document"
-        missing = docs.missing_label
-        if missing:
-            return "fail", f"{docs.with_label}/{docs.total_definitions} labelled, {len(missing)} missing"
-        return "ok", f"{docs.total_definitions}/{docs.total_definitions} have a label"
-    if anchor == "comments":
-        docs = report.definition_docs
-        if not docs:
-            return None
-        if not docs.total_definitions:
-            return "info", "no internal definitions to document"
-        missing = docs.missing_comment
-        if missing:
-            return "fail", f"{docs.with_comment}/{docs.total_definitions} commented, {len(missing)} missing"
-        return "ok", f"{docs.total_definitions}/{docs.total_definitions} have a comment"
+            return False, "no internal definitions to document"
+        present = docs.with_label if anchor == "labels" else docs.with_comment
+        noun = "a label" if anchor == "labels" else "a comment"
+        return True, f"{present}/{docs.total_definitions} have {noun}"
     if anchor == "language-tags":
         lt = report.lang_tags
         if not lt or lt.status == Status.SKIP:
-            return "info", "not applicable"
-        if lt.status == Status.WARN and lt.issues:
-            langs = ", ".join(lt.languages_used)
-            return "warn", f"{langs}, {len(lt.issues)} issue(s)"
-        if lt.status == Status.WARN:
-            return "warn", "labels or definitions present but none carry a language tag"
-        langs = ", ".join(lt.languages_used)
-        return "ok", f"{langs}, consistent"
+            return False, "not applicable"
+        return True, ", ".join(lt.languages_used) or "no language tags"
     if anchor == "reasoner":
         reasoner = report.reasoner
         if not reasoner or not reasoner.checks:
             return None
-        ok = reasoner.consistent and not reasoner.unsatisfiable_classes
-        if ok:
-            return "ok", "consistent"
-        return "fail", (
-            f"{len(reasoner.inconsistent_individuals)} inconsistency issue(s), "
+        if not report.severity_summary.for_check("reasoner"):
+            return True, "no contradictions detected"
+        return True, (
+            f"{len(reasoner.inconsistent_individuals)} inconsistent individual(s), "
             f"{len(reasoner.unsatisfiable_classes)} unsatisfiable class(es)"
         )
     return None
@@ -839,27 +816,32 @@ def _print_overview(report: ValidationReport, console: Console) -> None:
     overview.add_column("Status", justify="center")
     overview.add_column("Detail", overflow="fold")
 
+    summary = report.severity_summary
     first = True
     for cat in CATEGORIES:
         rows = []
         for check in CHECKS:
             if check["category"] != cat["key"]:
                 continue
-            line = _overview_line(report, check["report_anchor"])
+            anchor = check["report_anchor"]
+            line = _overview_line(report, anchor)
             if line is None:
                 continue
-            kind, detail = line
+            applicable, detail = line
+            counts = _finding_counts(summary.for_check(anchor))
+            if counts:
+                detail = f"{detail} ({counts})"
             title = check["title"].replace("&amp;", "&")
-            num = _CHECK_NUMBERS.get(check["report_anchor"], "")
+            num = CHECK_NUMBERS.get(anchor, "")
             label = f"  {num} {title}" if num else f"  {title}"
-            rows.append((label, _kind_badge(kind, check["report_anchor"]), detail))
+            rows.append((label, _overview_badge(report, anchor, applicable), detail))
         if not rows:
             continue
         if not first:
             overview.add_section()
         first = False
         label = cat["label"].replace("&amp;", "&")
-        overview.add_row(f"[bold cyan]{_CLUSTER_NUMBERS[cat['key']]}. {label}[/bold cyan]", "", "")
+        overview.add_row(f"[bold cyan]{CLUSTER_NUMBERS[cat['key']]}. {label}[/bold cyan]", "", "")
         for title, badge, detail in rows:
             overview.add_row(title, badge, detail)
 
@@ -891,8 +873,10 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     imp = report.imports
     if imp is not None and imp.checks:
         console.print()
-        if imp.broken:
-            console.print(_flag("imports", Status.FAIL, f"Imports  -  {len(imp.broken)} of {len(imp.checks)} do not resolve"))
+        if imp.skipped:
+            console.print(f"[dim]- Imports  -  {len(imp.checks)} declared, resolution skipped[/dim]")
+        elif imp.broken:
+            console.print(_flag(RULE_SEVERITY[Rule.IMPORT_UNRESOLVED], f"Imports  -  {len(imp.broken)} of {len(imp.checks)} do not resolve"))
         else:
             console.print(f"[green]\u2713 Imports  -  {len(imp.checks)} declared, all resolve[/green]")
         imp_table = Table(title="Imports", show_lines=True)
@@ -910,7 +894,7 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
                 bits.append("valid RDF" if res.is_valid_rdf else "invalid RDF")
             if res.error:
                 bits.append(res.error)
-            imp_table.add_row(c.iri, _status_badge(res.status, "imports"), ", ".join(bits))
+            imp_table.add_row(c.iri, _item_badge(res.status, Rule.IMPORT_UNRESOLVED), ", ".join(bits))
         console.print(imp_table)
 
     # Open licence compliance
@@ -924,25 +908,24 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
         license_table.add_column("Category")
         for c in lcns.checks:
             license_category = "recommended" if c.is_recommended else ("open" if c.is_open else "non-open")
-            license_table.add_row(c.iri, c.name, _status_badge(c.status, "license"), license_category)
+            license_rule = Rule.LICENSE_NOT_OPEN if c.status == Status.FAIL else Rule.LICENSE_NOT_RECOMMENDED
+            license_table.add_row(c.iri, c.name, _item_badge(c.status, license_rule), license_category)
         license_count = len(lcns.checks)
-        if lcns.status == Status.OK:
+        license_worst = worst_severity(lcns.findings())
+        if license_worst is None:
             console.print(f"[green]\u2713 Open licence  -  1 recommended licence declared ({lcns.checks[0].name})[/green]")
+        elif license_count == 0:
+            console.print(_flag(license_worst, "Open licence  -  no licence declared"))
         else:
-            recommended_count = len(lcns.recommended_licenses)
-            open_count = len(lcns.open_licenses)
-            non_open_count = len(lcns.non_open_licenses)
-            recommended_str = f'{recommended_count} recommended' if recommended_count else ''
-            open_str = f'{", " if recommended_count else ""}{open_count} open' if open_count else ''
-            non_open_str = f'{", " if recommended_count or open_count else ""}{non_open_count} non-open' if non_open_count else ''
+            kinds = ", ".join(
+                f"{n} {label}" for n, label in (
+                    (len(lcns.recommended_licenses), "recommended"),
+                    (len(lcns.open_licenses), "open"),
+                    (len(lcns.non_open_licenses), "non-open"),
+                ) if n
+            )
             plural = "s" if license_count > 1 else ""
-            if lcns.status == Status.WARN:
-                console.print(_flag("license", Status.WARN, f"Open licence  -  {license_count} licence{plural} declared, {recommended_str}{open_str}{non_open_str}"))
-            else:
-                if license_count == 0:
-                    console.print(_flag("license", Status.FAIL, "Open licence  -  no licence declared"))
-                else:
-                    console.print(_flag("license", Status.FAIL, f"Open licence  -  {license_count} licence{plural} declared, {recommended_str}{open_str}{non_open_str}"))
+            console.print(_flag(license_worst, f"Open licence  -  {license_count} licence{plural} declared, {kinds}"))
         if license_count > 0:
             console.print()
             console.print(license_table)
@@ -957,7 +940,7 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
             hash_n = sum(ns.hash_count for ns in mixed)
             slash_n = sum(ns.slash_count for ns in mixed)
             suffix = f" in {len(mixed)} of {len(iri.namespaces)} base IRI(s)" if multi else ""
-            console.print(_flag("iri-strategy", Status.WARN, f"IRI strategy  -  mixed: {hash_n} hash + {slash_n} slash{suffix}"))
+            console.print(_flag(RULE_SEVERITY[Rule.IRI_STRATEGY_MIXED], f"IRI strategy  -  mixed: {hash_n} hash + {slash_n} slash{suffix}"))
             for ns in mixed:
                 if ns.hash_examples:
                     console.print(f"  [dim]hash:[/dim] {', '.join(ns.hash_examples)}")
@@ -975,7 +958,7 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     if sch is not None and sch.status != Status.SKIP:
         console.print()
         if sch.status == Status.WARN:
-            console.print(_flag("iri-scheme", Status.WARN, f"IRI scheme  -  {len(sch.conflicts)} host(s) on both http and https"))
+            console.print(_flag(RULE_SEVERITY[Rule.IRI_SCHEME_MIXED], f"IRI scheme  -  {len(sch.conflicts)} host(s) on both http and https"))
             for c in sch.conflicts:
                 console.print(f"  [dim]{c.host}:[/dim] {c.http_count} http, {c.https_count} https")
         else:
@@ -993,7 +976,7 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
 
     for ns in report.namespaces:
         r = ns.resolution
-        status_str = _status_badge(r.status, "namespaces")
+        status_str = _item_badge(r.status, Rule.NAMESPACE_UNRESOLVED)
         http_str = str(r.http_status) if r.http_status else "-"
         rdf_str = "yes" if r.is_valid_rdf else ("no" if r.is_valid_rdf is False else "-")
         ns_table.add_row(ns.prefix or "(default)", ns.uri, http_str, rdf_str, status_str)
@@ -1002,14 +985,15 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     console.print()
 
     # Term validation  -  grouped by status for clarity
-    ok_terms = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.OK]
-    fail_terms = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.FAIL]
-    warn_terms = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.WARN]
-    skip_terms = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.SKIP]
+    terms = report.external_term_checks
+    ok_terms = [(ns, t) for ns, t in terms if t.status == Status.OK]
+    fail_terms = [(ns, t) for ns, t in terms if t.status == Status.FAIL]
+    warn_terms = [(ns, t) for ns, t in terms if t.status == Status.WARN]
+    skip_terms = [(ns, t) for ns, t in terms if t.status == Status.SKIP]
 
     if fail_terms:
-        fail_table = Table(title="[red]Terms NOT found in remote vocabulary[/red]", show_lines=True)
-        fail_table.add_column("Term", style="red bold")
+        fail_table = Table(title="Terms not found in remote vocabulary", show_lines=True)
+        fail_table.add_column("Term")
         fail_table.add_column("Prefix")
         fail_table.add_column("Details")
         for ns, t in fail_terms:
@@ -1022,7 +1006,7 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
                        + ", ".join(sorted({ns.prefix for ns, _ in ok_terms})))
 
     if warn_terms:
-        console.print(_flag("external-terms", Status.WARN, f"{len(warn_terms)} term(s) deprecated upstream:"))
+        console.print(_flag(RULE_SEVERITY[Rule.EXTERNAL_TERM_DEPRECATED], f"{len(warn_terms)} term(s) deprecated upstream:"))
         for ns, t in warn_terms:
             console.print(f"  [dim]{ns.prefix}:[/dim]{t.local_name} ({t.deprecated})")
 
@@ -1033,9 +1017,9 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     it = report.internal_terms
     if it and it.status != Status.SKIP and it.undefined:
         console.print()
-        console.print(_flag("internal-terms", Status.FAIL, f"Internal term definitions  -  {len(it.undefined)} referenced but never defined"))
+        console.print(_flag(RULE_SEVERITY[Rule.INTERNAL_TERM_UNDEFINED], f"Internal term definitions  -  {len(it.undefined)} referenced but never defined"))
         it_table = Table(title="Undefined internal terms", show_lines=True)
-        it_table.add_column("Term", style="red bold")
+        it_table.add_column("Term")
         it_table.add_column("Full IRI")
         for issue in it.undefined:
             it_table.add_row(issue.display_name, issue.term)
@@ -1054,7 +1038,7 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     sk = report.non_ontology_terms
     if sk and sk.status != Status.SKIP and sk.terms:
         console.print()
-        console.print(_flag("non-ontology-terms", Status.WARN, f"Non-ontology terms  -  {len(sk.terms)} skos:Concept instance(s) in the ontology's own namespace"))
+        console.print(_flag(RULE_SEVERITY[Rule.NON_ONTOLOGY_TERM], f"Non-ontology terms  -  {len(sk.terms)} skos:Concept instance(s) in the ontology's own namespace"))
         sk_table = Table(title="Non-ontology terms", show_lines=True)
         sk_table.add_column("Term")
         sk_table.add_column("What it is")
@@ -1066,7 +1050,7 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     # Unused prefixes
     if report.unused_prefixes:
         console.print()
-        console.print(_flag("unused-prefixes", Status.WARN, f"{len(report.unused_prefixes)} unused prefix{'es' if len(report.unused_prefixes) != 1 else ''}:"))
+        console.print(_flag(RULE_SEVERITY[Rule.UNUSED_PREFIX], f"{len(report.unused_prefixes)} unused prefix{'es' if len(report.unused_prefixes) != 1 else ''}:"))
         for up in report.unused_prefixes:
             pfx = up.prefix or "(default)"
             console.print(f"  [dim]{pfx}:[/dim] <{up.uri}>")
@@ -1075,28 +1059,26 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     meta = report.ontology_metadata
     if meta and meta.checks:
         console.print()
-        if meta.failed_checks == 0 and meta.warning_checks == 0:
+        if not meta.missing:
             console.print(f"[green]✓ Ontology metadata complete[/green] ({meta.passed_checks}/{meta.total_checks} checks)")
         else:
-            console.print(_flag("ontology-metadata", Status.WARN, "Ontology metadata") + f" - {meta.passed_checks}/{meta.total_checks} checks OK")
+            console.print(_flag(RULE_SEVERITY[Rule.METADATA_MISSING], "Ontology metadata") + f" - {meta.passed_checks}/{meta.total_checks} present")
             meta_table = Table(title="Ontology metadata checks", show_lines=True)
             meta_table.add_column("Property")
-            meta_table.add_column("Level")
+            meta_table.add_column("Group")
             meta_table.add_column("Status")
             meta_table.add_column("Detail")
-            for check in meta.checks:
-                if check.status == Status.OK:
-                    continue
-                meta_table.add_row(check.property, check.severity, _status_badge(check.status, "ontology-metadata"), check.message or "")
+            for check in meta.missing:
+                meta_table.add_row(check.property, check.tier, _item_badge(check.status, Rule.METADATA_MISSING), check.message or "")
             console.print(meta_table)
 
     # Term inventory naming issues
     inv = report.term_inventory
     if inv and inv.naming_issues:
         console.print()
-        console.print(_flag("term-inventory", Status.WARN, f"Naming conventions  -  {len(inv.naming_issues)} issue{'s' if len(inv.naming_issues) != 1 else ''}"))
+        console.print(_flag(RULE_SEVERITY[Rule.NAMING_CONVENTION], f"Naming conventions  -  {len(inv.naming_issues)} issue{'s' if len(inv.naming_issues) != 1 else ''}"))
         inv_table = Table(title="Term naming issues", show_lines=True)
-        inv_table.add_column("Term", style="yellow bold")
+        inv_table.add_column("Term")
         inv_table.add_column("Category")
         inv_table.add_column("Issue")
         for e in inv.naming_issues:
@@ -1107,24 +1089,25 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     dr = report.domains_ranges
     if dr and dr.issues:
         console.print()
-        console.print(_flag("domains-ranges", dr.status, f"Domains and ranges  -  {len(dr.issues)} to review"))
+        console.print(_flag(worst_severity(dr.findings()), f"Domains and ranges  -  {len(dr.issues)} to review"))
         dr_table = Table(title="Domain and range issues", show_lines=True)
         dr_table.add_column("Property")
         dr_table.add_column("Category")
-        dr_table.add_column("Status", justify="center")
+        dr_table.add_column("Level", justify="center")
         dr_table.add_column("Issue")
         for c in dr.issues:
-            msg = (c.message or "").replace("<code>", "").replace("</code>", "")
-            dr_table.add_row(c.display_name, c.category, _status_badge(c.status, "domains-ranges"), msg)
+            for finding in c.findings():
+                msg = (finding.message or "").replace("<code>", "").replace("</code>", "")
+                dr_table.add_row(c.display_name, c.category, _severity_badge(finding.severity), msg)
         console.print(dr_table)
 
     # Unrecognised datatypes
     dt = report.datatypes
     if dt and dt.unrecognised:
         console.print()
-        console.print(_flag("datatypes", Status.FAIL, f"Datatypes  -  {len(dt.unrecognised)} unrecognised"))
+        console.print(_flag(RULE_SEVERITY[Rule.DATATYPE_UNRECOGNISED], f"Datatypes  -  {len(dt.unrecognised)} unrecognised"))
         dt_table = Table(title="Unrecognised datatypes", show_lines=True)
-        dt_table.add_column("Datatype", style="red bold")
+        dt_table.add_column("Datatype")
         dt_table.add_column("Uses", justify="center")
         dt_table.add_column("Full IRI")
         for u in dt.unrecognised:
@@ -1135,7 +1118,7 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     lt = report.lang_tags
     if lt and lt.status == Status.WARN and lt.issues:
         console.print()
-        console.print(_flag("language-tags", Status.WARN, f"Language tags  -  {len(lt.issues)} consistency issue{'s' if len(lt.issues) != 1 else ''}"))
+        console.print(_flag(RULE_SEVERITY[Rule.LANG_TAG_INCONSISTENT], f"Language tags  -  {len(lt.issues)} consistency issue{'s' if len(lt.issues) != 1 else ''}"))
         if lt.languages_used:
             console.print(f"  Languages used: {', '.join(lt.languages_used)}")
         lang_table = Table(title="Language tag issues", show_lines=True)
@@ -1151,27 +1134,31 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
         console.print(lang_table)
     elif lt and lt.status == Status.WARN:
         console.print()
-        console.print(_flag("language-tags", Status.WARN, "Language tags  -  labels or definitions present but none carry a language tag"))
+        console.print(_flag(RULE_SEVERITY[Rule.LANG_TAG_MISSING], "Language tags  -  labels or definitions present but none carry a language tag"))
 
     # Reasoner checks
     reasoner = report.reasoner
     if reasoner and reasoner.checks:
         console.print()
-        reas_ok = reasoner.consistent and not reasoner.unsatisfiable_classes
+        reas_ok = not reasoner.findings()
         if reas_ok:
-            console.print("[green]\u2713 Reasoner checks  -  consistent[/green]")
+            console.print("[green]\u2713 Reasoner checks  -  no contradictions detected[/green]")
         else:
             console.print(_flag(
-                "reasoner", Status.FAIL,
-                f"Reasoner checks  -  {len(reasoner.inconsistent_individuals)} inconsistency(ies), "
+                worst_severity(reasoner.findings()),
+                f"Reasoner checks  -  {len(reasoner.inconsistent_individuals)} inconsistent individual(s), "
                 f"{len(reasoner.unsatisfiable_classes)} unsatisfiable class(es)",
             ))
         reasoner_table = Table(title="Reasoner checks", show_lines=True)
+        console.print("[dim]Limited OWL RL checks on the current document; imports excluded.[/dim]")
         reasoner_table.add_column("Check")
         reasoner_table.add_column("Status", justify="center")
         reasoner_table.add_column("Detail")
         for check in reasoner.checks:
-            reasoner_table.add_row(check.label, _status_badge(check.status, "reasoner"), check.message or "")
+            level = worst_severity(reasoner.findings_for_check(check.key))
+            badge = ("[dim]-[/dim]" if check.status == Status.SKIP else
+                     _severity_badge(level) if level else "[green]OK[/green]")
+            reasoner_table.add_row(check.label, badge, check.message or "")
         console.print(reasoner_table)
 
     console.print()
@@ -1179,52 +1166,43 @@ def print_report(report: ValidationReport, console: Console | None = None) -> No
     # Summary
     summary = report.severity_summary
     console.print(_severity_summary_line(summary))
-    if not report.has_issues:
-        console.print("[bold green]All checks passed.[/bold green]")
-    console.print("[dim]Unmet recommendations do not make an ontology invalid.[/dim]")
-
     console.print()
 
 
-# (rich style, glyph, label) per severity; the tuple is also used by the
-# Markdown report so both outputs stay in step.
-_SEVERITY_STYLE = {
-    Severity.ERROR: ("red", "\u2717", "ERROR"),
-    Severity.WARNING: ("yellow", "\u26A0", "WARNING"),
-    Severity.RECOMMENDATION: ("blue", "\U0001F4A1", "RECOMMENDATION"),
-}
+def _flag(severity: Severity | None, text: str) -> str:
+    """One-line finding, coloured and iconised by its severity."""
+    if severity is None:
+        return f"[green]\u2713 {text}[/green]"
+    style = SEVERITY_STYLES[severity]
+    return f"[{style.rich}]{style.glyph} {text}[/{style.rich}]"
 
 
-def _flag(anchor: str, status: Status, text: str) -> str:
-    """One-line finding, coloured and iconised by the severity its check assigns."""
-    severity = severity_of(anchor, status)
-    style, glyph, _ = _SEVERITY_STYLE[severity] if severity else ("yellow", "\u26A0", "")
-    return f"[{style}]{glyph} {text}[/{style}]"
+def _finding_counts(findings: list[Finding]) -> str:
+    """``"2 errors, 1 recommendation"`` for the findings of one check."""
+    return ", ".join(
+        count_label(sev, n) for sev in SEVERITY_ORDER if (n := sum(1 for f in findings if f.severity == sev))
+    )
 
 
 def _severity_summary_line(summary: SeveritySummary) -> str:
-    verdict = "[bold green]No errors found.[/bold green]" if summary.valid else (
-        "[bold red]Errors found.[/bold red]"
-    )
-    counts = "  ".join(
-        f"[{_SEVERITY_STYLE[sev][0]}]{_SEVERITY_STYLE[sev][1]} {summary.count(sev)} {SEVERITY_PLURAL_LABELS[sev]}"
-        f"[/{_SEVERITY_STYLE[sev][0]}]"
+    return "  ".join(
+        f"[{SEVERITY_STYLES[sev].rich}]{SEVERITY_STYLES[sev].glyph} {count_label(sev, summary.count(sev))}"
+        f"[/{SEVERITY_STYLES[sev].rich}]"
         for sev in SEVERITY_ORDER
     )
-    return f"{verdict}  {counts}"
 
 
-def _status_badge(status: Status, anchor: str | None = None) -> str:
-    severity = severity_of(anchor, status) if anchor else None
-    if severity is not None:
-        style, glyph, label = _SEVERITY_STYLE[severity]
-        return f"[{style}]{glyph} {label}[/{style}]"
+def _severity_badge(severity: Severity) -> str:
+    style = SEVERITY_STYLES[severity]
+    return f"[{style.rich}]{style.glyph} {style.label.upper()}[/{style.rich}]"
+
+
+def _item_badge(status: Status, rule: Rule) -> str:
+    """Badge for one checked item whose failure would be a finding of ``rule``."""
     match status:
         case Status.OK:
             return "[green]OK[/green]"
-        case Status.FAIL:
-            return "[red]FAIL[/red]"
-        case Status.WARN:
-            return "[yellow]WARN[/yellow]"
         case Status.SKIP:
             return "[dim]SKIP[/dim]"
+        case _:
+            return _severity_badge(RULE_SEVERITY[rule])

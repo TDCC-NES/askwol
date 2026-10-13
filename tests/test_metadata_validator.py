@@ -17,7 +17,7 @@ def _base_graph() -> Graph:
     return g
 
 
-def test_complete_ontology_metadata_passes_required_checks():
+def test_complete_ontology_metadata_has_nothing_missing():
     g = _base_graph()
     ont = EX[""]
     g.add((ont, DCTERMS.title, Literal("Example Ontology", lang="en")))
@@ -31,22 +31,24 @@ def test_complete_ontology_metadata_passes_required_checks():
     report = validate_ontology_metadata(g)
 
     assert report is not None
-    assert report.failed_checks == 0
+    assert [c.key for c in report.missing] == ["modified"]
     assert report.passed_checks >= 5
     assert any(c.key == "title" and c.status == Status.OK for c in report.checks)
 
 
-def test_missing_required_metadata_fails():
+def test_missing_core_metadata_is_reported_as_missing():
     g = _base_graph()
 
     report = validate_ontology_metadata(g)
 
-    assert report.failed_checks >= 4
-    assert any(c.key == "title" and c.status == Status.FAIL for c in report.checks)
-    assert any(c.key == "creator" and c.status == Status.FAIL for c in report.checks)
+    core_missing = [c for c in report.missing if c.tier == "core"]
+    assert len(core_missing) >= 4
+    assert any(c.key == "title" and c.status == Status.WARN for c in report.checks)
+    assert any(c.key == "creator" and c.status == Status.WARN for c in report.checks)
+    assert len(report.findings()) == len(report.missing)
 
 
-def test_missing_recommended_metadata_warns_not_fails():
+def test_missing_additional_metadata_is_reported_as_missing():
     g = _base_graph()
     ont = EX[""]
     g.add((ont, DCTERMS.title, Literal("Example Ontology", lang="en")))
@@ -57,18 +59,18 @@ def test_missing_recommended_metadata_warns_not_fails():
 
     report = validate_ontology_metadata(g)
 
-    assert any(c.key == "created" and c.status == Status.WARN for c in report.checks)
-    assert any(c.key == "publisher" and c.status == Status.WARN for c in report.checks)
+    assert any(c.key == "created" and c.status == Status.WARN and c.tier == "additional" for c in report.checks)
+    assert any(c.key == "publisher" and c.status == Status.WARN and c.tier == "additional" for c in report.checks)
 
 
 def test_missing_ontology_declaration_is_reported():
     g = Graph()
     report = validate_ontology_metadata(g)
 
-    assert any(c.key == "ontology_declaration" and c.status == Status.FAIL for c in report.checks)
+    assert any(c.key == "ontology_declaration" and c.status == Status.WARN for c in report.checks)
 
 
-def test_legacy_dublin_core_elements_satisfy_required_checks():
+def test_legacy_dublin_core_elements_satisfy_core_checks():
     """Pre-2010 ontologies (FOAF, OWL-Time, Dublin Core itself) often use the
     legacy dc: (Elements 1.1) properties instead of dcterms:. These should be
     accepted as equivalents, not hard-fail the check (issue #4)."""
@@ -86,11 +88,11 @@ def test_legacy_dublin_core_elements_satisfy_required_checks():
     assert any(c.key == "creator" and c.status == Status.OK for c in report.checks)
 
 
-def test_legacy_dc_date_and_publisher_satisfy_recommended_checks():
+def test_legacy_dc_date_and_publisher_satisfy_additional_checks():
     """Dublin Core Elements 1.1 has one generic dc:date property, with no
     separate created-and-modified split - it should count as an alternative for
-    both recommended date checks. dc:publisher is likewise a direct
-    equivalent for the recommended publisher check."""
+    both additional date checks. dc:publisher is likewise a direct
+    equivalent for the additional publisher check."""
     g = _base_graph()
     ont = EX[""]
     g.add((ont, DC.date, Literal("2026-04-20", datatype=XSD.date)))
@@ -111,8 +113,8 @@ def test_markdown_report_includes_metadata_summary():
                 key="title",
                 label="Title",
                 property="dcterms:title",
-                severity="required",
-                status=Status.FAIL,
+                tier="core",
+                status=Status.WARN,
                 message="Add a title.",
             )
         ]

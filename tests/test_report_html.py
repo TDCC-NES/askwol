@@ -40,6 +40,7 @@ from askwol.models import (
     ValidationReport,
 )
 from askwol.report_html import CHECKS, render_report
+from askwol.templates import CHECK_NUMBERS, GUIDE_HTML, GUIDE_SECTIONS
 
 
 def test_render_minimal_report_contains_all_section_anchors():
@@ -49,7 +50,7 @@ def test_render_minimal_report_contains_all_section_anchors():
             key="title",
             label="Title",
             property="http://purl.org/dc/terms/title",
-            severity="required",
+            tier="core",
             status=Status.OK,
         )],
     )
@@ -125,7 +126,7 @@ def test_render_minimal_report_contains_all_section_anchors():
     report.non_ontology_terms = NonOntologyTermsReport(status=Status.OK)
     report.reasoner = ReasonerReport(
         consistent=True,
-        checks=[ReasonerCheck(key="consistency", label="Consistency", status=Status.OK)],
+        checks=[ReasonerCheck(key="ontology_consistency", label="Logical findings", status=Status.OK)],
     )
 
     html = render_report(report)
@@ -225,3 +226,23 @@ def test_render_unused_prefixes_section():
 
     assert 'id="unused-prefixes"' in html
     assert "foaf" in html
+
+
+def test_guide_markup_and_compact_severity_wording():
+    assert GUIDE_HTML.count("<strong>") == GUIDE_HTML.count("</strong>")
+    assert "never makes" not in GUIDE_HTML
+    assert "Unmet recommendations" not in GUIDE_HTML
+
+
+def test_guide_explains_check_scope_without_claiming_complete_validation():
+    sections = {section["anchor"]: section["body"] for section in GUIDE_SECTIONS}
+    assert "does not require an import" in sections["imports"]
+    assert "does not establish consistency" in sections["reasoner"]
+    assert "unequal data values" in sections["reasoner"]
+    assert "does not establish OWL 2 DL conformance" in sections["datatypes"]
+
+
+def test_shared_check_numbers_match_guide_headings():
+    for check in CHECKS:
+        number = CHECK_NUMBERS[check["report_anchor"]]
+        assert f'id="{check["guide_anchor"]}">{number} ' in GUIDE_HTML

@@ -1,169 +1,211 @@
-"""Severity levels for askwol findings.
+"""Severity levels, finding rules, and the presentation shared by all reports.
 
-A check's ``Status`` says *what happened* (ok, fail, warn, skip); a ``Severity``
-says *how much it matters*:
+A ``Status`` says what a single check did (ok, warn, fail, skip). A
+``Severity`` says how much a *finding* matters:
 
-- ``error``: a formal logic or modelling problem. The ontology is invalid.
+- ``error``: a formal logic or OWL 2 DL problem.
 - ``warning``: a likely mistake or a serious interoperability problem.
-- ``recommendation``: ontology publishing best practice. Unmet recommendations
-  never make an ontology invalid.
+- ``recommendation``: ontology publishing best practice.
 
-``Status`` is kept as-is so the JSON API stays compatible; this module is the one
-place that decides which severity a non-OK status carries for each check.
+Every finding is created from a ``Rule``. ``RULE_SEVERITY`` is the single place
+that says how severe each rule is (the same idea as ROBOT's report profile).
+This module deliberately imports nothing from ``askwol.models`` so that the
+models can build findings without a circular import.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from enum import Enum
 
-from askwol.models import CheckFinding, Severity, SeveritySummary, Status
+from pydantic import BaseModel, Field
 
-if TYPE_CHECKING:
-    from askwol.models import ValidationReport
+
+class Severity(str, Enum):
+    ERROR = "error"
+    WARNING = "warning"
+    RECOMMENDATION = "recommendation"
 
 
 # Display order, most severe first.
 SEVERITY_ORDER: tuple[Severity, ...] = (Severity.ERROR, Severity.WARNING, Severity.RECOMMENDATION)
 
-SEVERITY_LABELS: dict[Severity, str] = {
-    Severity.ERROR: "Error",
-    Severity.WARNING: "Warning",
-    Severity.RECOMMENDATION: "Recommendation",
-}
 
-SEVERITY_PLURAL_LABELS: dict[Severity, str] = {
-    Severity.ERROR: "errors",
-    Severity.WARNING: "warnings",
-    Severity.RECOMMENDATION: "recommendations",
-}
+class Rule(str, Enum):
+    """One kind of finding. The part before the dot is the check's report anchor."""
 
-# Keyed by check anchor (see templates.CHECKS), then by the non-OK status the
-# check can report.
+    PARSE_ERROR = "parse.error"
+    METADATA_MISSING = "ontology-metadata.missing"
+    IMPORT_UNRESOLVED = "imports.unresolved"
+    IRI_STRATEGY_MIXED = "iri-strategy.mixed"
+    IRI_SCHEME_MIXED = "iri-scheme.mixed"
+    LICENSE_MISSING = "license.missing"
+    LICENSE_NOT_OPEN = "license.not-open"
+    LICENSE_NOT_RECOMMENDED = "license.not-recommended"
+    LICENSE_MULTIPLE = "license.multiple"
+    NAMESPACE_UNRESOLVED = "namespaces.unresolved"
+    UNUSED_PREFIX = "unused-prefixes.unused"
+    EXTERNAL_TERM_NOT_FOUND = "external-terms.not-found"
+    EXTERNAL_TERM_DEPRECATED = "external-terms.deprecated"
+    INTERNAL_TERM_UNDEFINED = "internal-terms.undefined"
+    NAMING_CONVENTION = "term-inventory.naming"
+    DOMAIN_RANGE_MISSING = "domains-ranges.missing"
+    DOMAIN_RANGE_MISMATCH = "domains-ranges.mismatch"
+    DATATYPE_UNRECOGNISED = "datatypes.unrecognised"
+    NON_ONTOLOGY_TERM = "non-ontology-terms.concept"
+    LABEL_MISSING = "labels.missing"
+    COMMENT_MISSING = "comments.missing"
+    LANG_TAG_INCONSISTENT = "language-tags.inconsistent"
+    LANG_TAG_MISSING = "language-tags.missing"
+    INCONSISTENT_INDIVIDUAL = "reasoner.inconsistent-individual"
+    UNSATISFIABLE_CLASS = "reasoner.unsatisfiable-class"
+
+    @property
+    def check(self) -> str:
+        return self.value.split(".", 1)[0]
+
+
 _E, _W, _R = Severity.ERROR, Severity.WARNING, Severity.RECOMMENDATION
-CHECK_SEVERITY: dict[str, dict[Status, Severity]] = {
-    "ontology-metadata": {Status.FAIL: _R, Status.WARN: _R},
-    "imports": {Status.FAIL: _W},
-    "iri-strategy": {Status.WARN: _W},
-    "iri-scheme": {Status.WARN: _W},
-    "license": {Status.FAIL: _R, Status.WARN: _R},
-    "namespaces": {Status.FAIL: _W},
-    "unused-prefixes": {Status.WARN: _R},
-    "external-terms": {Status.FAIL: _E, Status.WARN: _W},
-    "internal-terms": {Status.FAIL: _W},
-    "term-inventory": {Status.WARN: _R},
-    "domains-ranges": {Status.FAIL: _E, Status.WARN: _R},
-    "datatypes": {Status.FAIL: _E},
-    "non-ontology-terms": {Status.WARN: _R},
-    "labels": {Status.FAIL: _R},
-    "comments": {Status.FAIL: _R},
-    "language-tags": {Status.WARN: _R},
-    "reasoner": {Status.FAIL: _E, Status.WARN: _E},  # unsatisfiable classes are WARN but still a logic error
+
+# The classification. Keep the SHACL shapes in askwol/shapes in step with the
+# rules they implement (tests/test_severity.py fails if they drift apart).
+RULE_SEVERITY: dict[Rule, Severity] = {
+    Rule.PARSE_ERROR: _E,
+    Rule.METADATA_MISSING: _R,
+    Rule.IMPORT_UNRESOLVED: _W,
+    Rule.IRI_STRATEGY_MIXED: _W,
+    Rule.IRI_SCHEME_MIXED: _W,
+    Rule.LICENSE_MISSING: _R,
+    Rule.LICENSE_NOT_OPEN: _R,
+    Rule.LICENSE_NOT_RECOMMENDED: _R,
+    Rule.LICENSE_MULTIPLE: _R,
+    Rule.NAMESPACE_UNRESOLVED: _W,
+    Rule.UNUSED_PREFIX: _R,
+    Rule.EXTERNAL_TERM_NOT_FOUND: _W,
+    Rule.EXTERNAL_TERM_DEPRECATED: _W,
+    Rule.INTERNAL_TERM_UNDEFINED: _W,
+    Rule.NAMING_CONVENTION: _R,
+    Rule.DOMAIN_RANGE_MISSING: _R,
+    Rule.DOMAIN_RANGE_MISMATCH: _E,
+    Rule.DATATYPE_UNRECOGNISED: _E,
+    Rule.NON_ONTOLOGY_TERM: _R,
+    Rule.LABEL_MISSING: _R,
+    Rule.COMMENT_MISSING: _R,
+    Rule.LANG_TAG_INCONSISTENT: _R,
+    Rule.LANG_TAG_MISSING: _R,
+    Rule.INCONSISTENT_INDIVIDUAL: _E,
+    Rule.UNSATISFIABLE_CLASS: _E,
 }
 
 
-def severity_of(anchor: str, status: Status | str) -> Severity | None:
-    """Severity of a result for a check, or None when it is OK/skipped."""
-    return CHECK_SEVERITY.get(anchor, {}).get(Status(status))
+class Finding(BaseModel):
+    """One thing a check found, with the severity its rule assigns."""
+
+    rule: Rule
+    check: str
+    severity: Severity
+    subject: str | None = None
+    message: str | None = None
+
+    @classmethod
+    def of(cls, rule: Rule, subject: str | None = None, message: str | None = None) -> Finding:
+        return cls(
+            rule=rule,
+            check=rule.check,
+            severity=RULE_SEVERITY[rule],
+            subject=subject,
+            message=message,
+        )
 
 
-def check_status(report: ValidationReport, anchor: str) -> Status | None:
-    """Overall status of one check, or None when it did not run."""
-    S = Status
-    if anchor == "ontology-metadata":
-        meta = report.ontology_metadata
-        if not (meta and meta.checks):
-            return None
-        if meta.failed_checks:
-            return S.FAIL
-        return S.WARN if meta.warning_checks else S.OK
-    if anchor == "imports":
-        imp = report.imports
-        if imp is None:
-            return None
-        return S.FAIL if imp.broken else S.OK
-    if anchor == "iri-strategy":
-        return report.iri_strategy.status if report.iri_strategy else None
-    if anchor == "iri-scheme":
-        return report.iri_scheme.status if report.iri_scheme else None
-    if anchor == "license":
-        return S(report.license.status) if report.license else None
-    if anchor == "namespaces":
-        if not report.namespaces:
-            return None
-        statuses = {ns.resolution.status for ns in report.namespaces}
-        if S.FAIL in statuses:
-            return S.FAIL
-        return S.SKIP if statuses == {S.SKIP} else S.OK
-    if anchor == "unused-prefixes":
-        return S.WARN if report.unused_prefixes else S.OK
-    if anchor == "external-terms":
-        term_statuses = {t.status for ns in report.namespaces for t in ns.terms}
-        if not term_statuses:
-            return None
-        if S.FAIL in term_statuses:
-            return S.FAIL
-        return S.WARN if S.WARN in term_statuses else S.OK
-    if anchor == "internal-terms":
-        it = report.internal_terms
-        if not it:
-            return None
-        if it.status == S.SKIP:
-            return S.SKIP
-        return S.FAIL if it.undefined else S.OK
-    if anchor == "term-inventory":
-        inv = report.term_inventory
-        if not inv:
-            return None
-        if inv.status == S.SKIP:
-            return S.SKIP
-        return S.WARN if inv.naming_issues else S.OK
-    if anchor == "domains-ranges":
-        return report.domains_ranges.status if report.domains_ranges else None
-    if anchor == "datatypes":
-        dt = report.datatypes
-        if not dt:
-            return None
-        if dt.status == S.SKIP:
-            return S.SKIP
-        return S.FAIL if dt.unrecognised else S.OK
-    if anchor == "non-ontology-terms":
-        sk = report.non_ontology_terms
-        if not sk:
-            return None
-        if sk.status == S.SKIP:
-            return S.SKIP
-        return S.WARN if sk.terms else S.OK
-    if anchor in ("labels", "comments"):
-        docs = report.definition_docs
-        if not (docs and docs.total_definitions):
-            return None
-        missing = docs.missing_label if anchor == "labels" else docs.missing_comment
-        return S.FAIL if missing else S.OK
-    if anchor == "language-tags":
-        return report.lang_tags.status if report.lang_tags else None
-    if anchor == "reasoner":
-        reasoner = report.reasoner
-        if not reasoner:
-            return None
-        return S.OK if reasoner.consistent and not reasoner.unsatisfiable_classes else S.FAIL
-    return None
+def worst_severity(findings: list[Finding]) -> Severity | None:
+    """The most severe level among ``findings``, or None when there are none."""
+    present = {f.severity for f in findings}
+    return next((sev for sev in SEVERITY_ORDER if sev in present), None)
 
 
-def summarise(report: ValidationReport) -> SeveritySummary:
-    """Roll a report up by severity. Parse errors count as errors."""
-    findings: list[CheckFinding] = []
-    for anchor in CHECK_SEVERITY:
-        status = check_status(report, anchor)
-        severity = severity_of(anchor, status) if status else None
-        if severity is not None:
-            findings.append(CheckFinding(check=anchor, status=status, severity=severity))
+class SeveritySummary(BaseModel):
+    """Counts of individual findings per severity, plus the findings themselves."""
 
-    findings.sort(key=lambda f: SEVERITY_ORDER.index(f.severity))
-    errors = sum(1 for f in findings if f.severity == Severity.ERROR) + len(report.parse_errors)
+    has_errors: bool = False
+    errors: int = 0
+    warnings: int = 0
+    recommendations: int = 0
+    findings: list[Finding] = Field(default_factory=list)
+
+    def count(self, severity: Severity) -> int:
+        return {
+            Severity.ERROR: self.errors,
+            Severity.WARNING: self.warnings,
+            Severity.RECOMMENDATION: self.recommendations,
+        }[severity]
+
+    def for_check(self, check: str) -> list[Finding]:
+        return [f for f in self.findings if f.check == check]
+
+
+def summarise(findings: list[Finding]) -> SeveritySummary:
+    """Roll findings up by severity, most severe first (stable within a level)."""
+    ordered = sorted(findings, key=lambda f: SEVERITY_ORDER.index(f.severity))
+    counts = {sev: sum(1 for f in ordered if f.severity == sev) for sev in SEVERITY_ORDER}
     return SeveritySummary(
-        valid=errors == 0,
-        errors=errors,
-        warnings=sum(1 for f in findings if f.severity == Severity.WARNING),
-        recommendations=sum(1 for f in findings if f.severity == Severity.RECOMMENDATION),
-        findings=findings,
+        has_errors=counts[Severity.ERROR] > 0,
+        errors=counts[Severity.ERROR],
+        warnings=counts[Severity.WARNING],
+        recommendations=counts[Severity.RECOMMENDATION],
+        findings=ordered,
     )
+
+
+@dataclass(frozen=True)
+class SeverityStyle:
+    """How a severity is named and drawn, shared by the HTML, CLI and Markdown reports."""
+
+    label: str
+    singular: str
+    plural: str
+    glyph: str
+    color: str  # hex, used by the HTML report
+    rich: str  # style name, used by the terminal report
+    description: str
+
+    @property
+    def html_glyph(self) -> str:
+        return f"&#x{ord(self.glyph):X};"
+
+
+SEVERITY_STYLES: dict[Severity, SeverityStyle] = {
+    Severity.ERROR: SeverityStyle(
+        label="Error",
+        singular="error",
+        plural="errors",
+        glyph="\u2717",
+        color="#c62828",
+        rich="red",
+        description="a formal logic or OWL 2 DL problem.",
+    ),
+    Severity.WARNING: SeverityStyle(
+        label="Warning",
+        singular="warning",
+        plural="warnings",
+        glyph="\u26A0",
+        color="#e6a700",
+        rich="yellow",
+        description="a likely mistake or a serious interoperability problem.",
+    ),
+    Severity.RECOMMENDATION: SeverityStyle(
+        label="Recommendation",
+        singular="recommendation",
+        plural="recommendations",
+        glyph="\U0001F4A1",
+        color="#1e6fb5",
+        rich="blue",
+        description="ontology publishing best practice.",
+    ),
+}
+
+
+def count_label(severity: Severity, n: int) -> str:
+    """``"1 error"``, ``"3 warnings"``."""
+    style = SEVERITY_STYLES[severity]
+    return f"{n} {style.singular if n == 1 else style.plural}"

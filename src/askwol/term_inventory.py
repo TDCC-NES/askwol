@@ -272,6 +272,7 @@ def check_domains_ranges(graph: Graph) -> DomainRangeReport:
         if marker:
             status = Status.OK
             message = "Deprecated; domain and range are not checked."
+            problems, missing = [], []
         elif problems:
             status = Status.FAIL
             message = " ".join(problems)
@@ -291,6 +292,8 @@ def check_domains_ranges(graph: Graph) -> DomainRangeReport:
                 has_range=has_range,
                 status=status,
                 message=message,
+                mismatches=problems,
+                omissions=missing,
                 deprecated=marker,
             )
         )

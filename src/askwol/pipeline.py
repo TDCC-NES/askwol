@@ -14,7 +14,7 @@ from typing import Callable
 
 from askwol.cache import OntologyCache
 from askwol.definition_docs import check_definition_documentation
-from askwol.imports_check import check_imports
+from askwol.imports_check import check_imports, skipped_imports
 from askwol.internal_terms import check_internal_terms
 from askwol.iri_scheme import check_iri_scheme
 from askwol.iri_strategy import check_iri_strategy
@@ -139,6 +139,7 @@ async def run_full_validation(
     report.reasoner = run_reasoner_checks(parsed.graph)
 
     if skip_resolution:
+        report.imports = skipped_imports(parsed.graph)
         for prefix, uri in parsed.namespaces.items():
             report.namespaces.append(
                 NamespaceReport(prefix=prefix, uri=uri, resolution=_skip_check(prefix, uri))
