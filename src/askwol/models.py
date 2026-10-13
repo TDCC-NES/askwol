@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class Status(str, Enum):
@@ -12,6 +12,39 @@ class Status(str, Enum):
     FAIL = "fail"
     WARN = "warn"
     SKIP = "skip"
+
+
+class Severity(str, Enum):
+    """How much a non-OK result matters. See askwol.severity for the mapping."""
+
+    ERROR = "error"
+    WARNING = "warning"
+    RECOMMENDATION = "recommendation"
+
+
+class CheckFinding(BaseModel):
+    """One check that did not come out clean, with its severity."""
+
+    check: str
+    status: Status
+    severity: Severity
+
+
+class SeveritySummary(BaseModel):
+    """Per-severity roll-up of a report. ``valid`` is False only on errors."""
+
+    valid: bool = True
+    errors: int = 0
+    warnings: int = 0
+    recommendations: int = 0
+    findings: list[CheckFinding] = Field(default_factory=list)
+
+    def count(self, severity: Severity) -> int:
+        return {
+            Severity.ERROR: self.errors,
+            Severity.WARNING: self.warnings,
+            Severity.RECOMMENDATION: self.recommendations,
+        }[severity]
 
 
 class NamespaceCheck(BaseModel):
@@ -507,6 +540,19 @@ class ValidationReport(BaseModel):
     iri_scheme: IRISchemeReport | None = None
     license: LicenseReport | None = None
     reasoner: ReasonerReport | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def severity_summary(self) -> SeveritySummary:
+        """Counts of errors, warnings and recommendations across all checks."""
+        from askwol.severity import summarise  # severity imports this module
+
+        return summarise(self)
+
+    @property
+    def is_valid(self) -> bool:
+        """False only when there are errors; warnings and recommendations don't count."""
+        return self.severity_summary.valid
 
     @property
     def total_namespaces(self) -> int:

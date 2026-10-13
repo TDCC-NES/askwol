@@ -499,10 +499,10 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <a href="#license">Open licence</a> below.</p>
   <p><span class="tag practice">TDCC guideline</span> Neither spec says any
   of these properties is mandatory on an ontology header. The
-  <strong>Required</strong> / <strong>Recommended</strong> split below, and
-  askwol&rsquo;s choice to fail on the first group and only warn on the
-  second, is this guide&rsquo;s own editorial judgement of what a
-  well-published ontology needs.</p>
+  <strong>Required</strong> / <strong>Recommended</strong> split below is
+  this guide&rsquo;s own editorial judgement of what a well-published
+  ontology needs. askwol reports a missing property from either group as a
+  <strong>recommendation</strong>: it never makes your ontology invalid.</p>
   <p>askwol evaluates <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/ontology_metadata.ttl" target="_blank" rel="noopener">SHACL shapes for the ontology header</a> and checks these properties:</p>
   <ul>
     <li><strong>Required:</strong> <code>rdf:type owl:Ontology</code>,
@@ -744,7 +744,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p>Declare it with <code>dcterms:license</code> in the ontology header:</p>
   <pre>&lt;https://example.org/my-ontology&gt; a owl:Ontology ;
     dcterms:license &lt;https://creativecommons.org/publicdomain/zero/1.0/&gt; .</pre>
-  <div class="tip">askwol checks each declared licence against the Open Definition&rsquo;s <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of conformant licences</a>: a missing or non-open licence is an error; an open but not-recommended licence, or more than one declared licence (even if each is fine on its own), is a warning.</div>
+  <div class="tip">askwol checks each declared licence against the Open Definition&rsquo;s <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of conformant licences</a>: a missing or non-open licence, an open but not-recommended licence, or more than one declared licence (even if each is fine on its own) is reported as a recommendation.</div>
 """,
     },
     {
@@ -903,7 +903,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   naming a class <code>person</code> or a property <code>HasName</code>.
   askwol checks it anyway, because consistent casing is one of the fastest
   ways to tell a class from a property at a glance. A mismatch is reported
-  as a warning, not a failure: it&rsquo;s worth fixing, but it won&rsquo;t
+  as a recommendation, not an error: it&rsquo;s worth fixing, but it won&rsquo;t
   block publication.</p>
   <ul>
     <li><strong>Classes start with an uppercase letter</strong> and are usually
@@ -1162,7 +1162,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <a href="/#reasoner">Reasoner checks</a> section of the report:</p>
   <ul>
     <li><strong>Ontology consistency</strong>: the ontology as a whole
-    has a possible model. This is the overall verdict; it fails when at
+    has a possible model. This is the overall verdict; it is reported as an error when at
     least one individual is inconsistent.</li>
     <li><strong>Inconsistent individuals</strong>: specific named
     individuals that violate a class restriction (e.g. a <code>Person</code>
@@ -1306,7 +1306,7 @@ _CLUSTER_NUMBERS = {c["key"]: i + 1 for i, c in enumerate(CHECK_CATEGORIES)}
 # API docs, which already speak Markdown.
 CHECKS: list[dict[str, str]] = [
     {"report_anchor": "ontology-metadata", "title": "Ontology metadata", "guide_anchor": "metadata", "category": "basics",
-     "description": "a SHACL check on the ontology header: title, description, creator, and version are required; created and modified dates and publisher are recommended."},
+     "description": "a SHACL check on the ontology header: title, description, creator, and version are the core properties; created and modified dates and publisher are additional. Missing properties are reported as recommendations."},
     {"report_anchor": "imports", "title": "Imports", "guide_anchor": "imports", "category": "basics",
      "description": "every `owl:imports` target declared in the ontology header is fetched over HTTP and parsed as RDF, the same way a reasoner would follow it."},
     {"report_anchor": "iri-strategy", "title": "IRI strategy", "guide_anchor": "iri-strategy", "category": "basics",
@@ -1314,7 +1314,7 @@ CHECKS: list[dict[str, str]] = [
     {"report_anchor": "iri-scheme", "title": "IRI scheme", "guide_anchor": "https-http", "category": "basics",
      "description": "each namespace (the base IRI, not just the host) should be referenced under a single URI scheme. `http://example.org/X` and `https://example.org/X` are different IRIs."},
     {"report_anchor": "license", "title": "Open licence", "guide_anchor": "license", "category": "basics",
-     "description": "the declared `dcterms:license` (or `schema:license`) must be an open licence per the Open Definition; CC0 and CC BY are recommended, other open licences (e.g. CC BY-SA, ODC-By, ODbL) pass with a warning, and a missing or non-open licence fails."},
+     "description": "the declared `dcterms:license` (or `schema:license`) should be an open licence per the Open Definition; CC0 and CC BY are the recommended choices, and a missing, non-open or merely open-but-not-recommended licence is reported as a recommendation."},
     {"report_anchor": "namespaces", "title": "Namespaces", "guide_anchor": "resolvable", "category": "reuse",
      "description": "fetches each declared namespace URI, checks HTTP status, and tries to parse it as RDF (Turtle, RDF/XML, JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF links."},
     {"report_anchor": "unused-prefixes", "title": "Unused prefixes", "guide_anchor": "prefixes", "category": "reuse",
@@ -1443,6 +1443,11 @@ def render_checks_api_description() -> str:
     OpenAPI description."""
     intro = "Upload an OWL ontology and get a full validation report as JSON.\n\nThe report includes:\n\n"
     outro = (
+        "\n\n`severity_summary` rolls the findings up by severity: `error` (a formal "
+        "logic or modelling problem; `valid` is false), `warning` (a likely mistake "
+        "or serious interoperability problem) and `recommendation` (publishing best "
+        "practice; never makes the ontology invalid). The per-check `status` values "
+        "(`ok`, `warn`, `fail`, `skip`) describe the outcome, not its severity."
         "\n\nOnly terms that appear as subjects in triples are validated "
         "against remote vocabularies. Terms used only as predicates or "
         "objects are treated as well-known vocabulary."
@@ -1620,6 +1625,21 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   <div class="tip">A green box like this one is a tip or extra detail.</div>
   <div class="warn">An amber box like this one is a warning or common
   pitfall to watch out for.</div>
+  <p>Every finding in an askwol report also carries one of three
+  <strong>severity levels</strong>, so you can tell a broken ontology from
+  an ontology that could be published better:</p>
+  <p><strong>&#x2717; Error</strong> a formal logic or modelling problem
+  (for example an inconsistent ontology, an unrecognised datatype, or a
+  reused term that does not exist in its vocabulary). The ontology is
+  invalid until it is fixed.</p>
+  <p><strong>&#x26A0; Warning</strong> a likely mistake or a serious
+  interoperability problem (for example a namespace that does not resolve,
+  mixed <code>http</code>/<code>https</code> IRIs, or a term that is used
+  but never defined).</p>
+  <p><strong>&#x1F4A1; Recommendation</strong> ontology publishing best
+  practice (for example ontology metadata, an open licence, labels and
+  comments, or naming conventions). <strong>Unmet recommendations do not
+  make an ontology invalid.</strong></p>
   </div>
 
   <div class="toc">
