@@ -5,7 +5,8 @@ from __future__ import annotations
 from html import escape
 
 from askwol.branding import FAVICON_LINK
-from askwol.models import NamespaceReport, Status, ValidationReport
+from askwol.models import NamespaceReport, Severity, Status, ValidationReport
+from askwol.severity import SEVERITY_LABELS, SEVERITY_ORDER, SEVERITY_PLURAL_LABELS, severity_of
 from askwol.templates import CHECK_CATEGORIES, CHECKS
 
 # CHECKS (title, description, anchors, category per check) is defined once in
@@ -43,6 +44,59 @@ def _compute_check_numbers() -> dict[str, str]:
 
 
 _CHECK_NUMBERS: dict[str, str] = _compute_check_numbers()
+
+_SEVERITY_COLORS: dict[Severity, str] = {
+    Severity.ERROR: "#c62828",
+    Severity.WARNING: "#e6a700",
+    Severity.RECOMMENDATION: "#1e6fb5",
+}
+_SEVERITY_GLYPHS: dict[Severity, str] = {
+    Severity.ERROR: "&#x2717;",
+    Severity.WARNING: "&#x26A0;",
+    Severity.RECOMMENDATION: "&#x1F4A1;",  # light bulb
+}
+
+
+def _mark(anchor: str | None, status: Status, size: str = "1.3em", extra_style: str = "") -> str:
+    """Coloured status mark. FAIL/WARN take the severity the check assigns to them."""
+    style = f"font-size:{size};line-height:1{extra_style}"
+    severity = severity_of(anchor, status) if anchor else None
+    if severity is not None:
+        label = escape(SEVERITY_LABELS[severity])
+        return (f'<span title="{label}" aria-label="{label}" '
+                f'style="color:{_SEVERITY_COLORS[severity]};{style}">{_SEVERITY_GLYPHS[severity]}</span>')
+    glyph, color = {
+        Status.OK: ("&#x2713;", "#2e7d32"),
+        Status.FAIL: ("&#x2717;", "#c62828"),
+        Status.WARN: ("&#x26A0;", "#e6a700"),
+        Status.SKIP: ("&#x2014;", "#888"),
+    }[status]
+    return f'<span style="color:{color};{style}">{glyph}</span>'
+
+
+def _severity_chip(severity: Severity) -> str:
+    return f'<span class="sev sev-{severity.value}">{escape(SEVERITY_LABELS[severity])}</span>'
+
+
+def _severity_summary_html(report: ValidationReport) -> str:
+    """Overview of how many checks ended as errors, warnings or recommendations."""
+    summary = report.severity_summary
+    verdict = "No errors found." if summary.valid else "Errors found."
+    items = "".join(
+        f'<span class="sev-count sev-{sev.value}">{_SEVERITY_GLYPHS[sev]} '
+        f'<strong>{summary.count(sev)}</strong> {SEVERITY_PLURAL_LABELS[sev]}</span>'
+        for sev in SEVERITY_ORDER
+    )
+    return (
+        '<div class="severity-summary">'
+        f'<p class="verdict"><strong>{verdict}</strong> {items}</p>'
+        '<ul class="legend">'
+        f'<li>{_severity_chip(Severity.ERROR)} a formal logic or modelling problem; the ontology is invalid.</li>'
+        f'<li>{_severity_chip(Severity.WARNING)} a likely mistake or a serious interoperability problem.</li>'
+        f'<li>{_severity_chip(Severity.RECOMMENDATION)} ontology publishing best practice. '
+        '<strong>Unmet recommendations do not make an ontology invalid.</strong></li>'
+        '</ul></div>'
+    )
 
 
 def _guide_link(report_anchor: str) -> str:
@@ -111,6 +165,19 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         "  .section h2 { margin: 0 0 0.2em 0; font-size: 1.1em; color: #444; border: none; padding: 0; }",
         "  .section .subtitle { font-size: 0.9em; color: #666; margin: 0.35em 0; }",
         "  .warn-box { background: #fef9f0; border: 1px solid #e8d5a3; border-radius: 8px; padding: 0.8em 1.2em; margin: 1em 0; }",
+        "  .severity-summary { background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 0.8em 1.5em; margin: 1.2em 0 0; }",
+        "  .severity-summary p { margin: 0.3em 0; }",
+        "  .severity-summary .verdict { font-size: 1.05em; }",
+        "  .severity-summary .legend { font-size: 0.85em; color: #666; list-style: none; margin: 0.3em 0; padding: 0; }",
+        "  .severity-summary .legend li { margin: 0.25em 0; }",
+        "  .sev-count { margin-left: 1em; white-space: nowrap; }",
+        "  .sev-count.sev-error { color: #c62828; }",
+        "  .sev-count.sev-warning { color: #9a5b12; }",
+        "  .sev-count.sev-recommendation { color: #1e6fb5; }",
+        "  .sev { display: inline-block; font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.05em 0.5em; border-radius: 999px; margin-right: 0.3em; }",
+        "  .sev-error.sev { background: #fdecec; color: #c62828; }",
+        "  .sev-warning.sev { background: #fdf0dc; color: #9a5b12; }",
+        "  .sev-recommendation.sev { background: #e6f0fa; color: #1e6fb5; }",
         "  .footer { margin-top: 2em; font-size: 0.85em; color: #aaa; text-align: center; }",
         "</style>",
         "</head><body>",
@@ -124,13 +191,8 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('</body></html>')
         return "\n".join(parts)
 
-    def _status_mark(status: Status) -> str:
-        return {
-            'ok': '<span style="color:#2e7d32;font-size:1.3em;line-height:1">&#x2713;</span>',
-            'fail': '<span style="color:#c62828;font-size:1.3em;line-height:1">&#x2717;</span>',
-            'warn': '<span style="color:#e6a700;font-size:1.3em;line-height:1">&#x26A0;</span>',
-            'skip': '<span style="color:#888;font-size:1.3em;line-height:1">&#x2014;</span>',
-        }[status.value]
+    def _status_mark(status: Status, anchor: str | None = None) -> str:
+        return _mark(anchor, status)
 
     # Summary stats (computed now, rendered after diagram)
     total_ns = len(report.namespaces)
@@ -166,9 +228,11 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     # sections below (driven by CHECKS so it can never drift). Each row jumps
     # to the matching #anchor when clicked.
     _ok = '<span style="color:#2e7d32;font-size:1.1em;line-height:1;vertical-align:middle">&#x2713;</span>'
-    _fail = '<span style="color:#c62828;font-size:1.1em;line-height:1;vertical-align:middle">&#x2717;</span>'
-    _warn = '<span style="color:#e6a700;font-size:1.1em;line-height:1;vertical-align:middle">&#x26A0;</span>'
     _info = '<span style="color:#888;font-size:1.1em;line-height:1;vertical-align:middle">&#x2014;</span>'
+    # Summary rows say _fail / _warn for "this check did not pass" and
+    # "partly passed"; _row swaps in the severity the check assigns to it.
+    _fail = 'fail'
+    _warn = 'warn'
 
     def _row(anchor: str, mark: str, title: str, detail: str) -> str:
         # Whole row jumps to the matching section anchor when clicked.
@@ -178,6 +242,12 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         # <details> blocks are deliberately left as-is (collapsed stays
         # collapsed) so clicking an overview row never force-expands
         # content the user didn't ask to see.
+        if mark in (_fail, _warn):
+            status = Status.FAIL if mark == _fail else Status.WARN
+            mark = _mark(anchor, status, '1.1em', ';vertical-align:middle')
+            severity = severity_of(anchor, status)
+            if severity is not None:
+                detail = f'{_severity_chip(severity)} {detail}'
         num = _CHECK_NUMBERS.get(anchor, "")
         prefix = f'<span class="num">{num}</span> ' if num else ""
         onclick = (
@@ -207,7 +277,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             skipped = total_terms - ok_terms - fail_terms - warn_terms
             term_bits = [f'{ok_terms} confirmed']
             if fail_terms:
-                term_bits.append(f'{fail_terms} failed')
+                term_bits.append(f'{fail_terms} not found')
             if warn_terms:
                 term_bits.append(f'{warn_terms} deprecated')
             if skipped:
@@ -410,6 +480,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     reasoner = report.reasoner
     lt = report.lang_tags
 
+    parts.append(_severity_summary_html(report))
     parts.append('<div class="summary"><table>')
     for cat in CATEGORIES:
         rows: list[str] = []
@@ -460,7 +531,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     )
 
     def _render_ns_card(ns: NamespaceReport) -> None:
-        mark = _status_mark(ns.resolution.status)
+        mark = _status_mark(ns.resolution.status, 'namespaces')
         prefix = escape(ns.prefix) or "<em>(default)</em>"
         uri = escape(ns.uri)
         parts.append(f'<div class="ns"><div class="ns-header">{mark} {prefix}: &lt;{uri}&gt;</div>')
@@ -506,7 +577,13 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     # marks as the summary table so the visual language is consistent.
     # `label` becomes a tooltip / accessible name on the mark.
     def _section_heading(anchor: str, title: str, status: str, label: str) -> str:
-        mark_html = {'ok': _ok, 'fail': _fail, 'warn': _warn, 'info': _info}[status]
+        if status in ('fail', 'warn'):
+            sev = severity_of(anchor, Status(status))
+            mark_html = _mark(anchor, Status(status), '1.1em', ';vertical-align:middle')
+            if sev is not None:
+                label = f'{SEVERITY_LABELS[sev]}: {label}'
+        else:
+            mark_html = {'ok': _ok, 'info': _info}[status]
         # Wrap in a span carrying the tooltip; keep the visual identical to
         # the summary table marks.
         marked = (f'<span title="{escape(label)}" aria-label="{escape(label)}" '
@@ -567,13 +644,11 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show metadata checks ({meta.total_checks})</summary>')
         parts.append('<table><tr><th>Property</th><th>Level</th><th>Status</th></tr>')
         for check in meta.checks:
-            mark = _status_mark(check.status)
+            mark = _status_mark(check.status, 'ontology-metadata')
             if check.status == Status.OK:
                 status_label = '<span style="color:#2e7d32">ok</span>'
-            elif check.status == Status.WARN:
-                status_label = '<span style="color:#e6a700">warning</span>'
             else:
-                status_label = '<span style="color:#c62828">missing</span>'
+                status_label = _severity_chip(severity_of('ontology-metadata', check.status)) + ' missing'
             parts.append(
                 f'<tr><td><code>{escape(check.property)}</code></td><td>{escape(check.severity)}</td><td>{mark} {status_label}</td></tr>'
             )
@@ -604,7 +679,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         if imp.checks:
             parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show imports ({len(imp.checks)})</summary>')
             for c in imp.checks:
-                mark = _status_mark(c.resolution.status)
+                mark = _status_mark(c.resolution.status, 'imports')
                 iri = escape(c.iri)
                 parts.append(f'<div class="ns"><div class="ns-header">{mark} &lt;<a href="{iri}" target="_blank" rel="noopener">{iri}</a>&gt;</div>')
                 parts.append('<div class="ns-body">')
@@ -792,7 +867,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         if lcns.checks:
             parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show licence{plural} ({len(lcns.checks)})</summary>')
             for c in lcns.checks:
-                mark = _status_mark(c.status)
+                mark = _status_mark(c.status, 'license')
                 parts.append(f'<div class="ns"><div class="ns-header">{mark} {c.name}</div>')
                 parts.append('<div class="ns-body">')
                 parts.append(f'<p style="font-size:0.9em;color:#444;margin:0.2em 0;">Licence IRI: <a href="{c.iri}" target="_blank" rel="noopener"><code>{c.iri}</code></a></p>')
@@ -982,7 +1057,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             parts.append('<table><tr><th>Term</th><th>Status</th></tr>')
             for ref in sorted(it.referenced, key=lambda x: (x.defined, x.display_name.lower())):
                 t_iri = escape(ref.term)
-                status_html = _ok + ' defined' if ref.defined else _fail + ' undefined'
+                status_html = _ok + ' defined' if ref.defined else _mark('internal-terms', Status.FAIL, '1.1em', ';vertical-align:middle') + ' undefined'
                 parts.append(
                     f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(ref.display_name)}</code></a></td>'
                     f'<td>{status_html}</td></tr>'
@@ -1019,7 +1094,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             elif e.naming_ok:
                 mark = '<span style="color:#2e7d32;font-size:1.2em;line-height:1">&#x2713;</span>'
             else:
-                mark = f'<span style="color:#e6a700;font-size:1.2em;line-height:1">&#x26A0;</span> {escape(e.naming_message or "")}'
+                mark = f'{_mark("term-inventory", Status.WARN, "1.2em")} {escape(e.naming_message or "")}'
             parts.append(
                 f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(e.display_name)}</code></a></td>'
                 f'<td>{escape(e.category)}</td><td>{mark}</td></tr>'
@@ -1057,13 +1132,13 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         for c in sorted(dr.checks, key=lambda x: (x.status == Status.OK, x.category, x.display_name.lower())):
             t_iri = escape(c.term)
             dmark = ('<span style="color:#2e7d32">&#x2713;</span>' if c.has_domain
-                     else '<span style="color:#c62828">&#x2717;</span>')
+                     else _mark('domains-ranges', Status.WARN, '1em'))
             rmark = ('<span style="color:#2e7d32">&#x2713;</span>' if c.has_range
-                     else '<span style="color:#c62828">&#x2717;</span>')
+                     else _mark('domains-ranges', Status.WARN, '1em'))
             category = escape(c.category)
             if c.deprecated:
                 category += f' <span title="Deprecated ({escape(c.deprecated)}); not checked" style="color:#999;">&#x2298;</span>'
-            issue = f'{_status_mark(c.status)} {escape(c.message or "")}' if c.status != Status.OK else _status_mark(c.status)
+            issue = f'{_status_mark(c.status, "domains-ranges")} {escape(c.message or "")}' if c.status != Status.OK else _status_mark(c.status)
             parts.append(
                 f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(c.display_name)}</code></a></td>'
                 f'<td>{category}</td><td>{dmark}</td><td>{rmark}</td><td>{issue}</td></tr>'
@@ -1095,7 +1170,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             if u.recognised:
                 status = '<span style="color:#2e7d32;font-size:1.2em;line-height:1">&#x2713;</span>'
             else:
-                status = f'<span style="color:#c62828;font-size:1.2em;line-height:1">&#x2717;</span> {escape(u.message or "")}'
+                status = f'{_mark("datatypes", Status.FAIL, "1.2em")} {escape(u.message or "")}'
             parts.append(
                 f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(u.display_name)}</code></a></td>'
                 f'<td>{u.count}</td><td>{escape(", ".join(u.sources))}</td><td>{status}</td></tr>'
@@ -1143,7 +1218,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 return f'<span title="Deprecated ({escape(deprecated)}); not checked" style="color:#999;font-size:1.3em;line-height:1">&#x2298;</span>'
             if present:
                 return '<span style="color:#2e7d32;font-size:1.3em;line-height:1">&#x2713;</span>'
-            return '<span style="color:#c62828;font-size:1.3em;line-height:1">&#x2717;</span>'
+            return _mark('labels', Status.FAIL)
 
         def _doc_section(anchor: str, title: str, prop: str,
                          present_count: int, missing: list) -> None:
@@ -1251,13 +1326,11 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show reasoner checks ({len(reasoner.checks)})</summary>')
         parts.append('<table><tr><th>Check</th><th>Status</th><th>Detail</th></tr>')
         for check in reasoner.checks:
-            mark = _status_mark(check.status)
+            mark = _status_mark(check.status, 'reasoner')
             if check.status == Status.OK:
                 status_label = '<span style="color:#2e7d32">ok</span>'
-            elif check.status == Status.WARN:
-                status_label = '<span style="color:#e6a700">warning</span>'
             else:
-                status_label = '<span style="color:#c62828">fail</span>'
+                status_label = _severity_chip(severity_of('reasoner', check.status))
             parts.append(f'<tr><td>{escape(check.label)}</td><td>{mark} {status_label}</td><td>{escape(check.message or "")}</td></tr>')
         parts.append('</table></details>')
         parts.append('</section>')

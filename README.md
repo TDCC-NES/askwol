@@ -69,7 +69,19 @@ askwol check ontology.ttl --timeout 60        # default: 30s
 askwol check ontology.ttl --skip-resolution   # parse only
 ```
 
-Exit codes: `0` all pass, `1` issues found.
+Exit codes: `0` no errors, `1` errors found. Warnings and recommendations alone do not change the exit code.
+
+### Severity levels
+
+Every finding that is not OK carries one of three severities, in the HTML report, the CLI/Markdown output, and the JSON API (`severity_summary`):
+
+| Level | Meaning |
+|-------|---------|
+| ✗ **Error** | A formal logic or modelling problem (e.g. an inconsistent ontology, an unrecognised datatype, a reused term that does not exist). The ontology is invalid. |
+| ⚠ **Warning** | A likely mistake or a serious interoperability problem (e.g. an unresolvable namespace, mixed `http`/`https` IRIs, a term used but never defined). |
+| 💡 **Recommendation** | Ontology publishing best practice (e.g. ontology metadata, an open licence, labels and comments, naming conventions). Unmet recommendations do **not** make an ontology invalid. |
+
+The per-check `status` values (`ok`, `warn`, `fail`, `skip`) in the JSON are unchanged; `severity_summary` adds the `valid` flag, the count per severity, and the list of findings with their severity. The mapping from check to severity lives in [`severity.py`](src/askwol/severity.py).
 
 ### Web UI
 
