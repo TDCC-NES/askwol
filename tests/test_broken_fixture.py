@@ -59,10 +59,10 @@ def test_unused_prefix_detected(parsed):
     assert "neverused" in unused
 
 
-def test_metadata_has_failures_and_warnings(parsed):
+def test_metadata_has_core_and_additional_gaps(parsed):
     meta = validate_ontology_metadata(parsed.graph)
-    assert meta.failed_checks >= 1
-    assert meta.warning_checks >= 1
+    assert any(c.tier == "core" for c in meta.missing)
+    assert any(c.tier == "additional" for c in meta.missing)
 
 
 @pytest.mark.asyncio
@@ -185,7 +185,7 @@ async def test_cli_pipeline_populates_every_check(foaf_stub):
         BROKEN, include_mermaid=False, timeout=10.0, skip_resolution=False, cache=cache,
     )
 
-    assert report.ontology_metadata is not None and report.ontology_metadata.failed_checks
+    assert report.ontology_metadata is not None and report.ontology_metadata.missing
     assert report.imports is not None and report.imports.status == Status.FAIL
     assert report.iri_strategy is not None and report.iri_strategy.status == Status.WARN
     assert report.iri_scheme is not None and report.iri_scheme.status == Status.WARN
@@ -223,7 +223,7 @@ async def test_cli_pipeline_skip_resolution_still_runs_local_checks():
         BROKEN, include_mermaid=False, timeout=10.0, skip_resolution=True,
     )
 
-    assert report.ontology_metadata is not None and report.ontology_metadata.failed_checks
+    assert report.ontology_metadata is not None and report.ontology_metadata.missing
     assert report.license is not None and report.license.status == Status.FAIL
     assert report.iri_strategy is not None and report.iri_strategy.status == Status.WARN
     assert report.iri_scheme is not None and report.iri_scheme.status == Status.WARN
@@ -238,7 +238,8 @@ async def test_cli_pipeline_skip_resolution_still_runs_local_checks():
     assert report.reasoner is not None and report.reasoner.consistent is False
 
     # Network-bound work should be skipped outright, not silently wrong.
-    assert report.imports is None
+    assert report.imports is not None and report.imports.skipped
+    assert report.imports.broken == []
     assert report.namespaces
     assert all(ns.resolution.status == Status.SKIP for ns in report.namespaces)
     assert all(ns.terms == [] for ns in report.namespaces)

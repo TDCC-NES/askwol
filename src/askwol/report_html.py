@@ -6,7 +6,17 @@ from html import escape
 
 from askwol.branding import FAVICON_LINK
 from askwol.models import NamespaceReport, Status, ValidationReport
-from askwol.templates import CHECK_CATEGORIES, CHECKS
+from askwol.severity import (
+    RULE_SEVERITY,
+    SEVERITY_ORDER,
+    SEVERITY_STYLES,
+    Finding,
+    Rule,
+    Severity,
+    count_label,
+    worst_severity,
+)
+from askwol.templates import CHECK_CATEGORIES, CHECK_NUMBERS, CHECKS, CLUSTER_NUMBERS
 
 # CHECKS (title, description, anchors, category per check) is defined once in
 # askwol.templates and shared with the landing page, README.md, and the API
@@ -27,22 +37,52 @@ _REPORT_BY_GUIDE: dict[str, str] = {c["guide_anchor"]: c["report_anchor"] for c 
 # report anchor -> category key
 _CATEGORY_BY_REPORT: dict[str, str] = {c["report_anchor"]: c["category"] for c in CHECKS}
 
-# Cluster number (1..5) per category, and "cluster.position" number per check,
-# so the results page can be numbered exactly like the guide and home page.
-_CLUSTER_NUMBERS: dict[str, int] = {c["key"]: i + 1 for i, c in enumerate(CATEGORIES)}
+_CLUSTER_NUMBERS = CLUSTER_NUMBERS
+_CHECK_NUMBERS = CHECK_NUMBERS
+
+_OK_COLOR = "#2e7d32"
+_NA_COLOR = "#888"
 
 
-def _compute_check_numbers() -> dict[str, str]:
-    counters: dict[str, int] = {}
-    labels: dict[str, str] = {}
-    for c in CHECKS:
-        cat = c["category"]
-        counters[cat] = counters.get(cat, 0) + 1
-        labels[c["report_anchor"]] = f"{_CLUSTER_NUMBERS[cat]}.{counters[cat]}"
-    return labels
+def _mark(severity: Severity | None, size: str = "1.3em") -> str:
+    """The mark for a result: a tick when there is no finding, otherwise the
+    glyph of the finding's severity."""
+    style = f"font-size:{size};line-height:1;vertical-align:middle"
+    if severity is None:
+        return f'<span style="color:{_OK_COLOR};{style}">&#x2713;</span>'
+    sev = SEVERITY_STYLES[severity]
+    return (f'<span title="{sev.label}" aria-label="{sev.label}" '
+            f'style="color:{sev.color};{style}">{sev.html_glyph}</span>')
 
 
-_CHECK_NUMBERS: dict[str, str] = _compute_check_numbers()
+def _na_mark(size: str = "1.3em") -> str:
+    return f'<span style="color:{_NA_COLOR};font-size:{size};line-height:1;vertical-align:middle">&#x2014;</span>'
+
+
+def _item_mark(status: Status, rule: Rule, size: str = "1.3em") -> str:
+    """The mark for one checked item whose failure would be a finding of ``rule``."""
+    if status == Status.SKIP:
+        return _na_mark(size)
+    return _mark(None if status == Status.OK else RULE_SEVERITY[rule], size)
+
+
+def _count_text(findings: list[Finding]) -> str:
+    """``"2 errors, 1 recommendation"`` for the findings of one check."""
+    return ", ".join(
+        count_label(sev, n) for sev in SEVERITY_ORDER if (n := sum(1 for f in findings if f.severity == sev))
+    )
+
+
+def _severity_summary_html(report: ValidationReport) -> str:
+    """Headline counts of individual findings; hover a count for what the level means."""
+    summary = report.severity_summary
+    items = "".join(
+        f'<span class="sev-count" title="{SEVERITY_STYLES[sev].label}: {SEVERITY_STYLES[sev].description}">'
+        f'<span style="color:{SEVERITY_STYLES[sev].color}">{SEVERITY_STYLES[sev].html_glyph}</span> '
+        f'<strong>{summary.count(sev)}</strong> {SEVERITY_STYLES[sev].plural}</span>'
+        for sev in SEVERITY_ORDER
+    )
+    return f'<div class="severity-summary">{items}</div>'
 
 
 def _guide_link(report_anchor: str) -> str:
@@ -111,6 +151,8 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         "  .section h2 { margin: 0 0 0.2em 0; font-size: 1.1em; color: #444; border: none; padding: 0; }",
         "  .section .subtitle { font-size: 0.9em; color: #666; margin: 0.35em 0; }",
         "  .warn-box { background: #fef9f0; border: 1px solid #e8d5a3; border-radius: 8px; padding: 0.8em 1.2em; margin: 1em 0; }",
+        "  .severity-summary { background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 0.6em 1.5em; margin: 1.2em 0 0; }",
+        "  .sev-count { margin-right: 1.2em; white-space: nowrap; cursor: default; }",
         "  .footer { margin-top: 2em; font-size: 0.85em; color: #aaa; text-align: center; }",
         "</style>",
         "</head><body>",
@@ -124,21 +166,15 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('</body></html>')
         return "\n".join(parts)
 
-    def _status_mark(status: Status) -> str:
-        return {
-            'ok': '<span style="color:#2e7d32;font-size:1.3em;line-height:1">&#x2713;</span>',
-            'fail': '<span style="color:#c62828;font-size:1.3em;line-height:1">&#x2717;</span>',
-            'warn': '<span style="color:#e6a700;font-size:1.3em;line-height:1">&#x26A0;</span>',
-            'skip': '<span style="color:#888;font-size:1.3em;line-height:1">&#x2014;</span>',
-        }[status.value]
-
     # Summary stats (computed now, rendered after diagram)
     total_ns = len(report.namespaces)
     ok_ns = sum(1 for ns in report.namespaces if ns.resolution.status == Status.OK)
-    total_terms = sum(len(ns.terms) for ns in report.namespaces)
-    ok_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.OK)
-    fail_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.FAIL)
-    warn_terms = sum(1 for ns in report.namespaces for t in ns.terms if t.status == Status.WARN)
+    external_terms = report.external_term_checks
+    total_terms = len(external_terms)
+    ok_terms = sum(1 for _, t in external_terms if t.status == Status.OK)
+    fail_terms = sum(1 for _, t in external_terms if t.status == Status.FAIL)
+    warn_terms = sum(1 for _, t in external_terms if t.status == Status.WARN)
+    terms_unchecked = report.external_terms_unchecked
 
     # Ontology diagram (Mermaid)  -  shown first
     if mermaid:
@@ -164,13 +200,17 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
 
     # Summary  -  one row per check, in the exact same order as the detail
     # sections below (driven by CHECKS so it can never drift). Each row jumps
-    # to the matching #anchor when clicked.
-    _ok = '<span style="color:#2e7d32;font-size:1.1em;line-height:1;vertical-align:middle">&#x2713;</span>'
-    _fail = '<span style="color:#c62828;font-size:1.1em;line-height:1;vertical-align:middle">&#x2717;</span>'
-    _warn = '<span style="color:#e6a700;font-size:1.1em;line-height:1;vertical-align:middle">&#x26A0;</span>'
-    _info = '<span style="color:#888;font-size:1.1em;line-height:1;vertical-align:middle">&#x2014;</span>'
+    # to the matching #anchor when clicked. The mark and the counts come from
+    # the findings of that check; `na` marks a check that does not apply to
+    # this ontology.
+    sev_summary = report.severity_summary
 
-    def _row(anchor: str, mark: str, title: str, detail: str) -> str:
+    def _row(anchor: str, title: str, detail: str, *, na: bool = False) -> str:
+        found = sev_summary.for_check(anchor)
+        mark = _na_mark('1.1em') if na else _mark(worst_severity(found), '1.1em')
+        counts = _count_text(found)
+        if counts:
+            detail = f'{detail} ({counts})'
         # Whole row jumps to the matching section anchor when clicked.
         # Scrolling is done explicitly (not just via location.hash) because
         # setting the hash to its current value is a no-op in browsers - it
@@ -197,211 +237,133 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     # single row because they share one report section.
     def _summary_for(report_anchor: str) -> list[str]:
         if report_anchor == 'namespaces':
-            ns_mark = _ok if ok_ns == total_ns else _fail
-            return [_row('namespaces', ns_mark, 'Namespaces',
-                         f'{ok_ns}/{total_ns} resolved')]
+            if report.namespace_resolution_skipped:
+                return [_row('namespaces', 'Namespaces', 'resolution skipped', na=True)]
+            return [_row('namespaces', 'Namespaces', f'{ok_ns}/{total_ns} resolved')]
         if report_anchor == 'external-terms':
-            term_mark = _ok if fail_terms == 0 else _fail
-            if fail_terms == 0 and warn_terms:
-                term_mark = _warn
+            if terms_unchecked:
+                return [_row('external-terms', 'External term definitions',
+                             'not checked (namespaces not resolved)', na=True)]
+            if not total_terms:
+                return [_row('external-terms', 'External term definitions', 'no external terms to check', na=True)]
             skipped = total_terms - ok_terms - fail_terms - warn_terms
             term_bits = [f'{ok_terms} confirmed']
             if fail_terms:
-                term_bits.append(f'{fail_terms} failed')
+                term_bits.append(f'{fail_terms} not found')
             if warn_terms:
                 term_bits.append(f'{warn_terms} deprecated')
             if skipped:
                 term_bits.append(f'{skipped} skipped')
-            return [_row('external-terms', term_mark, 'External term definitions', ', '.join(term_bits))]
+            return [_row('external-terms', 'External term definitions', ', '.join(term_bits))]
         if report_anchor == 'ontology-metadata':
             if not (meta and meta.total_checks):
                 return []
-            mark = _ok if not meta.failed_checks and not meta.warning_checks else (_warn if not meta.failed_checks else _fail)
-            if meta.failed_checks or meta.warning_checks:
-                bits = [f'{meta.passed_checks}/{meta.total_checks} OK']
-                if meta.failed_checks:
-                    bits.append(f'{meta.failed_checks} required missing')
-                if meta.warning_checks:
-                    bits.append(f'{meta.warning_checks} recommended missing')
-                detail = ', '.join(bits)
-            else:
-                detail = f'{meta.total_checks}/{meta.total_checks} OK'
-            return [_row('ontology-metadata', mark, 'Ontology metadata', detail)]
+            return [_row('ontology-metadata', 'Ontology metadata',
+                         f'{meta.passed_checks}/{meta.total_checks} present')]
         if report_anchor == 'internal-terms':
             it = report.internal_terms
             if not it or it.status == Status.SKIP:
-                return [_row('internal-terms', _info, 'Internal term definitions',
-                             (it.message if it else None) or 'not applicable')]
-            if it.undefined:
-                return [_row('internal-terms', _fail, 'Internal term definitions',
-                             f'{len(it.undefined)} referenced but never defined')]
-            return [_row('internal-terms', _ok, 'Internal term definitions',
+                return [_row('internal-terms', 'Internal term definitions',
+                             (it.message if it else None) or 'not applicable', na=True)]
+            return [_row('internal-terms', 'Internal term definitions',
                          f'{it.defined}/{it.total_referenced} defined')]
         if report_anchor == 'term-inventory':
             inv = report.term_inventory
             if not inv or inv.status == Status.SKIP:
-                return [_row('term-inventory', _info, 'Term inventory &amp; naming',
-                             'no terms defined in the ontology&rsquo;s own namespace')]
-            if inv.naming_issues:
-                return [_row('term-inventory', _warn, 'Term inventory &amp; naming',
-                             f'{inv.total_terms} terms &middot; {len(inv.naming_issues)} naming issue(s)')]
-            return [_row('term-inventory', _ok, 'Term inventory &amp; naming',
-                         f'{inv.total_terms} terms &middot; naming consistent')]
+                return [_row('term-inventory', 'Term inventory &amp; naming',
+                             'no terms defined in the ontology&rsquo;s own namespace', na=True)]
+            return [_row('term-inventory', 'Term inventory &amp; naming',
+                         f'{inv.total_terms} terms')]
         if report_anchor == 'domains-ranges':
             dr = report.domains_ranges
             if not dr or dr.status == Status.SKIP:
-                return [_row('domains-ranges', _info, 'Domains &amp; ranges',
-                             'no object or datatype properties defined')]
-            if dr.status == Status.FAIL:
-                fails = sum(1 for c in dr.issues if c.status == Status.FAIL)
-                return [_row('domains-ranges', _fail, 'Domains &amp; ranges',
-                             f'{fails} property(ies) with a domain or range problem')]
-            if dr.status == Status.WARN:
-                return [_row('domains-ranges', _warn, 'Domains &amp; ranges',
-                             f'{len(dr.issues)} property(ies) missing a domain or range')]
-            return [_row('domains-ranges', _ok, 'Domains &amp; ranges',
-                         f'{dr.total_properties} property(ies), all sound')]
+                return [_row('domains-ranges', 'Domains &amp; ranges',
+                             'no object or datatype properties defined', na=True)]
+            return [_row('domains-ranges', 'Domains &amp; ranges',
+                         f'{dr.total_properties} property(ies) checked')]
         if report_anchor == 'datatypes':
             dt = report.datatypes
             if not dt or dt.status == Status.SKIP:
-                return [_row('datatypes', _info, 'Datatypes', 'no datatypes used')]
-            if dt.unrecognised:
-                return [_row('datatypes', _fail, 'Datatypes',
-                             f'{len(dt.unrecognised)} unrecognised of {dt.total_datatypes}')]
-            return [_row('datatypes', _ok, 'Datatypes',
-                         f'{dt.total_datatypes} used, all recognised')]
+                return [_row('datatypes', 'Datatypes', 'no datatypes used', na=True)]
+            return [_row('datatypes', 'Datatypes', f'{dt.total_datatypes} used')]
         if report_anchor == 'labels':
             if not (docs and docs.total_definitions):
-                return [_row('labels', _info, 'Labels', 'no internal definitions to document')]
-            missing = docs.missing_label
-            mark = _ok if not missing else _fail
-            if missing:
-                detail = f'{docs.with_label}/{docs.total_definitions} have a label, {len(missing)} missing'
-            else:
-                detail = f'{docs.total_definitions}/{docs.total_definitions} have a label'
-            return [_row('labels', mark, 'Labels', detail)]
+                return [_row('labels', 'Labels', 'no internal definitions to document', na=True)]
+            return [_row('labels', 'Labels',
+                         f'{docs.with_label}/{docs.total_definitions} have a label')]
         if report_anchor == 'comments':
             if not (docs and docs.total_definitions):
-                return [_row('comments', _info, 'Comments', 'no internal definitions to document')]
-            missing = docs.missing_comment
-            mark = _ok if not missing else _fail
-            if missing:
-                detail = f'{docs.with_comment}/{docs.total_definitions} have a comment, {len(missing)} missing'
-            else:
-                detail = f'{docs.total_definitions}/{docs.total_definitions} have a comment'
-            return [_row('comments', mark, 'Comments', detail)]
+                return [_row('comments', 'Comments', 'no internal definitions to document', na=True)]
+            return [_row('comments', 'Comments',
+                         f'{docs.with_comment}/{docs.total_definitions} have a comment')]
         if report_anchor == 'imports':
             imp = report.imports
             if not imp:
                 return []
-            broken = imp.broken
-            if broken:
-                return [_row('imports', _fail, 'Imports',
-                             f'{len(broken)} of {len(imp.checks)} declared import(s) do not resolve')]
             if not imp.checks:
-                return [_row('imports', _ok, 'Imports', 'no imports declared')]
-            return [_row('imports', _ok, 'Imports',
-                         f'{len(imp.checks)} declared import(s), all resolve')]
+                return [_row('imports', 'Imports', 'no imports declared')]
+            if imp.skipped:
+                return [_row('imports', 'Imports', 'resolution skipped', na=True)]
+            return [_row('imports', 'Imports',
+                         f'{len(imp.checks) - len(imp.broken)}/{len(imp.checks)} declared import(s) resolve')]
         if report_anchor == 'license':
             lcns = report.license
             if not lcns:
                 return []
-            license_count = lcns.license_count
-            if license_count == 0:
-                return [_row('license', _fail, 'Licence', 'no licence declared')]
-            elif license_count == 1:
-                if lcns.recommended_licenses:
-                    return [_row('license', _ok, 'Open licence',
-                             '1 recommended licence')]
-                elif lcns.open_licenses:
-                    return [_row('license', _warn, 'Open licence',
-                             '1 open licence, not recommended')]
-                else:
-                    return [_row('license', _fail, 'Open licence',
-                             '1 non-open licence')]
-            else:
-                recommended_count = len(lcns.recommended_licenses)
-                open_count = len(lcns.open_licenses)
-                non_open_count = len(lcns.non_open_licenses)
-                recommended_str = f'{recommended_count} recommended' if recommended_count else ''
-                open_str = f'{", " if recommended_count else ""}{open_count} open' if open_count else ''
-                non_open_str = f'{", " if recommended_count or open_count else ""}{non_open_count} non-open' if non_open_count else ''
-                if non_open_count > 0:
-                    return [_row('license', _fail, 'Open licence',
-                             f'{license_count} licences &middot; {recommended_str}{open_str}{non_open_str}')]
-                else:
-                    return [_row('license', _warn, 'Open licence',
-                             f'{license_count} licences &middot; {recommended_str}{open_str}{non_open_str}')]
+            if not lcns.license_count:
+                return [_row('license', 'Open licence', 'no licence declared')]
+            kinds = [
+                f'{n} {label}' for n, label in (
+                    (len(lcns.recommended_licenses), 'recommended'),
+                    (len(lcns.open_licenses), 'open'),
+                    (len(lcns.non_open_licenses), 'non-open'),
+                ) if n
+            ]
+            plural = 's' if lcns.license_count != 1 else ''
+            return [_row('license', 'Open licence',
+                         f'{lcns.license_count} licence{plural} &middot; {", ".join(kinds)}')]
         if report_anchor == 'iri-strategy':
             iri = report.iri_strategy
             if not iri:
                 return []
             if iri.status == Status.SKIP:
-                return [_row('iri-strategy', _info, 'IRI strategy',
-                             iri.message or 'skipped')]
-            if iri.status == Status.WARN:
-                mixed = [ns for ns in iri.namespaces if ns.strategy == 'mixed']
-                hash_n = sum(ns.hash_count for ns in mixed)
-                slash_n = sum(ns.slash_count for ns in mixed)
-                detail = f'mixed: {hash_n} hash + {slash_n} slash'
-                if len(iri.namespaces) > 1:
-                    detail += f' in {len(mixed)} of {len(iri.namespaces)} base IRIs'
-                return [_row('iri-strategy', _warn, 'IRI strategy', detail)]
+                return [_row('iri-strategy', 'IRI strategy', iri.message or 'skipped', na=True)]
             if len(iri.namespaces) == 1:
                 ns = iri.namespaces[0]
-                label = 'hash (<code>#Term</code>)' if ns.strategy == 'hash' else 'slash (<code>/Term</code>)'
-                count = ns.hash_count if ns.strategy == 'hash' else ns.slash_count
-                return [_row('iri-strategy', _ok, 'IRI strategy',
-                             f'{label} &middot; {count} term{"s" if count != 1 else ""}')]
-            return [_row('iri-strategy', _ok, 'IRI strategy',
-                         f'{len(iri.namespaces)} base IRIs, each consistent')]
+                if ns.strategy == 'mixed':
+                    detail = f'mixed: {ns.hash_count} hash + {ns.slash_count} slash'
+                else:
+                    label = 'hash (<code>#Term</code>)' if ns.strategy == 'hash' else 'slash (<code>/Term</code>)'
+                    count = ns.hash_count if ns.strategy == 'hash' else ns.slash_count
+                    detail = f'{label} &middot; {count} term{"s" if count != 1 else ""}'
+                return [_row('iri-strategy', 'IRI strategy', detail)]
+            return [_row('iri-strategy', 'IRI strategy', f'{len(iri.namespaces)} base IRIs checked')]
         if report_anchor == 'iri-scheme':
             sch = report.iri_scheme
             if not sch:
                 return []
             if sch.status == Status.SKIP:
-                return [_row('iri-scheme', _info, 'IRI scheme', sch.message or 'skipped')]
-            if sch.status == Status.WARN:
-                return [_row('iri-scheme', _warn, 'IRI scheme',
-                             f'{len(sch.conflicts)} host(s) use both http:// and https://')]
-            return [_row('iri-scheme', _ok, 'IRI scheme',
-                         f'{sch.total_hosts} host(s), each on a single scheme')]
+                return [_row('iri-scheme', 'IRI scheme', sch.message or 'skipped', na=True)]
+            return [_row('iri-scheme', 'IRI scheme', f'{sch.total_hosts} host(s) checked')]
         if report_anchor == 'reasoner':
             if not reasoner:
                 return []
-            reas_ok = reasoner.consistent and not reasoner.unsatisfiable_classes
-            mark = _ok if reas_ok else _fail
-            if reas_ok:
-                detail = 'consistent'
-            else:
-                detail = f'{len(reasoner.inconsistent_individuals)} inconsistency issue(s), {len(reasoner.unsatisfiable_classes)} unsatisfiable class(es)'
-            return [_row('reasoner', mark, 'Reasoner checks', detail)]
+            return [_row('reasoner', 'Reasoner checks',
+                         'no contradictions detected' if not sev_summary.for_check('reasoner') else 'problems found')]
         if report_anchor == 'unused-prefixes':
-            if report.unused_prefixes:
-                return [_row('unused-prefixes', _warn, 'Unused prefixes',
-                             f'{len(report.unused_prefixes)} declared but never used')]
-            return [_row('unused-prefixes', _ok, 'Unused prefixes', 'none')]
+            return [_row('unused-prefixes', 'Unused prefixes',
+                         f'{len(report.unused_prefixes)} declared but never used' if report.unused_prefixes else 'none')]
         if report_anchor == 'language-tags':
-            if lt and lt.status == Status.OK:
-                lang_str = ', '.join(lt.languages_used)
-                return [_row('language-tags', _ok, 'Language tag consistency', f'{lang_str} &middot; consistent')]
-            if lt and lt.status == Status.WARN and lt.issues:
-                lang_str = ', '.join(lt.languages_used)
-                issue_count = len(lt.issues)
-                return [_row('language-tags', _warn, 'Language tag consistency',
-                             f'{lang_str} &middot; {issue_count} issue{"s" if issue_count != 1 else ""}')]
-            if lt and lt.status == Status.WARN:
-                return [_row('language-tags', _warn, 'Language tag consistency',
-                             'labels or definitions present but none carry a language tag')]
-            return [_row('language-tags', _info, 'Language tag consistency', 'not applicable')]
+            if lt and lt.status != Status.SKIP:
+                lang_str = ', '.join(lt.languages_used) or 'no language tags'
+                return [_row('language-tags', 'Language tag consistency', lang_str)]
+            return [_row('language-tags', 'Language tag consistency', 'not applicable', na=True)]
         if report_anchor == 'non-ontology-terms':
             sk = report.non_ontology_terms
             if not sk or sk.status == Status.SKIP:
-                return [_row('non-ontology-terms', _info, 'Non-ontology terms', 'not applicable')]
-            if sk.terms:
-                return [_row('non-ontology-terms', _warn, 'Non-ontology terms',
-                             f'{len(sk.terms)} that belong in a separate resource')]
-            return [_row('non-ontology-terms', _ok, 'Non-ontology terms', 'only schema terms defined')]
+                return [_row('non-ontology-terms', 'Non-ontology terms', 'not applicable', na=True)]
+            return [_row('non-ontology-terms', 'Non-ontology terms',
+                         f'{len(sk.terms)} that belong in a separate resource' if sk.terms else 'only schema terms defined')]
         return []
 
     # The data the summary needs (already computed earlier in the function).
@@ -410,6 +372,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     reasoner = report.reasoner
     lt = report.lang_tags
 
+    parts.append(_severity_summary_html(report))
     parts.append('<div class="summary"><table>')
     for cat in CATEGORIES:
         rows: list[str] = []
@@ -451,7 +414,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     def _ns_has_issues(ns: NamespaceReport) -> bool:
         if ns.resolution.status != Status.OK:
             return True
-        return any(t.status in (Status.FAIL, Status.WARN) for t in ns.terms)
+        return any(t.status in (Status.FAIL, Status.WARN) for t in report.external_terms_for_namespace(ns))
 
     prominent = [ns for ns in report.namespaces if _ns_has_issues(ns) or ns.uri not in STANDARD_NS]
     standard_ok = sorted(
@@ -460,7 +423,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     )
 
     def _render_ns_card(ns: NamespaceReport) -> None:
-        mark = _status_mark(ns.resolution.status)
+        mark = _item_mark(ns.resolution.status, Rule.NAMESPACE_UNRESOLVED)
         prefix = escape(ns.prefix) or "<em>(default)</em>"
         uri = escape(ns.uri)
         parts.append(f'<div class="ns"><div class="ns-header">{mark} {prefix}: &lt;{uri}&gt;</div>')
@@ -479,11 +442,12 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
 
         # Term counts only - per-term details are shown in the External terms
         # definition section below to avoid duplicating the same information.
-        if ns.terms:
-            t_ok = sum(1 for t in ns.terms if t.status == Status.OK)
-            t_fail = sum(1 for t in ns.terms if t.status == Status.FAIL)
-            t_warn = sum(1 for t in ns.terms if t.status == Status.WARN)
-            t_skip = sum(1 for t in ns.terms if t.status == Status.SKIP)
+        terms = report.external_terms_for_namespace(ns)
+        if terms:
+            t_ok = sum(1 for t in terms if t.status == Status.OK)
+            t_fail = sum(1 for t in terms if t.status == Status.FAIL)
+            t_warn = sum(1 for t in terms if t.status == Status.WARN)
+            t_skip = sum(1 for t in terms if t.status == Status.SKIP)
             summary_parts = []
             if t_ok:
                 summary_parts.append(f"{t_ok} confirmed")
@@ -494,30 +458,33 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             if t_skip:
                 summary_parts.append(f"{t_skip} skipped")
             parts.append(f'<p style="font-size:0.9em;color:#666;">'
-                         f'{len(ns.terms)} term{"s" if len(ns.terms) != 1 else ""} used '
+                         f'{len(terms)} term{"s" if len(terms) != 1 else ""} used '
                          f'({" &middot; ".join(summary_parts)}), '
                          f'see <a href="#external-terms">External term definitions</a> section</p>')
+        elif ns.terms:
+            parts.append('<p>Datatype findings are reported under <a href="#datatypes">Datatypes</a>.</p>')
         else:
             parts.append("<p><em>No terms used from this namespace.</em></p>")
 
         parts.append("</div></div>")
 
-    # Section helper: status mark FIRST, then title. Uses the same colored
-    # marks as the summary table so the visual language is consistent.
+    # Section heading: the mark comes from the check's findings, so errors,
+    # warnings and recommendations look the same here as in the overview.
     # `label` becomes a tooltip / accessible name on the mark.
-    def _section_heading(anchor: str, title: str, status: str, label: str) -> str:
-        mark_html = {'ok': _ok, 'fail': _fail, 'warn': _warn, 'info': _info}[status]
-        # Wrap in a span carrying the tooltip; keep the visual identical to
-        # the summary table marks.
+    def _section_heading(anchor: str, title: str, label: str, *, na: bool = False) -> str:
+        worst = worst_severity(sev_summary.for_check(anchor))
+        if not na and worst is not None:
+            label = f'{SEVERITY_STYLES[worst].label}: {label}'
+        mark_html = _na_mark('1.1em') if na else _mark(worst, '1.1em')
         marked = (f'<span title="{escape(label)}" aria-label="{escape(label)}" '
                   f'style="margin-right:0.4em;">{mark_html}</span>')
         num = _CHECK_NUMBERS.get(anchor, "")
         num_html = f'<span class="num">{num}</span> ' if num else ""
         return f'<h2 id="{anchor}">{marked}{num_html}{title}</h2>'
 
-    # Plain descriptive subtitle - no status mark here, because the section
-    # heading already carries the colored status. Avoids duplicate ✗/✓ icons.
-    def _status_subtitle(status: str, text: str) -> str:
+    # Plain descriptive subtitle - no mark here, because the section heading
+    # already carries it. Avoids duplicate icons.
+    def _subtitle(text: str) -> str:
         return f'<p class="subtitle">{text}</p>'
 
     # Cluster bands: emit a labelled divider before the first rendered section
@@ -537,45 +504,38 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         """Render a compact 'not applicable' section so every check is visible."""
         _open_cluster(anchor)
         parts.append('<section class="section">')
-        parts.append(_section_heading(anchor, title, 'info', 'not applicable'))
+        parts.append(_section_heading(anchor, title, reason, na=True))
         parts.append(_guide_link(anchor))
-        parts.append(_status_subtitle('info', reason))
+        parts.append(_subtitle(reason))
         parts.append('</section>')
 
     # Ontology metadata summary
     meta = report.ontology_metadata
     if meta and meta.checks:
         _open_cluster('ontology-metadata')
-        missing_required = [c for c in meta.checks if c.status == Status.FAIL]
-        missing_recommended = [c for c in meta.checks if c.status == Status.WARN]
-        if missing_required:
-            m_status, m_label = 'fail', 'needs attention'
-        elif missing_recommended:
-            m_status, m_label = 'warn', 'recommended fields missing'
-        else:
-            m_status, m_label = 'ok', 'all good'
+        core_missing = [c for c in meta.missing if c.tier == 'core']
+        extra_missing = [c for c in meta.missing if c.tier != 'core']
         parts.append('<section class="section">')
-        parts.append(_section_heading('ontology-metadata', 'Ontology metadata', m_status, m_label))
+        parts.append(_section_heading('ontology-metadata', 'Ontology metadata',
+                                      f'{len(meta.missing)} missing' if meta.missing else 'all present'))
         parts.append(_guide_link('ontology-metadata'))
-        parts.append('<p class="subtitle">The ontology header (title, creator, version, &hellip;) is checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/ontology_metadata.ttl" target="_blank" rel="noopener">SHACL shapes for the ontology header</a>.</p>')
+        parts.append('<p class="subtitle">The ontology header (title, creator, version, &hellip;) is checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/ontology_metadata.ttl" target="_blank" rel="noopener">SHACL shapes for the ontology header</a>. A missing property is reported as a recommendation.</p>')
         summary_bits = [f"{meta.passed_checks} present"]
-        if missing_required:
-            summary_bits.append(f"{len(missing_required)} required missing")
-        if missing_recommended:
-            summary_bits.append(f"{len(missing_recommended)} recommended missing")
-        parts.append(_status_subtitle(m_status, " &middot; ".join(summary_bits)))
+        if core_missing:
+            summary_bits.append(f"{len(core_missing)} core missing")
+        if extra_missing:
+            summary_bits.append(f"{len(extra_missing)} additional missing")
+        parts.append(_subtitle(" &middot; ".join(summary_bits)))
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show metadata checks ({meta.total_checks})</summary>')
-        parts.append('<table><tr><th>Property</th><th>Level</th><th>Status</th></tr>')
+        parts.append('<table><tr><th>Property</th><th>Group</th><th>Status</th></tr>')
         for check in meta.checks:
-            mark = _status_mark(check.status)
+            mark = _item_mark(check.status, Rule.METADATA_MISSING)
             if check.status == Status.OK:
-                status_label = '<span style="color:#2e7d32">ok</span>'
-            elif check.status == Status.WARN:
-                status_label = '<span style="color:#e6a700">warning</span>'
+                status_label = f'<span style="color:{_OK_COLOR}">present</span>'
             else:
-                status_label = '<span style="color:#c62828">missing</span>'
+                status_label = 'missing'
             parts.append(
-                f'<tr><td><code>{escape(check.property)}</code></td><td>{escape(check.severity)}</td><td>{mark} {status_label}</td></tr>'
+                f'<tr><td><code>{escape(check.property)}</code></td><td>{escape(check.tier)}</td><td>{mark} {status_label}</td></tr>'
             )
         parts.append('</table></details>')
         parts.append('</section>')
@@ -585,26 +545,26 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     if imp is not None:
         _open_cluster('imports')
         broken = imp.broken
-        if broken:
-            i_status, i_label = 'fail', f'{len(broken)} broken'
-        elif imp.checks:
-            i_status, i_label = 'ok', 'all resolve'
+        if imp.skipped:
+            i_label = 'resolution skipped'
         else:
-            i_status, i_label = 'ok', 'none declared'
+            i_label = f'{len(broken)} broken' if broken else ('all resolve' if imp.checks else 'none declared')
         parts.append('<section class="section">')
-        parts.append(_section_heading('imports', 'Imports', i_status, i_label))
+        parts.append(_section_heading('imports', 'Imports', i_label, na=imp.skipped))
         parts.append(_guide_link('imports'))
         parts.append('<p class="subtitle">Every <code>owl:imports</code> target declared in the ontology header is fetched over HTTP and parsed as RDF, the same way a reasoner would follow it.</p>')
-        if broken:
-            parts.append(_status_subtitle('fail', f'{len(broken)} of {len(imp.checks)} declared import(s) do not resolve'))
+        if imp.skipped:
+            parts.append(_subtitle(f'{len(imp.checks)} declared import(s), resolution skipped'))
+        elif broken:
+            parts.append(_subtitle(f'{len(broken)} of {len(imp.checks)} declared import(s) do not resolve'))
         elif imp.checks:
-            parts.append(_status_subtitle('ok', f'{len(imp.checks)} declared import(s), all resolve'))
+            parts.append(_subtitle(f'{len(imp.checks)} declared import(s), all resolve'))
         else:
-            parts.append(_status_subtitle('ok', 'no owl:imports declared'))
+            parts.append(_subtitle('no owl:imports declared'))
         if imp.checks:
             parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show imports ({len(imp.checks)})</summary>')
             for c in imp.checks:
-                mark = _status_mark(c.resolution.status)
+                mark = _item_mark(c.resolution.status, Rule.IMPORT_UNRESOLVED)
                 iri = escape(c.iri)
                 parts.append(f'<div class="ns"><div class="ns-header">{mark} &lt;<a href="{iri}" target="_blank" rel="noopener">{iri}</a>&gt;</div>')
                 parts.append('<div class="ns-body">')
@@ -628,27 +588,24 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         _open_cluster('iri-strategy')
         multi = len(iri.namespaces) > 1
         if iri.status == Status.SKIP:
-            s_status, s_label = 'info', 'skipped'
-        elif iri.status == Status.WARN:
-            s_status, s_label = 'warn', 'mixed strategy'
+            s_label = 'skipped'
         elif multi:
-            s_status, s_label = 'ok', f'{len(iri.namespaces)} base IRIs'
+            s_label = f'{len(iri.namespaces)} base IRIs'
         else:
-            s_status, s_label = 'ok', f'{iri.namespaces[0].strategy} style'
+            s_label = f'{iri.namespaces[0].strategy} style'
         parts.append('<section class="section">')
-        parts.append(_section_heading('iri-strategy', 'IRI strategy', s_status, s_label))
+        parts.append(_section_heading('iri-strategy', 'IRI strategy', s_label, na=iri.status == Status.SKIP))
         parts.append(_guide_link('iri-strategy'))
         parts.append('<p class="subtitle">A consistent IRI pattern for the ontology&rsquo;s own terms. Either every term sits under a fragment (<code>http://example.org/ont#Term</code>, the <strong>hash</strong> pattern) or every term is its own slash path (<code>http://example.org/ont/Term</code>, the <strong>slash</strong> pattern). Mixing both within the same base IRI confuses consumers and tooling; an ontology that bundles more than one base IRI may use a different, internally consistent style for each.</p>')
 
         if iri.status == Status.SKIP:
-            parts.append(_status_subtitle('info', iri.message or 'no terms in the ontology&rsquo;s own namespace could be classified'))
+            parts.append(_subtitle(iri.message or 'no terms in the ontology&rsquo;s own namespace could be classified'))
         else:
             for ns in iri.namespaces:
                 if multi:
                     parts.append(f'<p style="margin:0.6em 0 0.2em;font-weight:600;"><code>{escape(ns.namespace)}</code></p>')
                 if ns.strategy == 'mixed':
-                    parts.append(_status_subtitle(
-                        'warn',
+                    parts.append(_subtitle(
                         f'<strong>Mixed</strong>: {ns.hash_count} hash-style and {ns.slash_count} slash-style terms in the same namespace. Pick one and migrate the others.',
                     ))
                     parts.append('<details><summary style="cursor:pointer;font-weight:600;">Show examples</summary>')
@@ -668,8 +625,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 else:
                     count = ns.hash_count if ns.strategy == 'hash' else ns.slash_count
                     pattern = '<code>#Term</code>' if ns.strategy == 'hash' else '<code>/Term</code>'
-                    parts.append(_status_subtitle(
-                        'ok',
+                    parts.append(_subtitle(
                         f'<strong>{ns.strategy.capitalize()} pattern</strong> ({pattern}) used consistently across all {count} defined term{"s" if count != 1 else ""}.',
                     ))
                     examples = ns.hash_examples if ns.strategy == 'hash' else ns.slash_examples
@@ -686,21 +642,20 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     if sch is not None:
         _open_cluster('iri-scheme')
         if sch.status == Status.SKIP:
-            sc_status, sc_label = 'info', 'skipped'
+            sc_label = 'skipped'
         elif sch.status == Status.WARN:
-            sc_status, sc_label = 'warn', f'{len(sch.conflicts)} mixed namespace(s)'
+            sc_label = f'{len(sch.conflicts)} mixed namespace(s)'
         else:
-            sc_status, sc_label = 'ok', 'consistent'
+            sc_label = 'consistent'
         parts.append('<section class="section">')
-        parts.append(_section_heading('iri-scheme', 'IRI scheme (http vs https)', sc_status, sc_label))
+        parts.append(_section_heading('iri-scheme', 'IRI scheme (http vs https)', sc_label, na=sch.status == Status.SKIP))
         parts.append(_guide_link('iri-scheme'))
         parts.append('<p class="subtitle">In RDF, <code>http://example.org/X</code> and <code>https://example.org/X</code> are <strong>different IRIs</strong>. Within one ontology, each namespace should appear under exactly one scheme. Mixing schemes breaks SPARQL joins, <code>owl:sameAs</code>, and any tool that compares URIs as strings.</p>')
 
         if sch.status == Status.SKIP:
-            parts.append(_status_subtitle('info', sch.message or 'no http(s) IRIs found'))
+            parts.append(_subtitle(sch.message or 'no http(s) IRIs found'))
         elif sch.status == Status.WARN:
-            parts.append(_status_subtitle(
-                'warn',
+            parts.append(_subtitle(
                 f'<strong>{len(sch.conflicts)}</strong> namespace(s) are referenced under both <code>http://</code> and <code>https://</code> in the same ontology.',
             ))
             parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show conflicting namespaces ({len(sch.conflicts)})</summary>')
@@ -726,8 +681,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                     parts.append('</ul>')
             parts.append('</details>')
         else:
-            parts.append(_status_subtitle(
-                'ok',
+            parts.append(_subtitle(
                 f'<strong>{sch.total_hosts}</strong> namespace(s) referenced, each under a single scheme '
                 f'({sch.http_only_hosts} <code>http://</code>, {sch.https_only_hosts} <code>https://</code>).',
             ))
@@ -748,51 +702,38 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     if lcns is not None:
         _open_cluster('license')
         if lcns.license_count == 0:
-            i_status, i_label = 'fail', 'no licence declared'
+            i_label = 'no licence declared'
         elif lcns.license_count == 1:
             if lcns.recommended_licenses:
-                i_status, i_label = 'ok', 'recommended licence declared'
+                i_label = 'recommended licence declared'
             elif lcns.open_licenses:
-                i_status, i_label = 'warn', 'open licence declared, not recommended'
+                i_label = 'open licence declared, not recommended'
             else:
-                i_status, i_label = 'fail', 'no open licence declared'
+                i_label = 'no open licence declared'
         else:
-            if lcns.non_open_licenses:
-                i_status, i_label = 'fail', 'multiple licences declared, at least one non-open'
-            elif lcns.recommended_licenses:
-                i_status, i_label = 'warn', 'multiple licences declared, at least one recommended'
-            else:
-                i_status, i_label = 'warn', 'multiple licences declared, at least one open'
+            i_label = 'multiple licences declared'
         parts.append('<section class="section">')
-        parts.append(_section_heading('license', 'Open licence', i_status, i_label))
+        parts.append(_section_heading('license', 'Open licence', i_label))
         parts.append(_guide_link('license'))
-        parts.append('<p class="subtitle">Each <code>dcterms:license</code> value declared in the ontology header is checked against a <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of open licences</a> following the <a href="https://opendefinition.org" target="_blank" rel="noopener">Open Definition</a>. For the check to pass, there needs to be only one licence and it needs to be one of the <a href="guide#license" target="_blank" rel="noopener">recommended ones</a>. If no licence is declared or at least one of the declared licences is not open, the check will fail. In all other cases, a warning will be returned.</p>')
+        parts.append('<p class="subtitle">Each <code>dcterms:license</code> value declared in the ontology header is checked against a <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of open licences</a> following the <a href="https://opendefinition.org" target="_blank" rel="noopener">Open Definition</a>. The recommendation is met when there is exactly one licence and it is one of the <a href="guide#license" target="_blank" rel="noopener">recommended ones</a>. A missing licence, a non-open licence, an open licence that is not recommended, or more than one licence is reported as a recommendation.</p>')
         license_count = len(lcns.checks)
         plural = "s" if license_count > 1 else ""
         if lcns.checks:
-            recommended_count = len(lcns.recommended_licenses)
-            open_count = len(lcns.open_licenses)
-            non_open_count = len(lcns.non_open_licenses)
-            recommended_str = f'{recommended_count} recommended' if recommended_count else ''
-            open_str = f'{", " if recommended_count else ""}{open_count} open' if open_count else ''
-            non_open_str = f'{", " if recommended_count or open_count else ""}{non_open_count} non-open' if non_open_count else ''
-            if license_count == 1:
-                if lcns.recommended_licenses:
-                    parts.append(_status_subtitle('ok', '<strong>1</strong> recommended licence'))
-                elif lcns.open_licenses:
-                    parts.append(_status_subtitle('warn', '<strong>1</strong> open licence, not recommended'))
-                else:
-                    parts.append(_status_subtitle('fail', '<strong>1</strong> non-open licence'))
-            elif non_open_count > 0:
-                parts.append(_status_subtitle('fail', f'<strong>{license_count}</strong> licence{plural} &middot; {recommended_str}{open_str}{non_open_str}'))
-            else:
-                parts.append(_status_subtitle('warn', f'<strong>{license_count}</strong> licence{plural} &middot; {recommended_str}{open_str}{non_open_str}'))
+            kinds = [
+                f'{n} {label}' for n, label in (
+                    (len(lcns.recommended_licenses), 'recommended'),
+                    (len(lcns.open_licenses), 'open'),
+                    (len(lcns.non_open_licenses), 'non-open'),
+                ) if n
+            ]
+            parts.append(_subtitle(f'<strong>{license_count}</strong> licence{plural} &middot; {", ".join(kinds)}'))
         else:
-            parts.append(_status_subtitle('ok', 'no licence declared'))
+            parts.append(_subtitle('no licence declared'))
         if lcns.checks:
             parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show licence{plural} ({len(lcns.checks)})</summary>')
             for c in lcns.checks:
-                mark = _status_mark(c.status)
+                rule = Rule.LICENSE_NOT_OPEN if c.status == Status.FAIL else Rule.LICENSE_NOT_RECOMMENDED
+                mark = _item_mark(c.status, rule)
                 parts.append(f'<div class="ns"><div class="ns-header">{mark} {c.name}</div>')
                 parts.append('<div class="ns-body">')
                 parts.append(f'<p style="font-size:0.9em;color:#444;margin:0.2em 0;">Licence IRI: <a href="{c.iri}" target="_blank" rel="noopener"><code>{c.iri}</code></a></p>')
@@ -808,10 +749,11 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
 
     # --- Namespaces section: resolvability of each declared prefix ---
     _open_cluster('namespaces')
-    ns_only_status = 'ok' if ok_ns == total_ns else 'fail'
-    ns_label = 'all resolved' if ns_only_status == 'ok' else f'{total_ns - ok_ns} unresolved'
+    unresolved_ns = len(sev_summary.for_check('namespaces'))
+    all_ns_skipped = report.namespace_resolution_skipped
+    ns_label = 'resolution skipped' if all_ns_skipped else (f'{unresolved_ns} unresolved' if unresolved_ns else 'all resolved')
     parts.append('<section class="section">')
-    parts.append(_section_heading('namespaces', 'Namespaces', ns_only_status, ns_label))
+    parts.append(_section_heading('namespaces', 'Namespaces', ns_label, na=all_ns_skipped))
     parts.append(_guide_link('namespaces'))
     parts.append('<p class="subtitle">Each namespace URI declared in the ontology (the target of a <code>@prefix</code>) is fetched over HTTP and parsed as RDF where possible. A namespace that does not resolve makes its terms uncheckable downstream.</p>')
     parts.append(f'<p class="subtitle"><strong>{ok_ns}/{total_ns}</strong> namespaces resolved.</p>')
@@ -856,7 +798,9 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             parts.append("</details>")
 
     if standard_ok:
-        total_std_terms = sum(len(ns.terms) for ns in standard_ok)
+        total_std_terms = sum(
+            t.status == Status.OK for ns in standard_ok for t in report.external_terms_for_namespace(ns)
+        )
         parts.append('<details style="margin-top:1.5em;"><summary style="cursor:pointer;padding:0.6em 0;font-weight:bold;color:#555;">')
         parts.append(f'{len(standard_ok)} standard vocabularies OK ({total_std_terms} terms verified)</summary>')
         for ns in standard_ok:
@@ -868,11 +812,11 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     _open_cluster('unused-prefixes')
     parts.append('<section class="section">')
     if report.unused_prefixes:
-        parts.append(_section_heading('unused-prefixes', 'Unused prefixes', 'warn',
+        parts.append(_section_heading('unused-prefixes', 'Unused prefixes',
                                       f'{len(report.unused_prefixes)} to clean up'))
         parts.append(_guide_link('unused-prefixes'))
         parts.append('<p class="subtitle">Prefixes that are declared in the file but never appear in any triple. Removing them keeps the ontology clean and avoids suggesting dependencies that do not exist.</p>')
-        parts.append(_status_subtitle('warn', f'{len(report.unused_prefixes)} declared but never used'))
+        parts.append(_subtitle(f'{len(report.unused_prefixes)} declared but never used'))
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show unused prefixes ({len(report.unused_prefixes)})</summary>')
         parts.append('<table><tr><th>Prefix</th><th>Namespace IRI</th></tr>')
         for up in report.unused_prefixes:
@@ -881,31 +825,32 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             parts.append(f'<tr><td><code>{pfx}:</code></td><td><code>&lt;{uri}&gt;</code></td></tr>')
         parts.append('</table></details>')
     else:
-        parts.append(_section_heading('unused-prefixes', 'Unused prefixes', 'ok', 'all good'))
+        parts.append(_section_heading('unused-prefixes', 'Unused prefixes', 'all good'))
         parts.append(_guide_link('unused-prefixes'))
         parts.append('<p class="subtitle">Prefixes that are declared in the file but never appear in any triple. Removing them keeps the ontology clean and avoids suggesting dependencies that do not exist.</p>')
-        parts.append(_status_subtitle('ok', 'Every declared prefix is used in at least one triple.'))
+        parts.append(_subtitle('Every declared prefix is used in at least one triple.'))
     parts.append('</section>')
 
     # --- External term definitions: per-term verification against the remote vocabulary ---
     skipped = total_terms - ok_terms - fail_terms - warn_terms
     if fail_terms:
-        term_only_status = 'fail'
         term_label = f'{fail_terms} not found in remote vocabulary'
     elif warn_terms:
-        term_only_status = 'warn'
         term_label = f'{warn_terms} deprecated upstream'
+    elif terms_unchecked:
+        term_label = 'not checked'
     elif skipped:
-        term_only_status = 'ok'
         term_label = f'{skipped} not checkable'
+    elif not total_terms:
+        term_label = 'no external terms to check'
     else:
-        term_only_status = 'ok'
         term_label = 'all verified'
     _open_cluster('external-terms')
     parts.append('<section class="section">')
-    parts.append(_section_heading('external-terms', 'External term definitions', term_only_status, term_label))
+    parts.append(_section_heading('external-terms', 'External term definitions', term_label,
+                                  na=terms_unchecked or not total_terms))
     parts.append(_guide_link('external-terms'))
-    parts.append('<p class="subtitle">Every term you reuse from an external vocabulary must actually be defined in that vocabulary. askwol looks each one up in the resolved namespace; a term that is missing there is usually a typo or made-up reuse of an established prefix. A term that exists but is marked deprecated there (<code>owl:deprecated</code>, <code>owl:DeprecatedClass</code>/<code>owl:DeprecatedProperty</code>, or a <code>vs:term_status</code> of &ldquo;deprecated&rdquo;/&ldquo;archaic&rdquo;) is flagged so you don&rsquo;t build on a term the source vocabulary is phasing out.</p>')
+    parts.append('<p class="subtitle">External terms used as subjects are checked against the retrieved vocabulary. Terms not found there and terms marked deprecated are reported. Unknown datatypes are reported under <a href="#datatypes">Datatypes</a>.</p>')
     term_summary_bits = [f'<strong>{ok_terms}</strong> confirmed']
     if fail_terms:
         term_summary_bits.append(f'<strong>{fail_terms}</strong> not found')
@@ -913,12 +858,15 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         term_summary_bits.append(f'<strong>{warn_terms}</strong> deprecated upstream')
     if skipped:
         term_summary_bits.append(f'<strong>{skipped}</strong> skipped (namespace unavailable)')
-    parts.append(f'<p class="subtitle">{" &middot; ".join(term_summary_bits)} of {total_terms} total.</p>')
+    if terms_unchecked:
+        parts.append('<p class="subtitle">No external term could be checked: its namespace was not resolved.</p>')
+    elif total_terms:
+        parts.append(f'<p class="subtitle">{" &middot; ".join(term_summary_bits)} of {total_terms} total.</p>')
 
     # Flat list of problem terms across all namespaces
-    failed_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.FAIL]
-    deprecated_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.WARN]
-    skipped_terms_flat = [(ns, t) for ns in report.namespaces for t in ns.terms if t.status == Status.SKIP]
+    failed_terms_flat = [(ns, t) for ns, t in external_terms if t.status == Status.FAIL]
+    deprecated_terms_flat = [(ns, t) for ns, t in external_terms if t.status == Status.WARN]
+    skipped_terms_flat = [(ns, t) for ns, t in external_terms if t.status == Status.SKIP]
     if failed_terms_flat:
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Terms not found in their vocabulary ({len(failed_terms_flat)})</summary>')
         parts.append('<p style="font-size:0.85em;color:#666;margin:0.5em 0;">Some vocabularies redirect an unresolvable term&rsquo;s IRI to a general documentation page, which can coincidentally define a similarly named term under a different namespace. The IRI below is what askwol actually checked, not necessarily where the link redirects to.</p>')
@@ -949,7 +897,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Confirmed terms ({ok_terms})</summary>')
         parts.append('<table><tr><th>Term</th><th>Prefix</th></tr>')
         for ns in report.namespaces:
-            for t in ns.terms:
+            for t in report.external_terms_for_namespace(ns):
                 if t.status == Status.OK:
                     t_iri = escape(t.term_uri)
                     parts.append(f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(t.local_name)}</code></a></td>'
@@ -961,13 +909,12 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     it = report.internal_terms
     if it and it.status != Status.SKIP:
         _open_cluster('internal-terms')
-        i_status = 'ok' if not it.undefined else 'fail'
-        i_label = 'all defined' if i_status == 'ok' else f'{len(it.undefined)} undefined'
+        i_label = f'{len(it.undefined)} undefined' if it.undefined else 'all defined'
         parts.append('<section class="section">')
-        parts.append(_section_heading('internal-terms', 'Internal term definitions', i_status, i_label))
+        parts.append(_section_heading('internal-terms', 'Internal term definitions', i_label))
         parts.append(_guide_link('internal-terms'))
         parts.append('<p class="subtitle">Every term you use from your own namespace must also be defined there: it has to appear as the subject of at least one triple, not only as a predicate or object. A term that is referenced but never defined is usually a typo or a forgotten declaration.</p>')
-        parts.append(_status_subtitle(i_status, f'{it.defined}/{it.total_referenced} referenced terms defined &middot; {len(it.undefined)} undefined'))
+        parts.append(_subtitle(f'{it.defined}/{it.total_referenced} referenced terms defined &middot; {len(it.undefined)} undefined'))
         if it.undefined:
             parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Referenced but never defined ({len(it.undefined)})</summary>')
             parts.append('<table><tr><th>Term</th></tr>')
@@ -982,7 +929,8 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             parts.append('<table><tr><th>Term</th><th>Status</th></tr>')
             for ref in sorted(it.referenced, key=lambda x: (x.defined, x.display_name.lower())):
                 t_iri = escape(ref.term)
-                status_html = _ok + ' defined' if ref.defined else _fail + ' undefined'
+                status_html = (_mark(None, '1.1em') + ' defined' if ref.defined
+                               else _mark(RULE_SEVERITY[Rule.INTERNAL_TERM_UNDEFINED], '1.1em') + ' undefined')
                 parts.append(
                     f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(ref.display_name)}</code></a></td>'
                     f'<td>{status_html}</td></tr>'
@@ -997,16 +945,15 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     inv = report.term_inventory
     if inv and inv.status != Status.SKIP and inv.entries:
         _open_cluster('term-inventory')
-        inv_status = 'ok' if not inv.naming_issues else 'warn'
-        inv_label = 'naming consistent' if inv_status == 'ok' else f'{len(inv.naming_issues)} naming issue(s)'
+        inv_label = f'{len(inv.naming_issues)} naming issue(s)' if inv.naming_issues else 'naming consistent'
         parts.append('<section class="section">')
-        parts.append(_section_heading('term-inventory', 'Term inventory &amp; naming', inv_status, inv_label))
+        parts.append(_section_heading('term-inventory', 'Term inventory &amp; naming', inv_label))
         parts.append(_guide_link('term-inventory'))
         parts.append('<p class="subtitle">Every term defined in the ontology&rsquo;s own namespace, grouped by category. By convention, class names start with an uppercase letter (<code>Person</code>) and property names start with a lowercase letter (<code>hasName</code>).</p>')
         counts_html = ' &middot; '.join(
             f'<strong>{n}</strong> {escape(cat)}' for cat, n in inv.category_counts.items()
         )
-        parts.append(_status_subtitle(inv_status, f'{inv.total_terms} internal term{"s" if inv.total_terms != 1 else ""}: {counts_html}'))
+        parts.append(_subtitle(f'{inv.total_terms} internal term{"s" if inv.total_terms != 1 else ""}: {counts_html}'))
         summary = f'Show all terms ({inv.total_terms})'
         if inv.naming_issues:
             summary += f' &middot; {len(inv.naming_issues)} to review'
@@ -1019,7 +966,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             elif e.naming_ok:
                 mark = '<span style="color:#2e7d32;font-size:1.2em;line-height:1">&#x2713;</span>'
             else:
-                mark = f'<span style="color:#e6a700;font-size:1.2em;line-height:1">&#x26A0;</span> {escape(e.naming_message or "")}'
+                mark = f'{_mark(RULE_SEVERITY[Rule.NAMING_CONVENTION], "1.2em")} {escape(e.naming_message or "")}'
             parts.append(
                 f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(e.display_name)}</code></a></td>'
                 f'<td>{escape(e.category)}</td><td>{mark}</td></tr>'
@@ -1034,18 +981,12 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     dr = report.domains_ranges
     if dr and dr.status != Status.SKIP and dr.checks:
         _open_cluster('domains-ranges')
-        if dr.status == Status.FAIL:
-            dr_status = 'fail'
-        elif dr.status == Status.WARN:
-            dr_status = 'warn'
-        else:
-            dr_status = 'ok'
-        dr_label = 'all sound' if dr_status == 'ok' else f'{len(dr.issues)} to review'
+        dr_label = f'{len(dr.issues)} to review' if dr.issues else 'all sound'
         parts.append('<section class="section">')
-        parts.append(_section_heading('domains-ranges', 'Domains &amp; ranges', dr_status, dr_label))
+        parts.append(_section_heading('domains-ranges', 'Domains &amp; ranges', dr_label))
         parts.append(_guide_link('domains-ranges'))
-        parts.append('<p class="subtitle">Object and datatype properties should declare an <code>rdfs:domain</code> and <code>rdfs:range</code>. An object property should range over a <strong>class</strong>; a datatype property over a <strong>datatype</strong>. This check looks only at domain and range declared directly on each property, not values inherited from super-properties.</p>')
-        parts.append(_status_subtitle(dr_status,
+        parts.append('<p class="subtitle">Object and datatype properties should declare an <code>rdfs:domain</code> and <code>rdfs:range</code>. An object property should range over a <strong>class</strong>; a datatype property over a <strong>datatype</strong>. A missing domain or range is a recommendation; a domain or range of the wrong kind is an error. This check looks only at domain and range declared directly on each property, not values inherited from super-properties.</p>')
+        parts.append(_subtitle(
             f'{dr.total_properties} propert{"y" if dr.total_properties == 1 else "ies"} '
             f'({dr.object_properties} object &middot; {dr.datatype_properties} datatype) &middot; '
             f'{dr.with_domain} with a domain &middot; {dr.with_range} with a range'))
@@ -1056,14 +997,17 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('<table><tr><th>Property</th><th>Category</th><th style="width:70px;">Domain</th><th style="width:70px;">Range</th><th>Status</th></tr>')
         for c in sorted(dr.checks, key=lambda x: (x.status == Status.OK, x.category, x.display_name.lower())):
             t_iri = escape(c.term)
-            dmark = ('<span style="color:#2e7d32">&#x2713;</span>' if c.has_domain
-                     else '<span style="color:#c62828">&#x2717;</span>')
-            rmark = ('<span style="color:#2e7d32">&#x2713;</span>' if c.has_range
-                     else '<span style="color:#c62828">&#x2717;</span>')
+            dmark = (_mark(None, '1em') if c.has_domain
+                     else _mark(RULE_SEVERITY[Rule.DOMAIN_RANGE_MISSING], '1em'))
+            rmark = (_mark(None, '1em') if c.has_range
+                     else _mark(RULE_SEVERITY[Rule.DOMAIN_RANGE_MISSING], '1em'))
             category = escape(c.category)
             if c.deprecated:
                 category += f' <span title="Deprecated ({escape(c.deprecated)}); not checked" style="color:#999;">&#x2298;</span>'
-            issue = f'{_status_mark(c.status)} {escape(c.message or "")}' if c.status != Status.OK else _status_mark(c.status)
+            findings = c.findings()
+            issue = '<br>'.join(
+                f'{_mark(f.severity)} {escape(f.message or "")}' for f in findings
+            ) if findings else _mark(None)
             parts.append(
                 f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(c.display_name)}</code></a></td>'
                 f'<td>{category}</td><td>{dmark}</td><td>{rmark}</td><td>{issue}</td></tr>'
@@ -1078,13 +1022,12 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     dt = report.datatypes
     if dt and dt.status != Status.SKIP and dt.usages:
         _open_cluster('datatypes')
-        dt_status = 'ok' if not dt.unrecognised else 'fail'
-        dt_label = 'all recognised' if dt_status == 'ok' else f'{len(dt.unrecognised)} unrecognised'
+        dt_label = f'{len(dt.unrecognised)} unrecognised' if dt.unrecognised else 'all recognised'
         parts.append('<section class="section">')
-        parts.append(_section_heading('datatypes', 'Datatypes', dt_status, dt_label))
+        parts.append(_section_heading('datatypes', 'Datatypes', dt_label))
         parts.append(_guide_link('datatypes'))
-        parts.append('<p class="subtitle">Datatypes used as property ranges and as literal datatypes should be recognised XSD built-ins (<code>xsd:string</code>, <code>xsd:integer</code>, &hellip;), <code>rdfs:Literal</code>, <code>rdf:langString</code>, or a datatype you declare with <code>rdfs:Datatype</code>. An unrecognised datatype is usually a typo.</p>')
-        parts.append(_status_subtitle(dt_status, f'{dt.recognised}/{dt.total_datatypes} recognised &middot; {len(dt.unrecognised)} unrecognised'))
+        parts.append('<p class="subtitle">Datatypes used as property ranges and as literal datatypes should be recognised XSD built-ins (<code>xsd:string</code>, <code>xsd:integer</code>, &hellip;), <code>rdfs:Literal</code>, <code>rdf:langString</code>, or a datatype you declare with <code>rdfs:Datatype</code>. An unrecognised datatype is usually a typo, and it takes the ontology outside OWL 2 DL.</p>')
+        parts.append(_subtitle(f'{dt.recognised}/{dt.total_datatypes} recognised &middot; {len(dt.unrecognised)} unrecognised'))
         summary = f'Show all datatypes ({dt.total_datatypes})'
         if dt.unrecognised:
             summary += f' &middot; {len(dt.unrecognised)} unrecognised'
@@ -1095,7 +1038,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             if u.recognised:
                 status = '<span style="color:#2e7d32;font-size:1.2em;line-height:1">&#x2713;</span>'
             else:
-                status = f'<span style="color:#c62828;font-size:1.2em;line-height:1">&#x2717;</span> {escape(u.message or "")}'
+                status = f'{_mark(RULE_SEVERITY[Rule.DATATYPE_UNRECOGNISED], "1.2em")} {escape(u.message or "")}'
             parts.append(
                 f'<tr><td><a href="{t_iri}" target="_blank" rel="noopener" title="{t_iri}"><code>{escape(u.display_name)}</code></a></td>'
                 f'<td>{u.count}</td><td>{escape(", ".join(u.sources))}</td><td>{status}</td></tr>'
@@ -1110,14 +1053,13 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     sk = report.non_ontology_terms
     if sk and sk.status != Status.SKIP:
         _open_cluster('non-ontology-terms')
-        sk_status = 'ok' if not sk.terms else 'warn'
-        sk_label = 'schema only' if sk_status == 'ok' else f'{len(sk.terms)} to move out'
+        sk_label = f'{len(sk.terms)} to move out' if sk.terms else 'schema only'
         parts.append('<section class="section">')
-        parts.append(_section_heading('non-ontology-terms', 'Non-ontology terms', sk_status, sk_label))
+        parts.append(_section_heading('non-ontology-terms', 'Non-ontology terms', sk_label))
         parts.append(_guide_link('non-ontology-terms'))
         parts.append('<p class="subtitle">An OWL ontology should define schema: classes, properties, and datatypes. A <code>skos:Concept</code> scheme is subject-matter data, not schema, so a <code>skos:Concept</code> defined in the ontology&rsquo;s own namespace is flagged. Named individuals are not flagged here: many ontologies deliberately define a small, fixed set of individuals alongside their schema (e.g. days of week, units of measure), which is a common, legitimate pattern rather than accidental instance data.</p>')
         if sk.terms:
-            parts.append(_status_subtitle('warn', f'{len(sk.terms)} skos:Concept instance{"s" if len(sk.terms) != 1 else ""} defined in the ontology&rsquo;s own namespace'))
+            parts.append(_subtitle(f'{len(sk.terms)} skos:Concept instance{"s" if len(sk.terms) != 1 else ""} defined in the ontology&rsquo;s own namespace'))
             parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Terms to move into a separate concept scheme ({len(sk.terms)})</summary>')
             parts.append('<table><tr><th>Term</th><th>What it is</th></tr>')
             for issue in sk.terms:
@@ -1128,7 +1070,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
                 )
             parts.append('</table></details>')
         else:
-            parts.append(_status_subtitle('ok', 'The ontology&rsquo;s own namespace defines no skos:Concept instances.'))
+            parts.append(_subtitle('The ontology&rsquo;s own namespace defines no skos:Concept instances.'))
         parts.append('</section>')
     else:
         _skipped_section('non-ontology-terms', 'Non-ontology terms',
@@ -1138,31 +1080,31 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
     docs = report.definition_docs
     if docs and docs.total_definitions:
         _open_cluster('labels')
-        def _mark_cell(present: bool, deprecated: str | None) -> str:
+        def _mark_cell(present: bool, deprecated: str | None, rule: Rule) -> str:
             if deprecated:
                 return f'<span title="Deprecated ({escape(deprecated)}); not checked" style="color:#999;font-size:1.3em;line-height:1">&#x2298;</span>'
             if present:
                 return '<span style="color:#2e7d32;font-size:1.3em;line-height:1">&#x2713;</span>'
-            return '<span style="color:#c62828;font-size:1.3em;line-height:1">&#x2717;</span>'
+            return _mark(RULE_SEVERITY[rule])
 
         def _doc_section(anchor: str, title: str, prop: str,
                          present_count: int, missing: list) -> None:
-            status = 'ok' if not missing else 'fail'
-            label = 'all present' if status == 'ok' else f'{len(missing)} missing'
+            label = f'{len(missing)} missing' if missing else 'all present'
             parts.append('<section class="section">')
-            parts.append(_section_heading(anchor, title, status, label))
+            parts.append(_section_heading(anchor, title, label))
             parts.append(_guide_link(anchor))
             parts.append(f'<p class="subtitle">Every internally defined class and property should carry an <code>{prop}</code>. Reused external vocabulary terms, and terms you have marked deprecated, are ignored. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes for term documentation</a>.</p>')
-            parts.append(_status_subtitle(status, f'{present_count}/{docs.total_definitions} have an <code>{prop}</code> &middot; {len(missing)} missing'))
+            parts.append(_subtitle(f'{present_count}/{docs.total_definitions} have an <code>{prop}</code> &middot; {len(missing)} missing'))
             parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show {title.lower()} ({docs.total_definitions})</summary>')
             parts.append(f'<table><tr><th>Term</th><th>Type</th><th style="width:70px;">{title.rstrip("s")}</th></tr>')
             for check in sorted(docs.checks, key=lambda c: (getattr(c, "has_label" if anchor == "labels" else "has_comment"), c.display_name.lower())):
                 term = escape(check.display_name)
                 term_uri = escape(check.term)
                 present = check.has_label if anchor == 'labels' else check.has_comment
+                rule = Rule.LABEL_MISSING if anchor == 'labels' else Rule.COMMENT_MISSING
                 parts.append(
                     f'<tr><td><a href="{term_uri}" target="_blank" rel="noopener" title="{term_uri}"><code>{term}</code></a></td>'
-                    f'<td>{escape(check.term_type)}</td><td>{_mark_cell(present, check.deprecated)}</td></tr>'
+                    f'<td>{escape(check.term_type)}</td><td>{_mark_cell(present, check.deprecated, rule)}</td></tr>'
                 )
             parts.append('</table></details>')
             parts.append('</section>')
@@ -1197,11 +1139,11 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
             headline_bits.append(f"{n_missing_lang} value{'s' if n_missing_lang != 1 else ''} missing a translation")
         headline = " &middot; ".join(headline_bits)
 
-        parts.append(_section_heading('language-tags', 'Language tag consistency', 'warn',
+        parts.append(_section_heading('language-tags', 'Language tag consistency',
                                       f'{n_issues} issue{"s" if n_issues != 1 else ""}'))
         parts.append(_guide_link('language-tags'))
         parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) on internally defined terms should use language tags consistently.</p>')
-        parts.append(_status_subtitle('warn', headline or f'{n_issues} consistency issue{"s" if n_issues != 1 else ""}'))
+        parts.append(_subtitle(headline or f'{n_issues} consistency issue{"s" if n_issues != 1 else ""}'))
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show all issues ({n_issues})</summary>')
         parts.append('<table><tr><th>Subject</th><th>Property</th><th>Issue</th><th>Has</th><th>Expected</th></tr>')
         for i in lt.issues:
@@ -1219,45 +1161,40 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         parts.append('</table></details>')
     elif lt and lt.status == Status.OK:
         lang_str = ', '.join(lt.languages_used)
-        parts.append(_section_heading('language-tags', 'Language tag consistency', 'ok', 'consistent'))
+        parts.append(_section_heading('language-tags', 'Language tag consistency', 'consistent'))
         parts.append(_guide_link('language-tags'))
         parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) on internally defined terms should use language tags consistently.</p>')
-        parts.append(_status_subtitle('ok', f'Labels and definitions use {lang_str} consistently across subjects.'))
+        parts.append(_subtitle(f'Labels and definitions use {lang_str} consistently across subjects.'))
     elif lt and lt.status == Status.WARN:
-        parts.append(_section_heading('language-tags', 'Language tag consistency', 'warn', 'no language tags used'))
+        parts.append(_section_heading('language-tags', 'Language tag consistency', 'no language tags used'))
         parts.append(_guide_link('language-tags'))
         parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) on internally defined terms should use language tags consistently.</p>')
-        parts.append(_status_subtitle('warn', 'None of the labels or definitions in this ontology carry a language tag (e.g. <code>"Person"@en</code>). Plain strings are valid RDF, but language tags make labels easier to localise and to filter by language.'))
+        parts.append(_subtitle('None of the labels or definitions in this ontology carry a language tag (e.g. <code>"Person"@en</code>). Plain strings are valid RDF, but language tags make labels easier to localise and to filter by language.'))
     else:
-        parts.append(_section_heading('language-tags', 'Language tag consistency', 'info', 'not applicable'))
+        parts.append(_section_heading('language-tags', 'Language tag consistency', 'not applicable', na=True))
         parts.append(_guide_link('language-tags'))
         parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) on internally defined terms should use language tags consistently.</p>')
-        parts.append(_status_subtitle('info', 'This ontology has no labels or definitions to check for language tags.'))
+        parts.append(_subtitle('This ontology has no labels or definitions to check for language tags.'))
     parts.append('</section>')
 
     # Reasoner checks
     reasoner = report.reasoner
     if reasoner and reasoner.checks:
         _open_cluster('reasoner')
-        r_ok = reasoner.consistent and not reasoner.unsatisfiable_classes
-        r_status = 'ok' if r_ok else 'fail'
-        r_label = 'consistent' if r_ok else 'needs attention'
+        r_label = 'problems found' if sev_summary.for_check('reasoner') else 'no contradictions detected'
         parts.append('<section class="section">')
-        parts.append(_section_heading('reasoner', 'Reasoner checks', r_status, r_label))
+        parts.append(_section_heading('reasoner', 'Reasoner checks', r_label))
         parts.append(_guide_link('reasoner'))
-        parts.append('<p class="subtitle">A lightweight OWL RL reasoner runs against the <strong>current ontology only</strong>; <code>owl:imports</code> are not followed. It surfaces three things: overall <strong>ontology consistency</strong>, specific <strong>inconsistent individuals</strong> (e.g. typed in two <code>owl:disjointWith</code> classes), and <strong>unsatisfiable classes</strong> (definitions equivalent to <code>owl:Nothing</code>).</p>')
-        reas_summary = 'consistent' if r_ok else f'{len(reasoner.inconsistent_individuals)} inconsistency issue(s), {len(reasoner.unsatisfiable_classes)} unsatisfiable class(es)'
-        parts.append(_status_subtitle(r_status, reas_summary))
+        parts.append('<p class="subtitle">Limited OWL RL checks on the current document; imports excluded. This is not a complete consistency or OWL 2 DL conformance check.</p>')
         parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show reasoner checks ({len(reasoner.checks)})</summary>')
         parts.append('<table><tr><th>Check</th><th>Status</th><th>Detail</th></tr>')
         for check in reasoner.checks:
-            mark = _status_mark(check.status)
+            mark = (_na_mark() if check.status == Status.SKIP else
+                    _mark(worst_severity(reasoner.findings_for_check(check.key))))
             if check.status == Status.OK:
-                status_label = '<span style="color:#2e7d32">ok</span>'
-            elif check.status == Status.WARN:
-                status_label = '<span style="color:#e6a700">warning</span>'
+                status_label = f'<span style="color:{_OK_COLOR}">ok</span>'
             else:
-                status_label = '<span style="color:#c62828">fail</span>'
+                status_label = 'problem'
             parts.append(f'<tr><td>{escape(check.label)}</td><td>{mark} {status_label}</td><td>{escape(check.message or "")}</td></tr>')
         parts.append('</table></details>')
         parts.append('</section>')

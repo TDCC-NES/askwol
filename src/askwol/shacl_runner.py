@@ -24,7 +24,7 @@ from rdflib.namespace import Namespace, RDF
 from rdflib.plugins.sparql import prepareQuery
 
 from askwol.models import Status
-
+from askwol.severity import Severity
 SH = Namespace("http://www.w3.org/ns/shacl#")
 
 _orig_graph_query = Graph.query
@@ -93,10 +93,18 @@ def _load_shapes_graph(shapes_file: str) -> Graph:
     return g
 
 
+_SEVERITY_LEVELS = {
+    str(SH.Violation): Severity.ERROR,
+    str(SH.Warning): Severity.WARNING,
+    str(SH.Info): Severity.RECOMMENDATION,
+}
+
+# What a result means for the legacy per-item ``Status``: only a violation is
+# a FAIL; anything softer (warning or info) is a WARN.
 _SEVERITY_STATUS = {
-    str(SH.Violation): Status.FAIL,
-    str(SH.Warning): Status.WARN,
-    str(SH.Info): Status.OK,
+    Severity.ERROR: Status.FAIL,
+    Severity.WARNING: Status.WARN,
+    Severity.RECOMMENDATION: Status.WARN,
 }
 
 
@@ -107,8 +115,12 @@ class ShaclResult:
     focus_node: str
     name: str | None  # sh:name of the violated shape, when the shape sets one
     path: str | None  # sh:resultPath, when the violated constraint has one
-    status: Status  # derived from sh:resultSeverity
+    severity: Severity  # derived from sh:resultSeverity
     message: str
+
+    @property
+    def status(self) -> Status:
+        return _SEVERITY_STATUS[self.severity]
 
 
 # Per-data-graph cache of run_shapes() results, keyed by shapes_file. Some
@@ -166,7 +178,7 @@ def run_shapes(data_graph: Graph, shapes_file: str) -> list[ShaclResult]:
                 focus_node=str(focus),
                 name=str(name) if name is not None else None,
                 path=str(path) if path is not None else None,
-                status=_SEVERITY_STATUS.get(str(severity), Status.FAIL),
+                severity=_SEVERITY_LEVELS.get(str(severity), Severity.ERROR),
                 message=str(message) if message is not None else "",
             )
         )

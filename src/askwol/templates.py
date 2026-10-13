@@ -499,19 +499,19 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <a href="#license">Open licence</a> below.</p>
   <p><span class="tag practice">TDCC guideline</span> Neither spec says any
   of these properties is mandatory on an ontology header. The
-  <strong>Required</strong> / <strong>Recommended</strong> split below, and
-  askwol&rsquo;s choice to fail on the first group and only warn on the
-  second, is this guide&rsquo;s own editorial judgement of what a
-  well-published ontology needs.</p>
+  <strong>core</strong> / <strong>additional</strong> grouping below is
+  this guide&rsquo;s own editorial judgement of what a well-published
+  ontology needs. askwol reports every missing property, in either group,
+  as a <strong>recommendation</strong>.</p>
   <p>askwol evaluates <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/ontology_metadata.ttl" target="_blank" rel="noopener">SHACL shapes for the ontology header</a> and checks these properties:</p>
   <ul>
-    <li><strong>Required:</strong> <code>rdf:type owl:Ontology</code>,
+    <li><strong>Core:</strong> <code>rdf:type owl:Ontology</code>,
     <code>dcterms:title</code> (or <code>rdfs:label</code>, or the legacy
     <code>dc:title</code>), <code>dcterms:description</code> (or
     <code>rdfs:comment</code>, or the legacy <code>dc:description</code>),
     <code>dcterms:creator</code> (or <code>dc:creator</code>), and
     <code>owl:versionInfo</code> or <code>owl:versionIRI</code>.</li>
-    <li><strong>Recommended:</strong> <code>dcterms:created</code>
+    <li><strong>Additional:</strong> <code>dcterms:created</code>
     (or <code>dcterms:issued</code>, or <code>dc:date</code>),
     <code>dcterms:modified</code> (or <code>dc:date</code>), and
     <code>dcterms:publisher</code> (or <code>dc:publisher</code>).</li>
@@ -522,7 +522,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   either, since they carry the same meaning. One nuance: Elements 1.1&rsquo;s
   single, generic <code>dc:date</code> property doesn&rsquo;t distinguish created
   from modified, so askwol accepts it for either (or both) of the two
-  recommended date checks above.</p>
+  additional date checks above.</p>
   <div class="tip">Fill in these metadata so that both humans and machines
   can understand the provenance and reuse conditions of your ontology.</div>
   
@@ -559,10 +559,11 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Declare imports, and keep them resolving",
         "toc_label": "Imports",
         "body": """\
-  <p><span class="tag spec">Spec</span> If your ontology uses terms from
-  another vocabulary,
+  <p><span class="tag spec">Spec</span> To include another ontology&rsquo;s
+  axioms in yours, use
   <a href="https://www.w3.org/TR/owl2-syntax/#Imports" target="_blank" rel="noopener">OWL 2</a>
-  says to declare it with <code>owl:imports</code> in the ontology header:</p>
+  <code>owl:imports</code> in the ontology header. Merely referencing a
+  vocabulary&rsquo;s terms does not require an import:</p>
   <pre>&lt;https://example.org/my-ontology&gt; a owl:Ontology ;
     owl:imports &lt;http://xmlns.com/foaf/0.1/&gt; .</pre>
   <p>This tells reasoners and tools where your external terms are defined,
@@ -579,7 +580,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <div class="tip">A broken import (a dead link, a renamed URL, a server
   that no longer serves RDF) degrades reasoning for anyone who loads your
   ontology, with nothing reporting the failure unless a tool checks it
-  explicitly.</div>
+  explicitly. askwol reports an import that does not resolve as a
+  <strong>warning</strong>.</div>
   <div class="tip">askwol only checks that declared imports resolve; it
   never merges their content into the checks that run on your ontology.
   Every other check, including the reasoner, runs on your ontology document
@@ -597,9 +599,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   ontology&rsquo;s own namespace is classified as either <em>hash style</em>
   (<code>http://example.org/ont#Person</code>) or <em>slash style</em>
   (<code>http://example.org/ont/Person</code>), per declared
-  <code>owl:Ontology</code> base IRI. The check <strong>passes</strong>
-  when all defined terms under one base IRI use the same pattern and
-  <strong>warns</strong> when a single base IRI mixes both. An ontology
+  <code>owl:Ontology</code> base IRI. A base IRI whose defined terms all use
+  the same pattern is fine; one that mixes both is reported as a
+  <strong>warning</strong>. An ontology
   that legitimately bundles more than one base IRI (a rare pattern, e.g.
   the W3C PROV family) may use a different, consistent style for each
   without being flagged.</p>
@@ -659,10 +661,10 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   (in subject, predicate, or object position, plus every bound namespace)
   is grouped by namespace (the base IRI up to the last <code>/</code> or
   <code>#</code>), not just by host, so two unrelated vocabularies that
-  happen to share a host are never compared to each other. The check
-  <strong>passes</strong> when each namespace appears under exactly one URI
-  scheme and <strong>warns</strong> when the same namespace is referenced
-  under both <code>http://</code> and <code>https://</code>. The report
+  happen to share a host are never compared to each other. A namespace
+  that appears under exactly one URI scheme is fine; one referenced
+  under both <code>http://</code> and <code>https://</code> is reported as a
+  <strong>warning</strong>. The report
   lists the conflicting namespaces with examples of each scheme so you can
   pick one canonical form and migrate the others.</p>
 
@@ -744,7 +746,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p>Declare it with <code>dcterms:license</code> in the ontology header:</p>
   <pre>&lt;https://example.org/my-ontology&gt; a owl:Ontology ;
     dcterms:license &lt;https://creativecommons.org/publicdomain/zero/1.0/&gt; .</pre>
-  <div class="tip">askwol checks each declared licence against the Open Definition&rsquo;s <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of conformant licences</a>: a missing or non-open licence is an error; an open but not-recommended licence, or more than one declared licence (even if each is fine on its own), is a warning.</div>
+  <div class="tip">askwol checks each declared licence against the Open Definition&rsquo;s <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of conformant licences</a>: a missing or non-open licence, an open but not-recommended licence, or more than one declared licence (even if each is fine on its own) is reported as a recommendation.</div>
 """,
     },
     {
@@ -775,7 +777,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p>If you host your own ontology, configure your server to support
   <a href="https://www.w3.org/TR/swbp-vocab-pub/" target="_blank" rel="noopener">content negotiation</a>,
   serving RDF to machines and HTML to browsers; see
-  <a href="#server-config">Server configuration</a> below for the details.</p>
+  <a href="#server-config">Server configuration</a> below for the details.
+  askwol reports a namespace that does not resolve as a
+  <strong>warning</strong>.</p>
 """,
     },
     {
@@ -795,8 +799,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   they suggest a dependency that doesn&rsquo;t exist.</p>
   <pre>@prefix dct: &lt;http://purl.org/dc/terms/&gt; .              # used below
 @prefix geo: &lt;http://www.opengis.net/ont/geosparql#&gt; .  # unused, remove it</pre>
-  <div class="tip">askwol flags every prefix that is declared
-  but never appears in a triple, so you can clean them up.</div>
+  <div class="tip">askwol reports every prefix that is declared
+  but never appears in a triple as a <strong>recommendation</strong>, so you
+  can clean them up.</div>
 """,
     },
     {
@@ -817,8 +822,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <div class="warn">When reusing a term, use the <em>exact</em>
   IRI from the source vocabulary. A typo like <code>foaf:nme</code> instead
   of <code>foaf:name</code> breaks interoperability.</div>
-  <div class="tip">askwol looks up every term you reuse from an external
-  vocabulary and reports the ones that are not actually defined there. This
+  <div class="tip">askwol checks external terms used as subjects in your
+  document against the retrieved vocabulary and reports terms not found there as
+  <strong>warnings</strong>. This
   catches typos like <code>foaf:nme</code>, made-up terms like
   <code>owl:MadeUpClass</code>, and <strong>namespace hijacking</strong>
   (asserting a brand-new term such as <code>foaf:MadeUpConcept</code> under
@@ -866,7 +872,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <div class="tip">askwol treats a term as <strong>defined</strong> when it
   appears as the <strong>subject</strong> of at least one triple, and as
   <strong>referenced</strong> when it appears as a predicate or object. A term
-  in your own namespace that is referenced but never defined is flagged.
+  in your own namespace that is referenced but never defined is reported as
+  a <strong>warning</strong>.
   External vocabulary terms are covered by the
   <a href="#external-terms">External term definitions</a> check instead.
   Some ontologies re-declare a reused term as boilerplate (e.g.
@@ -903,7 +910,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   naming a class <code>person</code> or a property <code>HasName</code>.
   askwol checks it anyway, because consistent casing is one of the fastest
   ways to tell a class from a property at a glance. A mismatch is reported
-  as a warning, not a failure: it&rsquo;s worth fixing, but it won&rsquo;t
+  as a recommendation, not an error: it&rsquo;s worth fixing, but it won&rsquo;t
   block publication.</p>
   <ul>
     <li><strong>Classes start with an uppercase letter</strong> and are usually
@@ -964,6 +971,11 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     be an object property.</li>
     <li>A <strong>domain</strong> should be a class for either kind.</li>
   </ul>
+  <p><span class="tag spec">Spec</span> In OWL 2 DL, an object property
+  ranges over classes and a datatype property over datatypes. Getting that
+  wrong puts the ontology outside OWL 2 DL, so askwol reports it as an
+  <strong>error</strong>. A domain or range that is simply missing is only a
+  <strong>recommendation</strong>.</p>
   <div class="warn"><span class="tag spec">Spec</span> In OWL, a domain or
   range is not a constraint that rejects bad data; a reasoner instead
   <em>infers new facts</em> from it. Stating
@@ -986,18 +998,23 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Use recognised datatypes",
         "toc_label": "Datatypes",
         "body": """\
-  <p><span class="tag spec">Spec</span> Datatype property ranges and typed
-  literals can use any
+  <p><span class="tag spec">Spec</span> RDF typed literals use datatype
+  IRIs, commonly from
   <a href="https://www.w3.org/TR/xmlschema11-2/" target="_blank" rel="noopener">XSD</a>
-  built-in (<code>xsd:string</code>, <code>xsd:integer</code>,
-  <code>xsd:date</code>, <code>xsd:boolean</code>, &hellip;),
-  <a href="https://www.w3.org/TR/rdf-schema/#ch_literal" target="_blank" rel="noopener"><code>rdfs:Literal</code></a>,
-  <code>rdf:langString</code>, or a custom datatype you declare with
+  built-ins (<code>xsd:string</code>, <code>xsd:integer</code>,
+  <code>xsd:date</code>, <code>xsd:boolean</code>, &hellip;)
+  or <code>rdf:langString</code>. A datatype property can range over
+  <a href="https://www.w3.org/TR/rdf-schema/#ch_literal" target="_blank" rel="noopener"><code>rdfs:Literal</code></a>
+  or a specific datatype. Custom datatypes can be declared with
   <a href="https://www.w3.org/TR/rdf-schema/#ch_datatype" target="_blank" rel="noopener"><code>rdfs:Datatype</code></a>.
-  <span class="tag practice">TDCC guideline</span> RDF places no closed list
-  on datatype IRIs; any IRI is technically legal there. askwol checks
-  against this recognised set instead, because an IRI outside it is almost
-  never intentional.</p>
+  RDF itself places no closed list on datatype IRIs; any IRI is legal there.
+  <span class="tag spec">Spec</span> OWL 2 has a specific
+  <a href="https://www.w3.org/TR/owl2-syntax/#Datatype_Maps" target="_blank" rel="noopener">datatype map</a>
+  and restrictions on datatype definitions; recognising an IRI or finding
+  a declaration alone does not establish OWL 2 DL conformance.
+  askwol checks datatype IRIs against its built-in list and local
+  declarations, reporting unrecognised IRIs as <strong>errors</strong>.
+  It does not perform a complete datatype or literal-value validation.</p>
   <pre>&lt;#age&gt; rdfs:range xsd:nonNegativeInteger .
 &lt;#born&gt; rdfs:range xsd:date .
 "42"^^xsd:integer</pre>
@@ -1030,8 +1047,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <pre>&lt;#Dataset&gt; a owl:Class .     # schema, belongs here
 &lt;#biology&gt; a skos:Concept .  # concept, belongs in a SKOS scheme
 &lt;#Monday&gt; a &lt;#DayOfWeek&gt; .   # named individual, fine to keep here</pre>
-  <div class="tip">askwol only flags <code>skos:Concept</code> instances defined
-  in your own namespace; a full concept scheme has usually outgrown the schema
+  <div class="tip">askwol only reports <code>skos:Concept</code> instances defined
+  in your own namespace, as <strong>recommendations</strong>; a full concept scheme has usually outgrown the schema
   file and is better managed on its own. Named individuals are left alone:
   many ontologies deliberately define a small, fixed set of them alongside
   their schema (days of week, units of measure, as OWL-Time does), a
@@ -1063,7 +1080,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <div class="tip">askwol uses <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes</a> to check that each
   <em>internally defined</em> class and property has an
   <code>rdfs:label</code>. Reused external vocabulary terms, and terms you
-  have marked deprecated yourself, are ignored.</div>
+  have marked deprecated yourself, are ignored. A missing label is reported
+  as a <strong>recommendation</strong>.</div>
 """,
     },
     {
@@ -1089,7 +1107,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <div class="tip">askwol uses <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes</a> to check that each
   <em>internally defined</em> class and property has an
   <code>rdfs:comment</code>. Reused external vocabulary terms, and terms you
-  have marked deprecated yourself, are ignored.</div>
+  have marked deprecated yourself, are ignored. A missing comment is reported
+  as a <strong>recommendation</strong>.</div>
   <div class="tip">An <strong>inverse property</strong>
   (<code>owl:inverseOf</code>) doesn&rsquo;t need its own comment when its
   partner already has one: the relationship is documented either way.</div>
@@ -1129,7 +1148,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     class should have both. A missing <code>@nl</code> on one subject
     is probably an oversight.</li>
     <li><strong>No tags used anywhere.</strong> If your ontology has labels
-    or comments but none carry a language tag, askwol warns too: plain
+    or comments but none carry a language tag, askwol reports that too, as
+    a recommendation: plain
     strings are valid RDF, but untagged text is harder to localise or filter
     by language. An ontology with no labels or comments at all isn&rsquo;t
     flagged: there is nothing to tag.</li>
@@ -1157,24 +1177,31 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <a href="https://www.w3.org/TR/owl2-direct-semantics/" target="_blank" rel="noopener">OWL 2 Direct Semantics</a>
   formally defines when an ontology is consistent and when a class is
   satisfiable; a reasoner can derive consequences from your axioms and
-  detect contradictions you didn&rsquo;t intend. askwol reports these as
-  three separate facets in the
+  detect contradictions you didn&rsquo;t intend. askwol displays a summary
+  and two types of logical finding in the
   <a href="/#reasoner">Reasoner checks</a> section of the report:</p>
   <ul>
-    <li><strong>Ontology consistency</strong>: the ontology as a whole
-    has a possible model. This is the overall verdict; it fails when at
-    least one individual is inconsistent.</li>
+    <li><strong>Logical findings</strong>: a summary of the selected
+    contradiction and class-satisfiability checks. No detected findings
+    does not establish consistency of the ontology as a whole.</li>
     <li><strong>Inconsistent individuals</strong>: specific named
     individuals that violate a class restriction (e.g. a <code>Person</code>
-    with two values for a functional property, or membership in two
+    with membership in two
     <code>owl:disjointWith</code> classes). Each offending individual is
     listed by IRI so you can locate the contradiction.</li>
-    <li><strong>Unsatisfiable classes</strong>: no class definition is
+    <li><strong>Unsatisfiable classes</strong>: classes whose definition is
     logically empty. A class is unsatisfiable when its definition forces it
     to be equivalent to <code>owl:Nothing</code> (e.g. via disjoint
     superclasses). The class is syntactically valid but can never have
-    instances.</li>
+    instances. This does not make the ontology as a whole inconsistent.</li>
   </ul>
+  <p>A functional object property with two object IRIs may imply that
+  they name the same individual. It is a contradiction only if the
+  objects must be different. For a functional datatype property, two
+  unequal data values contradict functionality. askwol does not check
+  all these cases.</p>
+  <p>Each inconsistent individual and each unsatisfiable class is reported
+  as an <strong>error</strong>.</p>
   <div class="tip"><span class="tag practice">TDCC guideline</span> askwol
   runs a lightweight
   <a href="https://www.w3.org/TR/owl2-profiles/#OWL_2_RL" target="_blank" rel="noopener">OWL 2 RL</a>
@@ -1306,7 +1333,7 @@ _CLUSTER_NUMBERS = {c["key"]: i + 1 for i, c in enumerate(CHECK_CATEGORIES)}
 # API docs, which already speak Markdown.
 CHECKS: list[dict[str, str]] = [
     {"report_anchor": "ontology-metadata", "title": "Ontology metadata", "guide_anchor": "metadata", "category": "basics",
-     "description": "a SHACL check on the ontology header: title, description, creator, and version are required; created and modified dates and publisher are recommended."},
+     "description": "a SHACL check on the ontology header: title, description, creator, and version are the core properties; created and modified dates and publisher are additional. Every missing property is reported as a recommendation."},
     {"report_anchor": "imports", "title": "Imports", "guide_anchor": "imports", "category": "basics",
      "description": "every `owl:imports` target declared in the ontology header is fetched over HTTP and parsed as RDF, the same way a reasoner would follow it."},
     {"report_anchor": "iri-strategy", "title": "IRI strategy", "guide_anchor": "iri-strategy", "category": "basics",
@@ -1314,7 +1341,7 @@ CHECKS: list[dict[str, str]] = [
     {"report_anchor": "iri-scheme", "title": "IRI scheme", "guide_anchor": "https-http", "category": "basics",
      "description": "each namespace (the base IRI, not just the host) should be referenced under a single URI scheme. `http://example.org/X` and `https://example.org/X` are different IRIs."},
     {"report_anchor": "license", "title": "Open licence", "guide_anchor": "license", "category": "basics",
-     "description": "the declared `dcterms:license` (or `schema:license`) must be an open licence per the Open Definition; CC0 and CC BY are recommended, other open licences (e.g. CC BY-SA, ODC-By, ODbL) pass with a warning, and a missing or non-open licence fails."},
+     "description": "the declared `dcterms:license` (or `schema:license`) should be an open licence per the Open Definition; CC0 and CC BY are the recommended choices, and a missing, non-open or merely open-but-not-recommended licence is reported as a recommendation."},
     {"report_anchor": "namespaces", "title": "Namespaces", "guide_anchor": "resolvable", "category": "reuse",
      "description": "fetches each declared namespace URI, checks HTTP status, and tries to parse it as RDF (Turtle, RDF/XML, JSON-LD, N-Triples). Falls back to scanning HTML pages for RDF links."},
     {"report_anchor": "unused-prefixes", "title": "Unused prefixes", "guide_anchor": "prefixes", "category": "reuse",
@@ -1326,7 +1353,7 @@ CHECKS: list[dict[str, str]] = [
     {"report_anchor": "term-inventory", "title": "Term inventory & naming", "guide_anchor": "term-inventory", "category": "structure",
      "description": "categorises every internal term (class, object property, datatype property, datatype, individual) and checks capitalisation: classes start uppercase, properties lowercase. Coded identifiers are exempt."},
     {"report_anchor": "domains-ranges", "title": "Domains & ranges", "guide_anchor": "domains-ranges", "category": "structure",
-     "description": "every internally defined object and datatype property should declare a domain and a range. Object properties range over classes; datatype properties over datatypes."},
+     "description": "every internally defined object and datatype property should declare a domain and a range. Object properties range over classes; datatype properties over datatypes. A missing domain or range is a recommendation; a domain or range of the wrong kind is an error."},
     {"report_anchor": "datatypes", "title": "Datatypes", "guide_anchor": "datatypes", "category": "structure",
      "description": "datatypes used as property ranges and literal datatypes should be recognised XSD built-ins, `rdfs:Literal`, `rdf:langString`, or a locally declared `rdfs:Datatype`. Catches typos like `xsd:stirng`."},
     {"report_anchor": "non-ontology-terms", "title": "Non-ontology terms", "guide_anchor": "non-ontology-terms", "category": "structure",
@@ -1338,8 +1365,13 @@ CHECKS: list[dict[str, str]] = [
     {"report_anchor": "language-tags", "title": "Language tag consistency", "guide_anchor": "lang-tags", "category": "docs",
      "description": "labels and definitions (`rdfs:label`, `rdfs:comment`, `skos:prefLabel`, `skos:definition`, ...) on internally defined terms should use language tags consistently."},
     {"report_anchor": "reasoner", "title": "Reasoner checks", "guide_anchor": "reasoner", "category": "logic",
-     "description": "lightweight OWL RL reasoning on the current ontology only (`owl:imports` are not followed), with three facets: *ontology consistency*, *inconsistent individuals*, and *unsatisfiable classes*."},
+     "description": "limited OWL RL checks for inconsistent individuals and unsatisfiable classes in the current document; imports are excluded. Not a complete consistency or OWL 2 DL conformance check."},
 ]
+
+CLUSTER_NUMBERS = _CLUSTER_NUMBERS
+CHECK_NUMBERS: dict[str, str] = {
+    check["report_anchor"]: _GUIDE_NUMBERS[check["guide_anchor"]] for check in CHECKS
+}
 
 # Enforce alignment between CHECKS and GUIDE_SECTIONS at import time. If they
 # ever drift (someone renames an anchor, reorders a section, etc.) the module
@@ -1443,6 +1475,13 @@ def render_checks_api_description() -> str:
     OpenAPI description."""
     intro = "Upload an OWL ontology and get a full validation report as JSON.\n\nThe report includes:\n\n"
     outro = (
+        "\n\n`severity_summary` lists every individual finding with its severity and "
+        "counts them per level: `error` (a formal logic or OWL 2 DL problem; "
+        "`has_errors` is true), `warning` (a likely mistake or serious "
+        "interoperability problem) and `recommendation` (publishing best "
+        "practice). The per-item `status` values "
+        "(`ok`, `warn`, `fail`, `skip`) describe the outcome of one check, not how "
+        "serious the finding is."
         "\n\nOnly terms that appear as subjects in triples are validated "
         "against remote vocabularies. Terms used only as predicates or "
         "objects are treated as well-known vocabulary."
@@ -1620,6 +1659,24 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   <div class="tip">A green box like this one is a tip or extra detail.</div>
   <div class="warn">An amber box like this one is a warning or common
   pitfall to watch out for.</div>
+  <p>Every finding in an askwol report also carries one of three
+  <strong>severity levels</strong>, so you can tell a logically broken
+  ontology from an ontology that could be published better. The report
+  counts individual findings, not checks: ten classes without a label are
+  ten recommendations.</p>
+  <p><strong>&#x2717; Error</strong> a formal logic or OWL 2 DL problem (for
+  example an inconsistent individual, an unsatisfiable class, an
+  unrecognised datatype, or a property whose domain or range is of the
+  wrong kind). An unsatisfiable class does not make the ontology as a whole
+  inconsistent, but nothing can be an instance of it.</p>
+  <p><strong>&#x26A0; Warning</strong> a likely mistake or a serious
+  interoperability problem (for example a namespace or import that does not
+  resolve, a reused term that does not exist in its vocabulary, mixed
+  <code>http</code>/<code>https</code> IRIs, or a term that is used but
+  never defined).</p>
+  <p><strong>&#x1F4A1; Recommendation</strong> ontology publishing best
+  practice (for example ontology metadata, an open licence, labels and
+  comments, or naming conventions).</p>
   </div>
 
   <div class="toc">

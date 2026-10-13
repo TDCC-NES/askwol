@@ -69,7 +69,25 @@ askwol check ontology.ttl --timeout 60        # default: 30s
 askwol check ontology.ttl --skip-resolution   # parse only
 ```
 
-Exit codes: `0` all pass, `1` issues found.
+Exit codes: `0` no errors, `1` errors found. Warnings and recommendations alone do not change the exit code.
+
+### Severity levels
+
+Every finding carries one of three severities, in the HTML report, the CLI/Markdown output, and the JSON API (`severity_summary`). Reports count individual findings, not checks: ten classes without a label are ten recommendations.
+
+| Level | Meaning |
+|-------|---------|
+| ✗ **Error** | A formal logic or OWL 2 DL problem (e.g. an inconsistent individual, an unsatisfiable class, an unrecognised datatype, a domain or range of the wrong kind). |
+| ⚠ **Warning** | A likely mistake or a serious interoperability problem (e.g. an unresolvable namespace or import, a reused term that does not exist in its vocabulary, mixed `http`/`https` IRIs, a term used but never defined). |
+| 💡 **Recommendation** | Ontology publishing best practice (e.g. ontology metadata, an open licence, labels and comments, naming conventions). |
+
+The per-item `status` values (`ok`, `warn`, `fail`, `skip`) in the JSON describe the outcome of one check, not how serious it is. `severity_summary` adds the `has_errors` flag, the count per severity, and the list of findings (rule, check, severity, subject, message). The classification lives in one table, `RULE_SEVERITY` in [`severity.py`](src/askwol/severity.py); the SHACL shapes under `src/askwol/shapes/` are kept in step with it (a test enforces this).
+
+Severity configuration is code-based, not a CLI or runtime setting. Each rule can be classified independently. Unknown datatypes are counted under Datatypes, not again under External term definitions; skipped checks contribute no findings.
+
+The reasoner performs limited checks on the current document, without imports. No detected findings is not a guarantee of consistency or OWL 2 DL conformance.
+
+Moving a few `status` values: a missing label, comment, or ontology-header property is now `warn` (it was `fail`), and `MetadataCheck.severity` (`required`/`recommended`) is now `tier` (`core`/`additional`).
 
 ### Web UI
 

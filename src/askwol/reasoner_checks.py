@@ -134,13 +134,13 @@ def run_reasoner_checks(graph: Graph) -> ReasonerReport:
     else:
         overall_status = Status.OK
         overall_message = (
-            "No logical contradictions or unsatisfiable classes found in the "
+            "No logical contradictions or unsatisfiable classes detected in the "
             "current ontology."
         )
     checks.append(
         ReasonerCheck(
             key="ontology_consistency",
-            label="Ontology consistency",
+            label="Logical findings",
             status=overall_status,
             message=overall_message,
         )
@@ -162,7 +162,7 @@ def run_reasoner_checks(graph: Graph) -> ReasonerReport:
                 key="inconsistent_individuals",
                 label="Inconsistent individuals",
                 status=Status.OK,
-                message="No logical contradictions found among named individuals in the current ontology.",
+                message="No logical contradictions detected among named individuals in the current ontology.",
             )
         )
 

@@ -67,7 +67,7 @@ def check(file: Path, output_format: str, output: Path | None, timeout: float, s
     else:
         print_report(report)
 
-    sys.exit(1 if report.has_issues else 0)
+    sys.exit(1 if report.has_errors else 0)
 
 
 if __name__ == "__main__":
