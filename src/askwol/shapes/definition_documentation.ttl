@@ -54,13 +54,14 @@
         sh:name "Label" ;
         sh:path rdfs:label ;
         sh:minCount 1 ;
-        sh:severity sh:Violation ;
+        sh:severity sh:Info ;
         sh:message "Add an rdfs:label to each internally defined class and property." ;
     ] ;
 
     sh:sparql [
         a sh:SPARQLConstraint ;
         sh:name "Comment" ;
+        sh:severity sh:Info ;
         sh:message "Add an rdfs:comment to each internally defined class and property, unless its owl:inverseOf partner already has one." ;
         sh:select """
             PREFIX owl: <http://www.w3.org/2002/07/owl#>

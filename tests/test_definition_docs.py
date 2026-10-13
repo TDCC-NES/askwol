@@ -122,4 +122,4 @@ def test_markdown_report_includes_labels_and_comments_sections():
     assert "| Term | Type | Label |" in md
     assert "| Term | Type | Comment |" in md
     assert "| `Person` | Class | ok |" in md
-    assert "| `Person` | Class | missing |" in md
+    assert "| `Person` | Class | recommendation: missing |" in md

@@ -13,7 +13,7 @@
         sh:name "Title" ;
         sh:path [ sh:alternativePath ( dcterms:title rdfs:label dc:title ) ] ;
         sh:minCount 1 ;
-        sh:severity sh:Violation ;
+        sh:severity sh:Info ;
         sh:message "Add a title for the ontology using dcterms:title, rdfs:label, or the legacy dc:title." ;
     ] ;
 
@@ -21,7 +21,7 @@
         sh:name "Description" ;
         sh:path [ sh:alternativePath ( dcterms:description rdfs:comment dc:description ) ] ;
         sh:minCount 1 ;
-        sh:severity sh:Violation ;
+        sh:severity sh:Info ;
         sh:message "Add a description for the ontology using dcterms:description, rdfs:comment, or the legacy dc:description." ;
     ] ;
 
@@ -29,7 +29,7 @@
         sh:name "Creator" ;
         sh:path [ sh:alternativePath ( dcterms:creator dc:creator ) ] ;
         sh:minCount 1 ;
-        sh:severity sh:Violation ;
+        sh:severity sh:Info ;
         sh:message "Add at least one creator using dcterms:creator or the legacy dc:creator." ;
     ] ;
 
@@ -37,7 +37,7 @@
         sh:name "Version" ;
         sh:path [ sh:alternativePath ( owl:versionInfo owl:versionIRI ) ] ;
         sh:minCount 1 ;
-        sh:severity sh:Violation ;
+        sh:severity sh:Info ;
         sh:message "Add version information using owl:versionInfo or owl:versionIRI." ;
     ] ;
 
@@ -45,7 +45,7 @@
         sh:name "Created date" ;
         sh:path [ sh:alternativePath ( dcterms:created dcterms:issued dc:date ) ] ;
         sh:minCount 1 ;
-        sh:severity sh:Warning ;
+        sh:severity sh:Info ;
         sh:message "Consider adding a creation or issue date using dcterms:created, dcterms:issued, or the legacy dc:date." ;
     ] ;
 
@@ -53,7 +53,7 @@
         sh:name "Modified date" ;
         sh:path [ sh:alternativePath ( dcterms:modified dc:date ) ] ;
         sh:minCount 1 ;
-        sh:severity sh:Warning ;
+        sh:severity sh:Info ;
         sh:message "Consider adding a modification date using dcterms:modified or the legacy dc:date." ;
     ] ;
 
@@ -61,6 +61,6 @@
         sh:name "Publisher" ;
         sh:path [ sh:alternativePath ( dcterms:publisher dc:publisher ) ] ;
         sh:minCount 1 ;
-        sh:severity sh:Warning ;
+        sh:severity sh:Info ;
         sh:message "Consider adding a publisher using dcterms:publisher or the legacy dc:publisher." ;
     ] .

@@ -11,16 +11,12 @@ from __future__ import annotations
 from rdflib import OWL, Graph, URIRef
 
 from askwol.cache import OntologyCache
-from askwol.models import ImportsCheck, ImportsReport, Status
+from askwol.models import ImportsCheck, ImportsReport, NamespaceCheck, Status
 from askwol.resolver import DEFAULT_TIMEOUT, resolve_all_namespaces
 
 
-async def check_imports(
-    graph: Graph,
-    cache: OntologyCache,
-    timeout: float = DEFAULT_TIMEOUT,
-) -> ImportsReport:
-    """Resolve every declared owl:imports target and report broken ones."""
+def declared_imports(graph: Graph) -> list[str]:
+    """Distinct owl:imports target IRIs, in the order they appear."""
     declared: list[str] = []
     seen: set[str] = set()
     for o in graph.objects(None, OWL.imports):
@@ -29,6 +25,28 @@ async def check_imports(
             if val and val not in seen:
                 seen.add(val)
                 declared.append(val)
+    return declared
+
+
+def skipped_imports(graph: Graph) -> ImportsReport:
+    """The imports report for an offline run: every declared import, unresolved."""
+    checks = [
+        ImportsCheck(
+            iri=iri,
+            resolution=NamespaceCheck(prefix=iri, uri=iri, status=Status.SKIP, error="Resolution skipped"),
+        )
+        for iri in declared_imports(graph)
+    ]
+    return ImportsReport(status=Status.SKIP if checks else Status.OK, checks=checks)
+
+
+async def check_imports(
+    graph: Graph,
+    cache: OntologyCache,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> ImportsReport:
+    """Resolve every declared owl:imports target and report broken ones."""
+    declared = declared_imports(graph)
 
     if not declared:
         return ImportsReport(status=Status.OK, checks=[])

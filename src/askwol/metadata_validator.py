@@ -11,18 +11,19 @@ from askwol.shacl_runner import load_shape_messages, run_shapes
 
 _SHAPES_FILE = "ontology_metadata.ttl"
 
-# key, sh:name (as used in the shape file), label, property, severity.
+# key, sh:name (as used in the shape file), label, property, tier.
 # "key" is the stable identifier consumers rely on; sh:name is how the shape
-# file's own violations correlate back to it.
+# file's own violations correlate back to it. The tier only groups the
+# properties for display: every missing one is a recommendation.
 _SPECS: tuple[tuple[str, str, str, str, str], ...] = (
-    ("ontology_declaration", "", "Ontology declaration", "rdf:type owl:Ontology", "required"),
-    ("title", "Title", "Title", "dcterms:title, rdfs:label, or dc:title", "required"),
-    ("description", "Description", "Description", "dcterms:description, rdfs:comment, or dc:description", "required"),
-    ("creator", "Creator", "Creator", "dcterms:creator or dc:creator", "required"),
-    ("version", "Version", "Version", "owl:versionInfo or owl:versionIRI", "required"),
-    ("created", "Created date", "Created date", "dcterms:created, dcterms:issued, or dc:date", "recommended"),
-    ("modified", "Modified date", "Modified date", "dcterms:modified or dc:date", "recommended"),
-    ("publisher", "Publisher", "Publisher", "dcterms:publisher or dc:publisher", "recommended"),
+    ("ontology_declaration", "", "Ontology declaration", "rdf:type owl:Ontology", "core"),
+    ("title", "Title", "Title", "dcterms:title, rdfs:label, or dc:title", "core"),
+    ("description", "Description", "Description", "dcterms:description, rdfs:comment, or dc:description", "core"),
+    ("creator", "Creator", "Creator", "dcterms:creator or dc:creator", "core"),
+    ("version", "Version", "Version", "owl:versionInfo or owl:versionIRI", "core"),
+    ("created", "Created date", "Created date", "dcterms:created, dcterms:issued, or dc:date", "additional"),
+    ("modified", "Modified date", "Modified date", "dcterms:modified or dc:date", "additional"),
+    ("publisher", "Publisher", "Publisher", "dcterms:publisher or dc:publisher", "additional"),
 )
 
 
@@ -45,22 +46,22 @@ def validate_ontology_metadata(graph: Graph) -> MetadataReport:
     fallback_messages = load_shape_messages(_SHAPES_FILE)
 
     checks: list[MetadataCheck] = []
-    for key, shape_name, label, prop, severity in _SPECS:
+    for key, shape_name, label, prop, tier in _SPECS:
         if key == "ontology_declaration":
             checks.append(
                 MetadataCheck(
                     key=key,
                     label=label,
                     property=prop,
-                    severity=severity,
-                    status=Status.OK if has_ontology_decl else Status.FAIL,
+                    tier=tier,
+                    status=Status.OK if has_ontology_decl else Status.WARN,
                     message=None if has_ontology_decl else "Declare the ontology itself with rdf:type owl:Ontology.",
                 )
             )
             continue
 
         if not has_ontology_decl:
-            status = Status.FAIL if severity == "required" else Status.WARN
+            status = Status.WARN
             message = fallback_messages.get(shape_name)
         else:
             result = results_by_name.get(shape_name)
@@ -72,7 +73,7 @@ def validate_ontology_metadata(graph: Graph) -> MetadataReport:
                 key=key,
                 label=label,
                 property=prop,
-                severity=severity,
+                tier=tier,
                 status=status,
                 message=message,
             )

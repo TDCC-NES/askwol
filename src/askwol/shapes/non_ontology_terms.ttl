@@ -30,7 +30,7 @@
     sh:sparql [
         a sh:SPARQLConstraint ;
         sh:name "ConceptInSchema" ;
-        sh:severity sh:Warning ;
+        sh:severity sh:Info ;
         sh:message "A skos:Concept defined in the ontology's own namespace. Concepts belong in a separate SKOS concept scheme, not mixed into the schema file." ;
         sh:select """
             PREFIX skos: <http://www.w3.org/2004/02/skos/core#>

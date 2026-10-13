@@ -137,7 +137,7 @@
     sh:sparql [
         a sh:SPARQLConstraint ;
         sh:name "ClassNaming" ;
-        sh:severity sh:Warning ;
+        sh:severity sh:Info ;
         sh:message "A class name should start with an uppercase letter (e.g. Person)." ;
         sh:select """
             SELECT $this WHERE {
@@ -153,7 +153,7 @@
     sh:sparql [
         a sh:SPARQLConstraint ;
         sh:name "PropertyNaming" ;
-        sh:severity sh:Warning ;
+        sh:severity sh:Info ;
         sh:message "A property name should start with a lowercase letter (e.g. hasName), unless it follows a coded-identifier convention like CIDOC CRM's P2_has_type or Wikidata's P19 (an uppercase letter directly followed by a digit)." ;
         sh:select """
             SELECT $this WHERE {
@@ -174,7 +174,7 @@
     sh:name "DomainMissing" ;
     sh:path rdfs:domain ;
     sh:minCount 1 ;
-    sh:severity sh:Warning ;
+    sh:severity sh:Info ;
     sh:message "No rdfs:domain declared." .
 
 <https://w3id.org/askwol/shapes/inventory/RangeMissing>
@@ -183,7 +183,7 @@
     sh:name "RangeMissing" ;
     sh:path rdfs:range ;
     sh:minCount 1 ;
-    sh:severity sh:Warning ;
+    sh:severity sh:Info ;
     sh:message "No rdfs:range declared." .
 
 <https://w3id.org/askwol/shapes/inventory/DomainIsDatatype>
@@ -192,6 +192,7 @@
     sh:sparql [
         a sh:SPARQLConstraint ;
         sh:name "DomainIsDatatype" ;
+        sh:severity sh:Violation ;
         sh:message "Domain is a datatype; a domain should be a class." ;
         sh:select """
             PREFIX owl: <http://www.w3.org/2002/07/owl#>
@@ -215,6 +216,7 @@
     sh:sparql [
         a sh:SPARQLConstraint ;
         sh:name "ObjectPropertyRangeIsDatatype" ;
+        sh:severity sh:Violation ;
         sh:message "Range is a datatype; an object property should range over a class (use a datatype property instead)." ;
         sh:select """
             PREFIX owl: <http://www.w3.org/2002/07/owl#>
@@ -238,6 +240,7 @@
     sh:sparql [
         a sh:SPARQLConstraint ;
         sh:name "DatatypePropertyRangeIsClass" ;
+        sh:severity sh:Violation ;
         sh:message "Range is a class; a datatype property should range over a datatype (use an object property instead)." ;
         sh:select """
             PREFIX owl: <http://www.w3.org/2002/07/owl#>

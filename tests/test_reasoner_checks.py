@@ -67,4 +67,4 @@ def test_disjoint_types_make_individual_inconsistent():
 
     md = report_as_markdown(full)
     assert "## Reasoner checks" in md
-    assert "Ontology consistency" in md
+    assert "Logical findings" in md
