@@ -96,6 +96,10 @@ CHECK_NUMBERS = _compute_check_numbers()
 GUIDE_CHECK_NUMBERS: dict[str, str] = {
     check["guide_anchor"]: CHECK_NUMBERS[check["report_anchor"]] for check in CHECKS
 }
+CHECK_GUIDE_URLS: dict[str, str] = {
+    check["report_anchor"]: f"https://lod-4tu.tudelft.nl/askwol/guide#{check['guide_anchor']}"
+    for check in CHECKS
+}
 
 # Categories must form contiguous blocks in their declared order.
 _seen_categories: list[str] = []
@@ -120,10 +124,18 @@ def _check_bullets_markdown() -> str:
 def render_checks_api_description() -> str:
     """Render the flat checks list as Markdown for the /api/validate route's
     OpenAPI description."""
-    intro = "Upload an OWL ontology and get a full validation report as JSON.\n\nThe report includes:\n\n"
+    intro = (
+        "Submit an OWL ontology and get a validation report as JSON. "
+        "Use `compact=true` to return findings, counts, check coverage and reasoning scope "
+        "without detailed term inventories. HTTP 200 means validation completed, not that "
+        "the ontology passed: inspect `severity_summary` and skipped or unavailable checks. "
+        "HTTP 422 returns a parse-error report or request-validation errors in `detail`.\n\n"
+        "The checks are:\n\n"
+    )
     outro = (
         "\n\n`severity_summary` lists every individual finding with its severity and "
-        "counts them per level: `error` (a parsing failure or a logical or structural problem; "
+        "counts them per level; each finding links to the relevant guide section in `guide_url`. "
+        "Levels are `error` (a parsing failure or a logical or structural problem; "
         "`has_errors` is true), `warning` (a likely mistake or serious "
         "interoperability problem) and `recommendation` (publishing best "
         "practice). The per-item `status` values "

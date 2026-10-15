@@ -12,12 +12,21 @@ from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
 import httpx
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from pydantic import ValidationError
 from starlette.datastructures import MutableHeaders
+from starlette.requests import ClientDisconnect
 from starlette.staticfiles import StaticFiles
 
 from askwol import progress, usage
+from askwol.agent_api import (
+    ApiError,
+    ApiValidationError,
+    CompactValidationReport,
+    OntologyContent,
+    compact_report,
+)
 from askwol.branding import STATIC_DIR
 from askwol.checks import render_checks_api_description
 from askwol.models import ValidationReport
@@ -49,7 +58,7 @@ ROOT_PATH = os.environ.get("ASKWOL_ROOT_PATH", "").rstrip("/")
 # oversized or abusive uploads.
 MAX_UPLOAD_SIZE = 20 * 1024 * 1024
 
-# Per-IP throttle for the two validation endpoints, since each request can
+# Shared per-IP throttle for validation, since each request can
 # trigger many outbound HTTP fetches (namespaces, imports). In-memory only, so
 # it resets on restart and is tracked per worker process - fine for abuse
 # mitigation, not a strict global limit. Set ASKWOL_RATE_LIMIT=0 to disable.
@@ -469,70 +478,148 @@ async def _run_validation(tmp_path: Path, source_name: str, base_uri: str | None
     return HTMLResponse(_apply_prefix(render_report(report, mermaid)), status_code=status_code)
 
 
+_API_REPORT = ValidationReport | CompactValidationReport
+_API_RESPONSES = {
+    200: {"description": "Validation completed; inspect findings and check coverage"},
+    422: {
+        "model": _API_REPORT | ApiValidationError,
+        "description": "RDF parse-error report, or invalid request with a detail list",
+    },
+    413: {"model": ApiError, "description": "Ontology file or JSON request exceeds the 20 MB size limit"},
+    429: {"model": ApiError, "description": "Too many requests from this client"},
+    503: {"model": ApiError, "description": "Too many concurrent validations; retry later"},
+    504: {"model": ApiError, "description": "Validation exceeded its time limit"},
+    500: {"model": ApiError, "description": "The validation worker failed"},
+}
+_COMPACT_QUERY = Query(
+    False, description="Return findings, counts and execution coverage without detailed term inventories.",
+)
+_RATE_LIMIT_MESSAGE = "Too many requests. Please wait a minute and try again."
+
+
+async def _api_validation_response(
+    request: Request, content: bytes, source: str, suffix: str,
+    *, compact: bool, base_uri: str | None = None,
+) -> Response:
+    """Both API inputs share isolation, cleanup and report selection."""
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(content)
+        tmp_path = Path(tmp.name)
+    try:
+        try:
+            report, _mermaid = await _unless_client_disconnects(
+                request, run_isolated_validation(tmp_path, source, kind="validate_api", base_uri=base_uri),
+            )
+            result = compact_report(report) if compact else report
+            return JSONResponse(result.model_dump(mode="json"), status_code=422 if report.parse_errors else 200)
+        except ValidationBusyError:
+            return JSONResponse({"detail": BUSY_MESSAGE}, status_code=503)
+        except ValidationTimeoutError:
+            return JSONResponse({"detail": TIMEOUT_MESSAGE}, status_code=504)
+        except ValidationExecutionError:
+            return JSONResponse({"detail": ERROR_MESSAGE}, status_code=500)
+        except ClientDisconnectedError:
+            return _abandoned_response()
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def _record_api_response(response: Response, source: str, started: float, client_ip: str | None) -> Response:
+    if response.status_code != 499:
+        usage.record(
+            "validate_api", source=source, status=str(response.status_code),
+            duration_ms=int((time.perf_counter() - started) * 1000), ip=client_ip,
+        )
+    return response
+
+
 @app.post(
     "/api/validate",
-    response_model=ValidationReport,
-    summary="Validate an ontology",
+    response_model=_API_REPORT,
+    summary="Validate an ontology file",
     description=render_checks_api_description(),
     tags=["validation"],
-    responses={
-        422: {"description": "Parse error  -  the file could not be parsed as RDF"},
-        429: {"description": "Too many requests from this client"},
-        503: {"description": "Too many concurrent validations, try again shortly"},
-        504: {"description": "This ontology took too long to validate"},
-        500: {"description": "The validation worker failed"},
-    },
+    responses={**_API_RESPONSES, 400: {"model": ApiError, "description": "Malformed multipart upload"}},
 )
 async def validate_api(
     request: Request,
     file: UploadFile = File(..., description="OWL ontology file (Turtle, RDF/XML, JSON-LD, N-Triples, or N3)"),
+    compact: bool = _COMPACT_QUERY,
 ):
-    """Upload an OWL ontology and get a full validation report as JSON.
-
-    See the route description for the full list of checks (single-sourced
-    from askwol.templates.CHECKS). Uses the same isolated validation runner
-    as the HTML /validate route.
-    """
+    """Validate a file through the same isolated runner as the HTML tool."""
     started = time.perf_counter()
     client_ip = _client_ip(request)
     source = file.filename or "upload"
-
     if _rate_limited(client_ip):
-        response = JSONResponse(
-            content={"detail": "Too many requests. Please wait a minute and try again."},
-            status_code=429,
-        )
+        response = JSONResponse({"detail": _RATE_LIMIT_MESSAGE}, status_code=429)
     else:
         try:
             content = await _read_upload_capped(file)
         except UploadTooLargeError as exc:
-            response = JSONResponse(content={"detail": str(exc)}, status_code=413)
+            response = JSONResponse({"detail": str(exc)}, status_code=413)
         else:
             suffix = Path(file.filename or "ontology.ttl").suffix or ".ttl"
-            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-                tmp.write(content)
-                tmp_path = Path(tmp.name)
-            try:
-                try:
-                    report, _mermaid = await _unless_client_disconnects(
-                        request, run_isolated_validation(tmp_path, source, kind="validate_api"),
-                    )
-                    status_code = 422 if report.parse_errors else 200
-                    response = JSONResponse(content=report.model_dump(mode="json"), status_code=status_code)
-                except ValidationBusyError:
-                    response = JSONResponse(content={"detail": BUSY_MESSAGE}, status_code=503)
-                except ValidationTimeoutError:
-                    response = JSONResponse(content={"detail": TIMEOUT_MESSAGE}, status_code=504)
-                except ValidationExecutionError:
-                    response = JSONResponse(content={"detail": ERROR_MESSAGE}, status_code=500)
-                except ClientDisconnectedError:
-                    return _abandoned_response()
-            finally:
-                tmp_path.unlink(missing_ok=True)
+            response = await _api_validation_response(request, content, source, suffix, compact=compact)
+    return _record_api_response(response, source, started, client_ip)
 
-    usage.record(
-        "validate_api", source=source, status=str(response.status_code),
-        duration_ms=int((time.perf_counter() - started) * 1000), ip=client_ip,
-    )
-    return response
+
+async def _read_content_capped(request: Request) -> bytes:
+    """Bound the complete JSON envelope before decoding or parsing it."""
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > MAX_UPLOAD_SIZE:
+            raise UploadTooLargeError(f"Request exceeds the {MAX_UPLOAD_SIZE // (1024 * 1024)} MB size limit")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+@app.post(
+    "/api/validate/content",
+    response_model=_API_REPORT,
+    summary="Validate ontology content in a JSON request",
+    description=(
+        "Send JSON-LD directly as the `content` object or array, or send RDF source text "
+        "with an explicit `format`. Optional `base_uri` resolves relative IRIs. "
+        "The complete JSON request is limited to 20 MB.\n\n" + render_checks_api_description()
+    ),
+    tags=["validation"],
+    responses={**_API_RESPONSES, 415: {"model": ApiError, "description": "Content-Type must be application/json"}},
+    # Read the body ourselves so the limit applies before JSON parsing. The
+    # request schema still comes from the same model used to validate it.
+    openapi_extra={"requestBody": {
+        "required": True,
+        "content": {"application/json": {"schema": OntologyContent.model_json_schema()}},
+    }},
+)
+async def validate_content_api(request: Request, compact: bool = _COMPACT_QUERY):
+    """Accept generated RDF without requiring an agent to create a file."""
+    started = time.perf_counter()
+    client_ip = _client_ip(request)
+    source = "ontology"
+    if _rate_limited(client_ip):
+        response = JSONResponse({"detail": _RATE_LIMIT_MESSAGE}, status_code=429)
+    elif request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
+        response = JSONResponse({"detail": "Content-Type must be application/json"}, status_code=415)
+    else:
+        try:
+            body = await _read_content_capped(request)
+            ontology = OntologyContent.model_validate_json(body)
+        except ClientDisconnect:
+            return _abandoned_response()
+        except UploadTooLargeError as exc:
+            response = JSONResponse({"detail": str(exc)}, status_code=413)
+        except ValidationError as exc:
+            errors = exc.errors(include_url=False, include_context=False, include_input=False)
+            for error in errors:
+                error["loc"] = ["body", *error["loc"]]
+            response = JSONResponse({"detail": errors}, status_code=422)
+        else:
+            source += ontology.suffix
+            response = await _api_validation_response(
+                request, ontology.as_bytes(), source, ontology.suffix,
+                compact=compact, base_uri=ontology.base_uri,
+            )
+    return _record_api_response(response, source, started, client_ip)
 

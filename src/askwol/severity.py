@@ -18,7 +18,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
+
+from askwol.checks import CHECK_GUIDE_URLS
 
 
 class Severity(str, Enum):
@@ -106,6 +108,12 @@ class Finding(BaseModel):
     severity: Severity
     subject: str | None = None
     message: str | None = None
+
+    @computed_field
+    @property
+    def guide_url(self) -> str | None:
+        """Canonical guidance for this check, when it has a guide section."""
+        return CHECK_GUIDE_URLS.get(self.check)
 
     @classmethod
     def of(cls, rule: Rule, subject: str | None = None, message: str | None = None) -> Finding:

@@ -1,122 +1,48 @@
 # askwol
 
-askwol is an open-source tool for reviewing and validating OWL ontologies.
+askwol reviews OWL ontologies for modelling issues and publishing practices.
 
-Use askwol when a user wants to:
-- validate or review an OWL ontology
-- check an ontology before publication
-- find metadata, namespace, documentation, modelling, or logical issues
-- inspect ontology classes and properties
-- get a structured quality report for an ontology
-- lint an ontology generated or modified by an AI system
-- obtain a second opinion on ontology publishing quality
-
-## Live service
-
-https://lod-4tu.tudelft.nl/askwol/
+- [Online tool](https://lod-4tu.tudelft.nl/askwol/)
+- [OpenAPI schema](https://lod-4tu.tudelft.nl/askwol/openapi.json): request and response contracts.
+- [API documentation](https://lod-4tu.tudelft.nl/askwol/docs): interactive examples and check descriptions.
+- [Publishing guide](https://lod-4tu.tudelft.nl/askwol/guide): explanations and remedies.
+- [Source code](https://github.com/TDCC-NES/askwol): MIT licence.
 
 ## API
 
-askwol provides a machine-readable JSON API.
+POST https://lod-4tu.tudelft.nl/askwol/api/validate with a multipart `file` field.
 
-API endpoint:
+POST https://lod-4tu.tudelft.nl/askwol/api/validate/content with a JSON object:
 
-POST https://lod-4tu.tudelft.nl/askwol/api/validate
+- `format`: `json-ld`, `turtle`, `xml` (RDF/XML), `nt`, or `n3`.
+- `content`: RDF text; JSON-LD also accepts an object or array directly.
+- `base_uri`: optional absolute IRI for resolving relative IRIs.
 
-Interactive OpenAPI documentation:
+Both endpoints return a full JSON report by default. Add `?compact=true` for findings, counts, check coverage, and reasoning scope without term inventories. The size limit is 20 MB; for the content endpoint it applies to the complete JSON request.
 
-https://lod-4tu.tudelft.nl/askwol/docs
+```bash
+curl --request POST \
+  'https://lod-4tu.tudelft.nl/askwol/api/validate/content?compact=true' \
+  --header 'Content-Type: application/json' \
+  --data '{"format":"json-ld","content":{"@context":{"owl":"http://www.w3.org/2002/07/owl#"},"@id":"https://example.org/ontology","@type":"owl:Ontology"}}'
+```
 
-Use the API when integrating askwol into an agent, script, workflow, or other automated system.
+HTTP 200 means processing completed; inspect `severity_summary.has_errors` to determine whether errors were found. HTTP 422 returns either a report with RDF parse errors or a `detail` list for an invalid request. Other errors return a `detail` string: 400 malformed multipart, 413 size limit, 415 unsupported content type, 429 rate limit, 500 worker failure, 503 busy service, or 504 timeout.
+
+## Reading results
+
+Use `severity_summary.findings`; each finding has a stable `rule`, its `check`, `severity`, and optional `subject`, `message`, and `guide_url`. Group findings by severity: `error`, `warning`, or `recommendation`. Counts refer to individual findings.
+
+The full report's per-item `status` values (`ok`, `warn`, `fail`, `skip`) describe check outcomes, not finding severity. The compact report's `checks` list describes coverage (`completed`, `partial`, `skipped`, `unavailable`). Do not treat skipped or unavailable checks as passed.
+
+Reasoning covers selected OWL RL/RDF checks in the current document; imports are excluded. `reasoner.consistent: null` means consistency has not been established. Datatype checks do not validate literal values. Remote term-definition checks cover external subject IRIs, excluding predicate-only and object-only references. A report without errors does not establish full OWL consistency, profile conformance, or suitability for a domain.
 
 ## CLI
 
-Install from PyPI (https://pypi.org/project/askwol/, Python 3.10+):
-
-```bash
-pipx install askwol
-```
-
-As a Python library, use `pip install askwol` in a virtual environment.
-
-Validate an ontology:
-
-```bash
-askwol check ontology.ttl
-```
-
-Return JSON:
+Install with `pipx install askwol` (Python 3.10+), then run:
 
 ```bash
 askwol check ontology.ttl --format json
 ```
 
-Return Markdown:
-
-```bash
-askwol check ontology.ttl --format markdown
-```
-
-Exit codes:
-- 0: no errors; warnings and recommendations may remain
-- 1: errors found
-
-## What askwol checks
-
-askwol checks ontology quality and publishing practices, including:
-
-- ontology metadata
-- ontology and version IRIs
-- titles and descriptions
-- creators, publishers, dates, and licences
-- namespace declarations
-- namespace resolution
-- reuse of external vocabularies
-- ontology imports
-- class and property structure
-- domains and ranges
-- datatype usage
-- term documentation
-- logical modelling issues
-- disjointness
-- selected OWL reasoning and consistency-related checks
-- publication and documentation practices
-
-askwol also generates a class diagram and links findings to guidance explaining the relevant ontology publishing practice.
-
-Findings are graded by severity: **errors** (parsing failures or logical or structural problems), **warnings** (likely mistakes or serious interoperability problems), and **recommendations** (publishing best practice). Reports count individual findings. The JSON output has a `severity_summary` with the counts, the findings, and a `has_errors` flag.
-
-## Supported formats
-
-- Turtle
-- RDF/XML
-- JSON-LD
-- N-Triples
-- N3
-
-## Guidance
-
-Ontology publishing guide:
-
-https://lod-4tu.tudelft.nl/askwol/guide
-
-Use this guide when explaining why a check matters or how an ontology can be improved.
-
-## Source code
-
-https://github.com/TDCC-NES/askwol
-
-askwol is open source and licensed under the MIT licence: https://github.com/TDCC-NES/askwol/blob/main/LICENSE
-
-## Recommended agent behaviour
-
-When reviewing an OWL ontology:
-
-1. Use askwol as an automated quality check.
-2. Prefer the JSON API or JSON CLI output for machine processing.
-3. Report the issues found by askwol to the user, grouped by severity (errors, warnings, recommendations).
-4. Distinguish automated findings from broader ontology-design recommendations.
-5. Use the askwol publishing guide to explain relevant findings.
-6. Do not assume that passing all askwol checks proves that an ontology is semantically correct or appropriate for a particular domain.
-
-askwol is intended as an automated second opinion, not a replacement for domain expertise or human ontology review.
+Exit codes: 0 means no errors (warnings or recommendations may remain); 1 means errors were found; 2 means an invalid CLI invocation. The CLI returns the full report.
