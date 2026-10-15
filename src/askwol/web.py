@@ -9,7 +9,7 @@ import threading
 import time
 from html import escape
 from pathlib import Path
-from urllib.parse import urlencode, urlparse
+from urllib.parse import unquote, urlencode, urlsplit
 
 import httpx
 from fastapi import FastAPI, File, Form, Query, Request, UploadFile
@@ -355,9 +355,60 @@ async def validate_progress(request: Request, source: str = ""):
 RDF_FILE_EXTENSIONS = frozenset({".ttl", ".rdf", ".owl", ".rdfs", ".jsonld", ".nt", ".n3", ".xml"})
 
 
+def _github_raw_url(url: str) -> str | None:
+    """Let GitHub resolve the unchanged ref/path, including slash-containing refs."""
+    parsed = urlsplit(url)
+    if parsed.scheme not in ("http", "https") or parsed.netloc.lower() != "github.com":
+        return None
+    parts = parsed.path.split("/", 4)
+    if (
+        len(parts) != 5 or not parts[1] or not parts[2] or parts[3] != "blob"
+        or "/" not in parts[4] or parts[4].startswith("/") or parts[4].endswith("/")
+    ):
+        return None
+    # The /raw/ route uses the same ref/path as /blob/. Strip viewer query
+    # parameters and line fragments, without decoding the file path.
+    return f"https://github.com/{parts[1]}/{parts[2]}/raw/{parts[4]}"
+
+
+def _github_url_guidance(url: str, raw_url: str) -> HTMLResponse:
+    """Explain the correction in the existing, editable URL form."""
+    notice = (
+        '<div class="github-guidance" role="note" aria-labelledby="github-url-title">'
+        '<h2 id="github-url-title">Use GitHub\u2019s raw file</h2>'
+        '<p>This GitHub link opens an HTML file viewer. Ontology tools need the raw '
+        'file contents.</p>'
+        f'<p><a id="github-raw-url" href="{escape(raw_url)}" target="_blank" rel="noopener"><code>{escape(raw_url)}</code></a></p>'
+        '<button type="button" class="chip" id="copy-raw-url">Copy raw URL</button>'
+        ' <span id="copy-raw-status" class="input-help" role="status"></span>'
+        '<p>Copy this raw URL, paste it into the <strong>Ontology URL</strong> box below, '
+        'then click <strong>Ask Wol</strong>. '
+        '<a href="guide#server-config">Learn more about ontology URLs</a>.</p>'
+        '</div>'
+    )
+    html = UPLOAD_HTML.replace('<!-- github-url-guidance -->', notice).replace(
+        'id="url-input" name="url"', f'id="url-input" name="url" value="{escape(url)}"',
+    )
+    html = html.replace('</body>', '''<script>
+document.getElementById('copy-raw-url').addEventListener('click', async function() {
+  const link = document.getElementById('github-raw-url');
+  const status = document.getElementById('copy-raw-status');
+  try {
+    await navigator.clipboard.writeText(link.textContent);
+    status.textContent = 'Raw URL copied';
+  } catch {
+    status.textContent = 'Copy unavailable. Select and copy the raw URL above.';
+  }
+});
+</script></body>''')
+    return HTMLResponse(_apply_prefix(html), status_code=415)
+
 
 async def _validate_url(url: str) -> HTMLResponse:
-    parsed_url = urlparse(url)
+    raw_url = _github_raw_url(url)
+    if raw_url:
+        return _github_url_guidance(url, raw_url)
+    parsed_url = urlsplit(url)
     if parsed_url.scheme not in ("http", "https"):
         return HTMLResponse("<p>Only http and https URLs are supported.</p>", status_code=400)
 
@@ -402,7 +453,7 @@ async def _validate_url(url: str) -> HTMLResponse:
             # servers redirect namespace URIs to catalogue/metadata endpoints that
             # return non-standard content types (e.g. "text/anot+turtle") which are
             # syntactically valid RDF but aren't the ontology itself.
-            path_suffix = Path(parsed_url.path).suffix
+            path_suffix = Path(unquote(parsed_url.path)).suffix
             trusted_by_extension = (
                 ctype in ("text/plain", "") and path_suffix.lower() in RDF_FILE_EXTENSIONS
             )
@@ -410,8 +461,7 @@ async def _validate_url(url: str) -> HTMLResponse:
                 if ctype in ("text/html", "application/xhtml+xml"):
                     return HTMLResponse(
                         f"<p>The URL <code>{escape(url)}</code> returned an HTML page "
-                        f"(<code>{escape(ctype)}</code>) instead of RDF. The server does not "
-                        f"support content negotiation for this namespace. Try a direct link "
+                        f"(<code>{escape(ctype)}</code>) instead of RDF. Try a direct link "
                         f"to the ontology file (e.g. <code>.ttl</code> or <code>.rdf</code>).</p>",
                         status_code=415,
                     )
