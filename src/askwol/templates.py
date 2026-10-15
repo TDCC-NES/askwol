@@ -120,6 +120,10 @@ UPLOAD_HTML = """<!DOCTYPE html>
   input[type=url], input[type=file] { width: 100%; padding: 0.6em 0.75em; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95em; font-family: inherit; background: #fff; }
   input[type=url]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(74,124,89,0.15); }
   input[type=file] { padding: 0.5em; }
+  .input-help { margin: 0.4em 0 0; font-size: 0.85em; color: var(--muted); }
+  .github-guidance { padding-bottom: 1.2em; border-bottom: 1px solid var(--border); margin-bottom: 1.2em; }
+  .github-guidance h2 { margin-top: 0; font-size: 1.1em; }
+  .github-guidance code { overflow-wrap: anywhere; }
 
   /* Examples */
   .examples-label { font-size: 0.8em; color: var(--muted); margin: 1em 0 0.4em; }
@@ -193,8 +197,10 @@ UPLOAD_HTML = """<!DOCTYPE html>
     </div>
 
     <div id="panel-url" class="tab-panel active">
+      <!-- github-url-guidance -->
       <label for="url-input">Ontology URL</label>
-      <input type="url" id="url-input" name="url" placeholder="https://example.org/ontology.ttl" required>
+      <input type="url" id="url-input" name="url" placeholder="https://example.org/ontology.ttl" aria-describedby="url-help" required>
+      <p id="url-help" class="input-help">Use a URL that serves ontology data. On GitHub, select <strong>Raw</strong> and copy its URL.</p>
       <div class="examples-label">Or try a well-known ontology</div>
       <div class="chips">
         <button type="button" class="chip" data-url="http://xmlns.com/foaf/spec/index.rdf">FOAF</button>
@@ -243,7 +249,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
         else { urlInput.disabled = true; fileInput.disabled = false; }
       });
     });
-    document.querySelectorAll('.chip').forEach(function(btn) {
+    document.querySelectorAll('.chip[data-url]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         urlInput.value = btn.dataset.url;
         urlInput.focus();
@@ -1264,8 +1270,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     <li><strong>Correct content type.</strong> Serve Turtle as
     <code>text/turtle</code>, RDF/XML as <code>application/rdf+xml</code>,
     JSON-LD as <code>application/ld+json</code>. A file served as
-    <code>text/plain</code> or <code>application/octet-stream</code> will not be
-    recognised as RDF.</li>
+    <code>text/plain</code> or <code>application/octet-stream</code> does not
+    identify RDF; some tools need a format hint or a filename-based fallback.</li>
     <li><strong>Content negotiation.</strong> Honour the client&rsquo;s
     <code>Accept</code> header: return RDF to tools that ask for it, and an
     HTML documentation page to browsers. A common pattern is one term IRI
@@ -1273,6 +1279,17 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     (<code>303 See Other</code>) to either the <code>.ttl</code> or an HTML view
     depending on <code>Accept</code>.</li>
   </ul>
+  <p><strong>GitHub file pages and raw files.</strong> A GitHub
+  <code>/blob/</code> URL opens a file viewer that returns HTML, even when
+  its path ends in <code>.owl</code> or <code>.ttl</code>. Ontology tools need
+  the file contents. Open the file on GitHub, select
+  <a href="https://docs.github.com/en/repositories/working-with-files/using-files/viewing-and-understanding-files#viewing-or-copying-the-raw-file-content" target="_blank" rel="noopener">Raw</a>,
+  and copy its URL. A filename extension alone does not establish what a
+  URL returns. Elsewhere, a published ontology IRI may legitimately show
+  HTML in a browser while serving RDF to tools through content negotiation.</p>
+  <p>A raw file URL is a retrieval location. Keep the ontology, namespace,
+  and term IRIs published by the vocabulary owner; do not replace these
+  identifiers with a GitHub download URL.</p>
   <div class="tip">Keep the <strong>namespace IRI</strong> and the
   <strong>document URL</strong> consistent. In the
   <a href="https://lod-4tu.tudelft.nl/ontologies/sample.ttl" target="_blank" rel="noopener">askwol sample ontology</a>,
@@ -1281,7 +1298,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   returns the ontology itself, directly or via redirect.</div>
   <div class="warn">Static file servers often default to <code>text/plain</code>
   for <code>.ttl</code>. Set the MIME type explicitly in your web server or
-  reverse proxy, otherwise namespace resolution (including askwol&rsquo;s) fails.</div>
+  reverse proxy so tools can reliably recognise the RDF.</div>
 """,
     },
     {
