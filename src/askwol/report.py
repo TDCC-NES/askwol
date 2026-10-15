@@ -20,7 +20,7 @@ from askwol.severity import (
     count_label,
     worst_severity,
 )
-from askwol.checks import CHECK_CATEGORIES, CHECK_NUMBERS, CHECKS, CLUSTER_NUMBERS
+from askwol.checks import CHECK_CATEGORIES, CHECK_NUMBERS, CHECKS, CLUSTER_NUMBERS, DATATYPE_SCOPE, REASONER_SCOPE
 
 CATEGORIES = CHECK_CATEGORIES
 
@@ -124,7 +124,9 @@ class _MarkdownReport:
         docs = self.report.definition_docs
         if docs and docs.total_definitions:
             self.w(f"| Definitions with a label | {docs.with_label}/{docs.total_definitions} |")
-            self.w(f"| Definitions with a comment | {docs.with_comment}/{docs.total_definitions} |")
+            self.w(f"| Comment recommendation met | {docs.with_comment}/{docs.total_definitions} |")
+            if docs.deprecated_count:
+                self.w(f"| Deprecated terms exempt from documentation checks | {docs.deprecated_count} |")
         it = self.report.internal_terms
         if it and it.status != Status.SKIP:
             self.w(f"| Internal terms defined | {it.defined}/{it.total_referenced} |")
@@ -163,8 +165,8 @@ class _MarkdownReport:
         if imp is not None:
             self.w("## Imports")
             self.w("")
-            self.w("Every `owl:imports` target declared in the ontology header is fetched over HTTP "
-              "and parsed as RDF, the same way a reasoner would follow it.")
+            self.w("Directly declared `owl:imports` targets must provide parseable RDF. "
+              "Nested imports are not followed, and imported axioms are not used by the other checks.")
             self.w("")
             if imp.skipped:
                 self.w(f"> {len(imp.checks)} declared import(s), resolution skipped")
@@ -289,8 +291,8 @@ class _MarkdownReport:
         if lcns is not None:
             self.w("## Open licence")
             self.w("")
-            self.w("Every `dcterms:license` value declared in the ontology header is checked "
-                "against a list of open licences following the Open Definition.")
+            self.w("Ontology-header `dcterms:license` and `schema:license` values are checked "
+                "against known licences. Unrecognised licences have not been assessed for openness.")
             self.w("")
             if lcns.status != Status.OK:
                 license_count = len(lcns.checks)
@@ -306,8 +308,7 @@ class _MarkdownReport:
                     self.w("| Licence | Licence IRI | Licence Category |")
                     self.w("|---------|-------------|------------------|")
                     for c in lcns.checks:
-                        license_category = "recommended" if c.is_recommended else ("open" if c.is_open else "non-open")
-                        self.w(f"| {c.name} | {c.iri} | {license_category} |")
+                        self.w(f"| {c.name} | {c.iri} | {c.category} |")
                     self.w("")
                     self.w("</details>")
                     self.w("")
@@ -322,7 +323,7 @@ class _MarkdownReport:
         if self.ok_ns:
             self.w("## Namespaces with valid RDF")
             self.w("")
-            self.w("These namespaces resolved and returned parseable RDF. All terms from these vocabularies could be verified.")
+            self.w("These namespaces returned parseable RDF for the subject-position term checks.")
             self.w("")
             self.w("| Prefix | URI | Terms | Verified |")
             self.w("|--------|-----|-------|----------|")
@@ -443,7 +444,7 @@ class _MarkdownReport:
         if self.report.unused_prefixes:
             self.w("## Unused prefixes")
             self.w("")
-            self.w("These prefixes are declared with `@prefix` but never used in any triple. "
+            self.w("These detected prefix bindings have no matching namespace IRI use. "
               "Consider removing them to keep the ontology clean.")
             self.w("")
             self.w("| Prefix | URI |")
@@ -534,8 +535,8 @@ class _MarkdownReport:
         if dr and dr.status != Status.SKIP and dr.checks:
             self.w("## Domains and ranges")
             self.w("")
-            self.w("Object and datatype properties should declare a domain and a range. "
-              "Object properties range over classes; datatype properties range over datatypes.")
+            self.w("Checks directly declared domains and ranges of internal object and datatype properties. "
+              "Selected named class/datatype mismatches are checked; inherited values and anonymous expressions are not evaluated.")
             self.w("")
             self.w(f"> {dr.with_domain}/{dr.total_properties} have a domain, "
               f"{dr.with_range}/{dr.total_properties} have a range, {len(dr.issues)} issue(s)")
@@ -565,8 +566,7 @@ class _MarkdownReport:
         if dt and dt.status != Status.SKIP and dt.usages:
             self.w("## Datatypes")
             self.w("")
-            self.w("Datatypes used as property ranges and literal datatypes. "
-              "Unrecognised datatypes are usually typos.")
+            self.w(DATATYPE_SCOPE)
             self.w("")
             self.w(f"> {dt.recognised}/{dt.total_datatypes} recognised, {len(dt.unrecognised)} unrecognised")
             self.w("")
@@ -593,9 +593,11 @@ class _MarkdownReport:
         if docs and docs.total_definitions:
             self.w("## Labels")
             self.w("")
-            self.w("Internal classes and properties only. Reused external vocabulary terms are ignored.")
+            self.w("Internal classes and properties only; deprecated terms are exempt.")
             self.w("")
             self.w(f"> {docs.with_label}/{docs.total_definitions} have an rdfs:label")
+            if docs.deprecated_count:
+                self.w(f"> {docs.deprecated_count} deprecated term(s) exempt.")
             self.w("")
             self.w("<details>")
             self.w(f"<summary>Show labels ({docs.total_definitions})</summary>")
@@ -603,7 +605,7 @@ class _MarkdownReport:
             self.w("| Term | Type | Label |")
             self.w("|------|------|-------|")
             for check in sorted(docs.checks, key=lambda c: (c.has_label, c.display_name.lower())):
-                label = "ok" if check.has_label else f"{_md_severity(Rule.LABEL_MISSING)}: missing"
+                label = "exempt (deprecated)" if check.deprecated else "ok" if check.has_label else f"{_md_severity(Rule.LABEL_MISSING)}: missing"
                 self.w(f"| `{check.display_name}` | {check.term_type} | {label} |")
             self.w("")
             self.w("</details>")
@@ -611,9 +613,11 @@ class _MarkdownReport:
 
             self.w("## Comments")
             self.w("")
-            self.w("Internal classes and properties only. Reused external vocabulary terms are ignored.")
+            self.w("Internal classes and properties only; deprecated terms are exempt. A comment on an inverse property also satisfies this recommendation.")
             self.w("")
-            self.w(f"> {docs.with_comment}/{docs.total_definitions} have an rdfs:comment")
+            self.w(f"> {docs.with_comment}/{docs.total_definitions} meet the comment recommendation")
+            if docs.deprecated_count:
+                self.w(f"> {docs.deprecated_count} deprecated term(s) exempt.")
             self.w("")
             self.w("<details>")
             self.w(f"<summary>Show comments ({docs.total_definitions})</summary>")
@@ -621,7 +625,7 @@ class _MarkdownReport:
             self.w("| Term | Type | Comment |")
             self.w("|------|------|---------|")
             for check in sorted(docs.checks, key=lambda c: (c.has_comment, c.display_name.lower())):
-                comment = "ok" if check.has_comment else f"{_md_severity(Rule.COMMENT_MISSING)}: missing"
+                comment = "exempt (deprecated)" if check.deprecated else "ok" if check.has_comment else f"{_md_severity(Rule.COMMENT_MISSING)}: missing"
                 self.w(f"| `{check.display_name}` | {check.term_type} | {comment} |")
             self.w("")
             self.w("</details>")
@@ -633,7 +637,7 @@ class _MarkdownReport:
         if reasoner and reasoner.checks:
             self.w("## Reasoner checks")
             self.w("")
-            self.w("Limited OWL RL checks on the current document; imports excluded.")
+            self.w(REASONER_SCOPE)
             self.w("")
             self.w("| Check | Status | Detail |")
             self.w("|-------|--------|--------|")
@@ -682,9 +686,8 @@ class _MarkdownReport:
         if sk and sk.status != Status.SKIP and sk.terms:
             self.w("## Non-ontology terms")
             self.w("")
-            self.w("An OWL ontology should define schema: classes, properties, and "
-              "datatypes. A skos:Concept scheme is subject-matter data, not "
-              "schema, and belongs in a separate resource.")
+            self.w("TDCC recommends considering separate management of independently maintained "
+              "SKOS concept schemes. Mixing OWL and SKOS is valid.")
             self.w("")
             self.w(f"> {len(sk.terms)} skos:Concept instance(s) defined in the ontology's own namespace")
             self.w("")
@@ -752,11 +755,7 @@ def _overview_line(report: ValidationReport, anchor: str, view: ReportView) -> t
         if not lcns.license_count:
             return True, "no licence declared"
         kinds = [
-            f"{n} {label}" for n, label in (
-                (len(lcns.recommended_licenses), "recommended"),
-                (len(lcns.open_licenses), "open"),
-                (len(lcns.non_open_licenses), "non-open"),
-            ) if n
+            f"{n} {label}" for label, n in lcns.category_counts.items() if n
         ]
         plural = "s" if lcns.license_count > 1 else ""
         return True, f"{lcns.license_count} licence{plural} declared, {', '.join(kinds)}"
@@ -825,8 +824,8 @@ def _overview_line(report: ValidationReport, anchor: str, view: ReportView) -> t
         if sk.status == S.SKIP:
             return False, "not applicable"
         if sk.terms:
-            return True, f"{len(sk.terms)} that belong in a separate resource"
-        return True, "only schema terms defined"
+            return True, f"{len(sk.terms)} SKOS concept(s) to review"
+        return True, "no internal SKOS concepts"
     if anchor in ("labels", "comments"):
         docs = report.definition_docs
         if not docs:
@@ -834,8 +833,8 @@ def _overview_line(report: ValidationReport, anchor: str, view: ReportView) -> t
         if not docs.total_definitions:
             return False, "no internal definitions to document"
         present = docs.with_label if anchor == "labels" else docs.with_comment
-        noun = "a label" if anchor == "labels" else "a comment"
-        return True, f"{present}/{docs.total_definitions} have {noun}"
+        detail = "have a label" if anchor == "labels" else "meet the comment recommendation"
+        return True, f"{present}/{docs.total_definitions} {detail}"
     if anchor == "language-tags":
         lt = report.lang_tags
         if not lt or lt.status == Status.SKIP:
@@ -982,9 +981,8 @@ class _ConsoleReport:
             license_table.add_column("Status")
             license_table.add_column("Category")
             for c in lcns.checks:
-                license_category = "recommended" if c.is_recommended else ("open" if c.is_open else "non-open")
-                license_rule = Rule.LICENSE_NOT_OPEN if c.status == Status.FAIL else Rule.LICENSE_NOT_RECOMMENDED
-                license_table.add_row(Text(c.iri), Text(c.name), _item_badge(c.status, license_rule), license_category)
+                license_rule = Rule.LICENSE_NOT_OPEN if c.is_open is not True else Rule.LICENSE_NOT_RECOMMENDED
+                license_table.add_row(Text(c.iri), Text(c.name), _item_badge(c.status, license_rule), c.category)
             license_count = len(lcns.checks)
             license_worst = worst_severity(lcns.findings())
             if license_worst is None:
@@ -993,11 +991,7 @@ class _ConsoleReport:
                 self.console.print(_flag(license_worst, "Open licence  -  no licence declared"))
             else:
                 kinds = ", ".join(
-                    f"{n} {label}" for n, label in (
-                        (len(lcns.recommended_licenses), "recommended"),
-                        (len(lcns.open_licenses), "open"),
-                        (len(lcns.non_open_licenses), "non-open"),
-                    ) if n
+                    f"{n} {label}" for label, n in lcns.category_counts.items() if n
                 )
                 plural = "s" if license_count > 1 else ""
                 self.console.print(_flag(license_worst, f"Open licence  -  {license_count} licence{plural} declared, {kinds}"))
@@ -1230,7 +1224,7 @@ class _ConsoleReport:
             self.console.print()
             reas_ok = not reasoner.findings()
             if reas_ok:
-                self.console.print("[green]\u2713 Reasoner checks  -  no contradictions detected[/green]")
+                self.console.print("[green]\u2713 Reasoner checks  -  no contradictions detected by these checks[/green]")
             else:
                 self.console.print(_flag(
                     worst_severity(reasoner.findings()),
@@ -1238,7 +1232,7 @@ class _ConsoleReport:
                     f"{len(reasoner.unsatisfiable_classes)} unsatisfiable class(es)",
                 ))
             reasoner_table = Table(title="Reasoner checks", show_lines=True)
-            self.console.print("[dim]Limited OWL RL checks on the current document; imports excluded.[/dim]")
+            self.console.print(Text(REASONER_SCOPE, style="dim"))
             reasoner_table.add_column("Check")
             reasoner_table.add_column("Status", justify="center")
             reasoner_table.add_column("Detail")

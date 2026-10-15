@@ -3,9 +3,8 @@
 Shared by the checks that should not flag issues about a term once it is
 deprecated (naming conventions, domain and range, label and comment
 documentation, language tag consistency), and by `term_validator` to note
-when a reused
-external term is deprecated upstream. Three conventions are recognised,
-since there is no single official one:
+when a reused external term is deprecated upstream. The OWL 2 standard
+annotation and two legacy conventions are recognised:
 
 * ``owl:deprecated "true"^^xsd:boolean`` - the OWL 2 standard annotation
   property (https://www.w3.org/TR/owl2-syntax/#Annotation_Properties).
@@ -20,8 +19,8 @@ since there is no single official one:
 
 from __future__ import annotations
 
-from rdflib import Graph, Namespace, URIRef
-from rdflib.namespace import OWL, RDF
+from rdflib import Graph, Literal, Namespace, URIRef
+from rdflib.namespace import OWL, RDF, XSD
 
 VS = Namespace("http://www.w3.org/2003/06/sw-vocab-status/ns#")
 
@@ -30,8 +29,11 @@ _DEPRECATED_STATUS_VALUES = {"deprecated", "archaic"}
 
 def deprecation_marker(graph: Graph, term: URIRef) -> str | None:
     """Return the convention that marks `term` deprecated in `graph`, or None."""
-    dep = graph.value(term, OWL.deprecated)
-    if dep is not None and str(dep).lower() in ("true", "1"):
+    if any(
+        isinstance(value, Literal) and value.datatype == XSD.boolean
+        and str(value).strip() in ("true", "1")
+        for value in graph.objects(term, OWL.deprecated)
+    ):
         return "owl:deprecated"
 
     types = set(graph.objects(term, RDF.type))
@@ -40,9 +42,12 @@ def deprecation_marker(graph: Graph, term: URIRef) -> str | None:
     if OWL.DeprecatedProperty in types:
         return "owl:DeprecatedProperty"
 
-    status = graph.value(term, VS.term_status)
-    if status is not None and str(status).lower() in _DEPRECATED_STATUS_VALUES:
-        return f'vs:term_status "{status}"'
+    statuses = sorted(
+        str(value) for value in graph.objects(term, VS.term_status)
+        if str(value).lower() in _DEPRECATED_STATUS_VALUES
+    )
+    if statuses:
+        return f'vs:term_status "{statuses[0]}"'
 
     return None
 

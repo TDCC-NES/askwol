@@ -19,7 +19,7 @@ from askwol.severity import (
     count_label,
     worst_severity,
 )
-from askwol.checks import CHECK_CATEGORIES, CHECK_NUMBERS, CHECKS, CLUSTER_NUMBERS
+from askwol.checks import CHECK_CATEGORIES, CHECK_NUMBERS, CHECKS, CLUSTER_NUMBERS, DATATYPE_SCOPE, REASONER_SCOPE
 
 # CHECKS (title, description, anchors, category per check) is defined once in
 # askwol.checks and shared with the landing page, README.md, and the API
@@ -338,7 +338,7 @@ class _HtmlReport:
             if not (docs and docs.total_definitions):
                 return [self._row('comments', 'Comments', 'no internal definitions to document', na=True)]
             return [self._row('comments', 'Comments',
-                         f'{docs.with_comment}/{docs.total_definitions} have a comment')]
+                         f'{docs.with_comment}/{docs.total_definitions} meet the comment recommendation')]
         if report_anchor == 'imports':
             imp = self.report.imports
             if not imp:
@@ -356,11 +356,7 @@ class _HtmlReport:
             if not lcns.license_count:
                 return [self._row('license', 'Open licence', 'no licence declared')]
             kinds = [
-                f'{n} {label}' for n, label in (
-                    (len(lcns.recommended_licenses), 'recommended'),
-                    (len(lcns.open_licenses), 'open'),
-                    (len(lcns.non_open_licenses), 'non-open'),
-                ) if n
+                f'{n} {label}' for label, n in lcns.category_counts.items() if n
             ]
             plural = 's' if lcns.license_count != 1 else ''
             return [self._row('license', 'Open licence',
@@ -406,7 +402,7 @@ class _HtmlReport:
             if not sk or sk.status == Status.SKIP:
                 return [self._row('non-ontology-terms', 'Non-ontology terms', 'not applicable', na=True)]
             return [self._row('non-ontology-terms', 'Non-ontology terms',
-                         f'{len(sk.terms)} that belong in a separate resource' if sk.terms else 'only schema terms defined')]
+                         f'{len(sk.terms)} SKOS concept(s) to review' if sk.terms else 'no internal SKOS concepts')]
         return []
 
     def _overview(self) -> None:
@@ -550,7 +546,7 @@ class _HtmlReport:
             self.parts.append('<section class="section">')
             self.parts.append(self._section_heading('imports', 'Imports', i_label, na=imp.skipped))
             self.parts.append(_guide_link('imports'))
-            self.parts.append('<p class="subtitle">Every <code>owl:imports</code> target declared in the ontology header is fetched over HTTP and parsed as RDF, the same way a reasoner would follow it.</p>')
+            self.parts.append('<p class="subtitle">Directly declared <code>owl:imports</code> targets must provide parseable RDF. Nested imports are not followed, and imported axioms are not used by the other checks.</p>')
             if imp.skipped:
                 self.parts.append(self._subtitle(f'{len(imp.checks)} declared import(s), resolution skipped'))
             elif broken:
@@ -709,6 +705,8 @@ class _HtmlReport:
                     i_label = 'recommended licence declared'
                 elif lcns.open_licenses:
                     i_label = 'open licence declared, not recommended'
+                elif lcns.unrecognised_licenses:
+                    i_label = 'unrecognised licence declared'
                 else:
                     i_label = 'no open licence declared'
             else:
@@ -716,16 +714,12 @@ class _HtmlReport:
             self.parts.append('<section class="section">')
             self.parts.append(self._section_heading('license', 'Open licence', i_label))
             self.parts.append(_guide_link('license'))
-            self.parts.append('<p class="subtitle">Each <code>dcterms:license</code> value declared in the ontology header is checked against a <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">list of open licences</a> following the <a href="https://opendefinition.org" target="_blank" rel="noopener">Open Definition</a>. The recommendation is met when there is exactly one licence and it is one of the <a href="guide#license" target="_blank" rel="noopener">recommended ones</a>. A missing licence, a non-open licence, an open licence that is not recommended, or more than one licence is reported as a recommendation.</p>')
+            self.parts.append('<p class="subtitle">Ontology-header <code>dcterms:license</code> and <code>schema:license</code> values are checked against known licences. Missing, unrecognised, non-open, non-preferred or multiple licences are recommendations. TDCC prefers a single CC0 or CC BY licence; an unrecognised licence has not been assessed for openness.</p>')
             license_count = len(lcns.checks)
             plural = "s" if license_count > 1 else ""
             if lcns.checks:
                 kinds = [
-                    f'{n} {label}' for n, label in (
-                        (len(lcns.recommended_licenses), 'recommended'),
-                        (len(lcns.open_licenses), 'open'),
-                        (len(lcns.non_open_licenses), 'non-open'),
-                    ) if n
+                    f'{n} {label}' for label, n in lcns.category_counts.items() if n
                 ]
                 self.parts.append(self._subtitle(f'<strong>{license_count}</strong> licence{plural} &middot; {", ".join(kinds)}'))
             else:
@@ -733,13 +727,15 @@ class _HtmlReport:
             if lcns.checks:
                 self.parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show licence{plural} ({len(lcns.checks)})</summary>')
                 for c in lcns.checks:
-                    rule = Rule.LICENSE_NOT_OPEN if c.status == Status.FAIL else Rule.LICENSE_NOT_RECOMMENDED
+                    rule = Rule.LICENSE_NOT_OPEN if c.is_open is not True else Rule.LICENSE_NOT_RECOMMENDED
                     mark = _item_mark(c.status, rule)
                     self.parts.append(f'<div class="ns"><div class="ns-header">{mark} {escape(c.name)}</div>')
                     self.parts.append('<div class="ns-body">')
                     self.parts.append(f'<p style="font-size:0.9em;color:#444;margin:0.2em 0;">Licence IRI: {_external_link(c.iri, "<code>" + escape(c.iri) + "</code>")}</p>')
                     if c.status == Status.OK:
                         self.parts.append('<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is one of the open licences we recommend.</p>')
+                    elif c.is_open is None:
+                        self.parts.append('<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This licence is unrecognised; openness could not be established.</p>')
                     elif c.status == Status.WARN:
                         self.parts.append('<p style="font-size:0.9em;color:#444;margin:0.2em 0;">This is an open licence but we do not recommend it.</p>')
                     else:
@@ -849,7 +845,7 @@ class _HtmlReport:
             self.parts.append(self._section_heading('unused-prefixes', 'Unused prefixes',
                                           f'{len(self.report.unused_prefixes)} to clean up'))
             self.parts.append(_guide_link('unused-prefixes'))
-            self.parts.append('<p class="subtitle">Prefixes that are declared in the file but never appear in any triple. Removing them keeps the ontology clean and avoids suggesting dependencies that do not exist.</p>')
+            self.parts.append('<p class="subtitle">Detected prefix bindings whose namespace has no matching IRI use, including header and literal datatype IRIs. Built-in declarations and source-level aliases cannot be fully distinguished after parsing.</p>')
             self.parts.append(self._subtitle(f'{len(self.report.unused_prefixes)} declared but never used'))
             self.parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show unused prefixes ({len(self.report.unused_prefixes)})</summary>')
             self.parts.append('<table><tr><th>Prefix</th><th>Namespace IRI</th></tr>')
@@ -1019,11 +1015,11 @@ class _HtmlReport:
         dr = self.report.domains_ranges
         if dr and dr.status != Status.SKIP and dr.checks:
             self._open_cluster('domains-ranges')
-            dr_label = f'{len(dr.issues)} to review' if dr.issues else 'all sound'
+            dr_label = f'{len(dr.issues)} to review' if dr.issues else 'no issues detected'
             self.parts.append('<section class="section">')
             self.parts.append(self._section_heading('domains-ranges', 'Domains &amp; ranges', dr_label))
             self.parts.append(_guide_link('domains-ranges'))
-            self.parts.append('<p class="subtitle">Object and datatype properties should declare an <code>rdfs:domain</code> and <code>rdfs:range</code>. An object property should range over a <strong>class</strong>; a datatype property over a <strong>datatype</strong>. A missing domain or range is a recommendation; a domain or range of the wrong kind is an error. This check looks only at domain and range declared directly on each property, not values inherited from super-properties.</p>')
+            self.parts.append('<p class="subtitle">Checks directly declared <code>rdfs:domain</code> and <code>rdfs:range</code> on internal object and datatype properties. Missing declarations are recommendations; selected named class/datatype mismatches are errors. Inherited values and anonymous expressions are not evaluated.</p>')
             self.parts.append(self._subtitle(
                 f'{dr.total_properties} propert{"y" if dr.total_properties == 1 else "ies"} '
                 f'({dr.object_properties} object &middot; {dr.datatype_properties} datatype) &middot; '
@@ -1065,7 +1061,7 @@ class _HtmlReport:
             self.parts.append('<section class="section">')
             self.parts.append(self._section_heading('datatypes', 'Datatypes', dt_label))
             self.parts.append(_guide_link('datatypes'))
-            self.parts.append('<p class="subtitle">Datatypes used as property ranges and as literal datatypes should be recognised XSD built-ins (<code>xsd:string</code>, <code>xsd:integer</code>, &hellip;), <code>rdfs:Literal</code>, <code>rdf:langString</code>, or a datatype you declare with <code>rdfs:Datatype</code>. An unrecognised datatype is usually a typo, and it takes the ontology outside OWL 2 DL.</p>')
+            self.parts.append(f'<p class="subtitle">{escape(DATATYPE_SCOPE)} Unrecognised IRIs are warnings, often caused by typos.</p>')
             self.parts.append(self._subtitle(f'{dt.recognised}/{dt.total_datatypes} recognised &middot; {len(dt.unrecognised)} unrecognised'))
             summary = f'Show all datatypes ({dt.total_datatypes})'
             if dt.unrecognised:
@@ -1097,7 +1093,7 @@ class _HtmlReport:
             self.parts.append('<section class="section">')
             self.parts.append(self._section_heading('non-ontology-terms', 'Non-ontology terms', sk_label))
             self.parts.append(_guide_link('non-ontology-terms'))
-            self.parts.append('<p class="subtitle">An OWL ontology should define schema: classes, properties, and datatypes. A <code>skos:Concept</code> scheme is subject-matter data, not schema, so a <code>skos:Concept</code> defined in the ontology&rsquo;s own namespace is flagged. Named individuals are not flagged here: many ontologies deliberately define a small, fixed set of individuals alongside their schema (e.g. days of week, units of measure), which is a common, legitimate pattern rather than accidental instance data.</p>')
+            self.parts.append('<p class="subtitle">TDCC recommends considering separate management of independently maintained SKOS concept schemes. Internal <code>skos:Concept</code> instances are listed for review; mixing OWL and SKOS is valid. Other named individuals are not flagged.</p>')
             if sk.terms:
                 self.parts.append(self._subtitle(f'{len(sk.terms)} skos:Concept instance{"s" if len(sk.terms) != 1 else ""} defined in the ontology&rsquo;s own namespace'))
                 self.parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Terms to move into a separate concept scheme ({len(sk.terms)})</summary>')
@@ -1130,12 +1126,14 @@ class _HtmlReport:
 
             def _doc_section(anchor: str, title: str, prop: str,
                              present_count: int, missing: list) -> None:
-                label = f'{len(missing)} missing' if missing else 'all present'
+                label = f'{len(missing)} missing' if missing else 'none missing among checked terms'
                 self.parts.append('<section class="section">')
                 self.parts.append(self._section_heading(anchor, title, label))
                 self.parts.append(_guide_link(anchor))
                 self.parts.append(f'<p class="subtitle">Every internally defined class and property should carry an <code>{prop}</code>. Reused external vocabulary terms, and terms you have marked deprecated, are ignored. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes for term documentation</a>.</p>')
-                self.parts.append(self._subtitle(f'{present_count}/{docs.total_definitions} have an <code>{prop}</code> &middot; {len(missing)} missing'))
+                coverage = 'have an <code>rdfs:label</code>' if anchor == 'labels' else 'meet the comment recommendation (including inverse properties)'
+                exempt = f' &middot; {docs.deprecated_count} deprecated term(s) exempt' if docs.deprecated_count else ''
+                self.parts.append(self._subtitle(f'{present_count}/{docs.total_definitions} {coverage} &middot; {len(missing)} missing{exempt}'))
                 self.parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show {title.lower()} ({docs.total_definitions})</summary>')
                 self.parts.append(f'<table><tr><th>Term</th><th>Type</th><th style="width:70px;">{title.rstrip("s")}</th></tr>')
                 for check in sorted(docs.checks, key=lambda c: (getattr(c, "has_label" if anchor == "labels" else "has_comment"), c.display_name.lower())):
@@ -1227,7 +1225,7 @@ class _HtmlReport:
             self.parts.append('<section class="section">')
             self.parts.append(self._section_heading('reasoner', 'Reasoner checks', r_label))
             self.parts.append(_guide_link('reasoner'))
-            self.parts.append('<p class="subtitle">Limited OWL RL checks on the current document; imports excluded. This is not a complete consistency or OWL 2 DL conformance check.</p>')
+            self.parts.append(f'<p class="subtitle">{escape(REASONER_SCOPE)}</p>')
             self.parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show reasoner checks ({len(reasoner.checks)})</summary>')
             self.parts.append('<table><tr><th>Check</th><th>Status</th><th>Detail</th></tr>')
             for check in reasoner.checks:

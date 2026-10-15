@@ -12,11 +12,11 @@ from askwol.models import Status, TermCheck
 # Built-in allowlists for vocabularies that don't serve RDF
 # ---------------------------------------------------------------------------
 
-# XSD 1.1 built-in datatypes and special type names
+# XSD 1.1 datatype names. Facets are vocabulary terms, not datatypes.
 # https://www.w3.org/TR/xmlschema11-2/#built-in-datatypes
 XSD_BUILTIN_TYPES: frozenset[str] = frozenset({
-    # Special types
-    "anyType", "anySimpleType", "anyAtomicType",
+    # Special simple types
+    "anySimpleType", "anyAtomicType",
     # Primitive datatypes
     "string", "boolean", "decimal", "float", "double",
     "duration", "dateTime", "time", "date",
@@ -32,15 +32,18 @@ XSD_BUILTIN_TYPES: frozenset[str] = frozenset({
     "unsignedShort", "unsignedByte", "positiveInteger",
     # XSD 1.1 additions
     "dateTimeStamp", "dayTimeDuration", "yearMonthDuration",
-    # Facets (used as properties in OWL restrictions)
+})
+
+XSD_FACETS: frozenset[str] = frozenset({
+    # Used as properties in OWL datatype restrictions.
     "minInclusive", "maxInclusive", "minExclusive", "maxExclusive",
     "minLength", "maxLength", "length", "totalDigits", "fractionDigits",
     "pattern", "whiteSpace", "enumeration",
 })
 
-# Map namespace URI -> known local names
+# anyType is a known complex type, not a datatype.
 KNOWN_TERMS: dict[str, frozenset[str]] = {
-    "http://www.w3.org/2001/XMLSchema#": XSD_BUILTIN_TYPES,
+    "http://www.w3.org/2001/XMLSchema#": XSD_BUILTIN_TYPES | XSD_FACETS | {"anyType"},
 }
 
 

@@ -12,7 +12,7 @@ from rdflib import Graph, URIRef
 from rdflib.namespace import OWL, RDF, RDFS
 
 from askwol.deprecation import deprecation_marker
-from askwol.iri_utils import is_external as _is_external, local_name as _local_name, namespace_of as _namespace_of
+from askwol.iri_utils import is_external as _is_external, local_name as _local_name, ontology_namespaces as _ontology_namespaces
 from askwol.models import DefinitionDocumentationCheck, DefinitionDocumentationIssue, DefinitionDocumentationReport, Status
 from askwol.shacl_runner import run_shapes
 
@@ -50,11 +50,7 @@ def check_definition_documentation(graph: Graph) -> DefinitionDocumentationRepor
         elif rdf_type in PROPERTY_TYPES:
             candidates[subject] = "Property"
 
-    ontology_namespaces = {
-        _namespace_of(str(subject))
-        for subject in graph.subjects(RDF.type, OWL.Ontology)
-        if isinstance(subject, URIRef)
-    }
+    ontology_namespaces = _ontology_namespaces(graph)
 
     # Index SHACL violations by focus node and shape name ("Label"/"Comment").
     # A term absent from this map for a given name satisfied that shape.
@@ -82,25 +78,25 @@ def check_definition_documentation(graph: Graph) -> DefinitionDocumentationRepor
 
         total += 1
         marker = deprecation_marker(graph, subject)
+        node_violations = violations.get(uri, {})
+        has_label = "Label" not in node_violations
+        has_comment = "Comment" not in node_violations
         if marker:
-            documented += 1
+            documented += int(has_label and has_comment)
             checks.append(
                 DefinitionDocumentationCheck(
                     term=uri,
                     display_name=_local_name(uri),
                     term_type=term_type,
-                    has_label=True,
-                    has_comment=True,
+                    has_label=has_label,
+                    has_comment=has_comment,
                     status=Status.OK,
-                    message="Deprecated; documentation not checked.",
+                    message="Deprecated; documentation recommendations are waived.",
                     deprecated=marker,
                 )
             )
             continue
 
-        node_violations = violations.get(uri, {})
-        has_label = "Label" not in node_violations
-        has_comment = "Comment" not in node_violations
         missing: list[str] = []
         if not has_label:
             missing.append("label")

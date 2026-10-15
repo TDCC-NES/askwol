@@ -3,7 +3,7 @@
 A ``Status`` says what a single check did (ok, warn, fail, skip). A
 ``Severity`` says how much a *finding* matters:
 
-- ``error``: a formal logic or OWL 2 DL problem.
+- ``error``: a parsing failure or a logical or structural problem.
 - ``warning``: a likely mistake or a serious interoperability problem.
 - ``recommendation``: ontology publishing best practice.
 
@@ -87,7 +87,7 @@ RULE_SEVERITY: dict[Rule, Severity] = {
     Rule.NAMING_CONVENTION: _R,
     Rule.DOMAIN_RANGE_MISSING: _R,
     Rule.DOMAIN_RANGE_MISMATCH: _E,
-    Rule.DATATYPE_UNRECOGNISED: _E,
+    Rule.DATATYPE_UNRECOGNISED: _W,
     Rule.NON_ONTOLOGY_TERM: _R,
     Rule.LABEL_MISSING: _R,
     Rule.COMMENT_MISSING: _R,
@@ -182,7 +182,7 @@ SEVERITY_STYLES: dict[Severity, SeverityStyle] = {
         glyph="\u2717",
         color="#c62828",
         rich="red",
-        description="a formal logic or OWL 2 DL problem.",
+        description="a parsing failure or a logical or structural problem.",
     ),
     Severity.WARNING: SeverityStyle(
         label="Warning",

@@ -135,13 +135,13 @@ app = FastAPI(
         "definitions (existence in remote vocabularies), internal term "
         "definitions (own-namespace terms are defined), label "
         "and comment documentation (SHACL), ontology metadata (SHACL), "
-        "open licence conformance (Open Definition), language-tag "
+        "ontology-header licence recognition, language-tag "
         "consistency, unused prefix declarations, owl:imports "
         "resolution, IRI strategy consistency (hash vs slash), IRI scheme "
         "consistency (http vs https), term naming and inventory, domain and "
         "range declarations, recognised datatypes, non-ontology terms, and "
-        "lightweight OWL RL reasoner checks (ontology consistency, "
-        "inconsistent individuals, and unsatisfiable classes)."
+        "selected OWL RL/RDF checks for contradictory class memberships of named individuals "
+        "and unsatisfiable internal classes. Imports are excluded from reasoning."
     ),
     version="0.1.2",
     root_path=ROOT_PATH,

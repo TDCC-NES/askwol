@@ -21,22 +21,34 @@
             FILTER(isIRI(?this))
             {
                 ?ont a owl:Ontology .
-                BIND(REPLACE(STR(?ont), "^(.*[/#])[^/#]*$", "$1") AS ?ontologyNs)
-                FILTER(STRSTARTS(STR(?this), ?ontologyNs))
+                FILTER(isIRI(?ont))
+                BIND(IF(CONTAINS(STR(?ont), "#"), CONCAT(STRBEFORE(STR(?ont), "#"), "#"), STR(?ont)) AS ?ontologyNs)
+                FILTER(
+                    ((STRENDS(?ontologyNs, "#") || STRENDS(?ontologyNs, "/")) && STRSTARTS(STR(?this), ?ontologyNs)) ||
+                    STRSTARTS(STR(?this), CONCAT(?ontologyNs, "#")) ||
+                    STRSTARTS(STR(?this), CONCAT(?ontologyNs, "/"))
+                )
             }
             UNION
             {
-                FILTER NOT EXISTS { ?anyOnt a owl:Ontology }
+                FILTER NOT EXISTS { ?anyOnt a owl:Ontology FILTER(isIRI(?anyOnt)) }
                 FILTER(
                     !STRSTARTS(STR(?this), "http://www.w3.org/2002/07/owl#") &&
                     !STRSTARTS(STR(?this), "http://www.w3.org/1999/02/22-rdf-syntax-ns#") &&
                     !STRSTARTS(STR(?this), "http://www.w3.org/2000/01/rdf-schema#") &&
                     !STRSTARTS(STR(?this), "http://www.w3.org/2001/XMLSchema#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/XML/1998/namespace") &&
                     !STRSTARTS(STR(?this), "http://www.w3.org/2004/02/skos/core#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/ns/prov#") &&
                     !STRSTARTS(STR(?this), "http://purl.org/dc/terms/") &&
+                    !STRSTARTS(STR(?this), "http://purl.org/dc/elements/1.1/") &&
                     !STRSTARTS(STR(?this), "http://xmlns.com/foaf/0.1/") &&
                     !STRSTARTS(STR(?this), "http://schema.org/") &&
-                    !STRSTARTS(STR(?this), "https://schema.org/")
+                    !STRSTARTS(STR(?this), "https://schema.org/") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/ns/shacl#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/2006/time#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/ns/dcat#") &&
+                    !STRSTARTS(STR(?this), "http://www.opengis.net/ont/geosparql#")
                 )
             }
         }
@@ -57,22 +69,34 @@
             FILTER(isIRI(?this))
             {
                 ?ont a owl:Ontology .
-                BIND(REPLACE(STR(?ont), "^(.*[/#])[^/#]*$", "$1") AS ?ontologyNs)
-                FILTER(STRSTARTS(STR(?this), ?ontologyNs))
+                FILTER(isIRI(?ont))
+                BIND(IF(CONTAINS(STR(?ont), "#"), CONCAT(STRBEFORE(STR(?ont), "#"), "#"), STR(?ont)) AS ?ontologyNs)
+                FILTER(
+                    ((STRENDS(?ontologyNs, "#") || STRENDS(?ontologyNs, "/")) && STRSTARTS(STR(?this), ?ontologyNs)) ||
+                    STRSTARTS(STR(?this), CONCAT(?ontologyNs, "#")) ||
+                    STRSTARTS(STR(?this), CONCAT(?ontologyNs, "/"))
+                )
             }
             UNION
             {
-                FILTER NOT EXISTS { ?anyOnt a owl:Ontology }
+                FILTER NOT EXISTS { ?anyOnt a owl:Ontology FILTER(isIRI(?anyOnt)) }
                 FILTER(
                     !STRSTARTS(STR(?this), "http://www.w3.org/2002/07/owl#") &&
                     !STRSTARTS(STR(?this), "http://www.w3.org/1999/02/22-rdf-syntax-ns#") &&
                     !STRSTARTS(STR(?this), "http://www.w3.org/2000/01/rdf-schema#") &&
                     !STRSTARTS(STR(?this), "http://www.w3.org/2001/XMLSchema#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/XML/1998/namespace") &&
                     !STRSTARTS(STR(?this), "http://www.w3.org/2004/02/skos/core#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/ns/prov#") &&
                     !STRSTARTS(STR(?this), "http://purl.org/dc/terms/") &&
+                    !STRSTARTS(STR(?this), "http://purl.org/dc/elements/1.1/") &&
                     !STRSTARTS(STR(?this), "http://xmlns.com/foaf/0.1/") &&
                     !STRSTARTS(STR(?this), "http://schema.org/") &&
-                    !STRSTARTS(STR(?this), "https://schema.org/")
+                    !STRSTARTS(STR(?this), "https://schema.org/") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/ns/shacl#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/2006/time#") &&
+                    !STRSTARTS(STR(?this), "http://www.w3.org/ns/dcat#") &&
+                    !STRSTARTS(STR(?this), "http://www.opengis.net/ont/geosparql#")
                 )
             }
         }
@@ -87,11 +111,16 @@
             FILTER(isIRI(?this))
             {
                 ?ont a owl:Ontology .
-                BIND(REPLACE(STR(?ont), "^(.*[/#])[^/#]*$", "$1") AS ?ontologyNs)
-                FILTER(STRSTARTS(STR(?this), ?ontologyNs))
+                FILTER(isIRI(?ont))
+                BIND(IF(CONTAINS(STR(?ont), "#"), CONCAT(STRBEFORE(STR(?ont), "#"), "#"), STR(?ont)) AS ?ontologyNs)
+                FILTER(
+                    ((STRENDS(?ontologyNs, "#") || STRENDS(?ontologyNs, "/")) && STRSTARTS(STR(?this), ?ontologyNs)) ||
+                    STRSTARTS(STR(?this), CONCAT(?ontologyNs, "#")) ||
+                    STRSTARTS(STR(?this), CONCAT(?ontologyNs, "/"))
+                )
             }
             UNION
-            { FILTER NOT EXISTS { ?anyOnt a owl:Ontology } }
+            { FILTER NOT EXISTS { ?anyOnt a owl:Ontology FILTER(isIRI(?anyOnt)) } }
         }
     """ .
 
@@ -104,11 +133,16 @@
             FILTER(isIRI(?this))
             {
                 ?ont a owl:Ontology .
-                BIND(REPLACE(STR(?ont), "^(.*[/#])[^/#]*$", "$1") AS ?ontologyNs)
-                FILTER(STRSTARTS(STR(?this), ?ontologyNs))
+                FILTER(isIRI(?ont))
+                BIND(IF(CONTAINS(STR(?ont), "#"), CONCAT(STRBEFORE(STR(?ont), "#"), "#"), STR(?ont)) AS ?ontologyNs)
+                FILTER(
+                    ((STRENDS(?ontologyNs, "#") || STRENDS(?ontologyNs, "/")) && STRSTARTS(STR(?this), ?ontologyNs)) ||
+                    STRSTARTS(STR(?this), CONCAT(?ontologyNs, "#")) ||
+                    STRSTARTS(STR(?this), CONCAT(?ontologyNs, "/"))
+                )
             }
             UNION
-            { FILTER NOT EXISTS { ?anyOnt a owl:Ontology } }
+            { FILTER NOT EXISTS { ?anyOnt a owl:Ontology FILTER(isIRI(?anyOnt)) } }
         }
     """ .
 
@@ -121,11 +155,16 @@
             FILTER(isIRI(?this))
             {
                 ?ont a owl:Ontology .
-                BIND(REPLACE(STR(?ont), "^(.*[/#])[^/#]*$", "$1") AS ?ontologyNs)
-                FILTER(STRSTARTS(STR(?this), ?ontologyNs))
+                FILTER(isIRI(?ont))
+                BIND(IF(CONTAINS(STR(?ont), "#"), CONCAT(STRBEFORE(STR(?ont), "#"), "#"), STR(?ont)) AS ?ontologyNs)
+                FILTER(
+                    ((STRENDS(?ontologyNs, "#") || STRENDS(?ontologyNs, "/")) && STRSTARTS(STR(?this), ?ontologyNs)) ||
+                    STRSTARTS(STR(?this), CONCAT(?ontologyNs, "#")) ||
+                    STRSTARTS(STR(?this), CONCAT(?ontologyNs, "/"))
+                )
             }
             UNION
-            { FILTER NOT EXISTS { ?anyOnt a owl:Ontology } }
+            { FILTER NOT EXISTS { ?anyOnt a owl:Ontology FILTER(isIRI(?anyOnt)) } }
         }
     """ .
 
@@ -248,6 +287,8 @@
             SELECT $this WHERE {
                 $this rdfs:range ?range .
                 FILTER(isIRI(?range))
+                # owl:equivalentClass also expresses datatype definitions.
+                FILTER NOT EXISTS { ?range a rdfs:Datatype }
                 FILTER(
                     ?range = owl:Thing ||
                     EXISTS { ?range a owl:Class } || EXISTS { ?range a rdfs:Class } ||

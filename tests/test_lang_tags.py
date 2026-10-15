@@ -1,5 +1,6 @@
 """Tests for language tag consistency checking."""
 
+import pytest
 from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import FOAF, OWL, RDF, RDFS, SKOS
 
@@ -27,6 +28,20 @@ def test_consistent_tags_no_issues():
     assert report.languages_used == ["en", "nl"]
     assert report.issues == []
     assert report.status == Status.OK
+
+
+@pytest.mark.parametrize("tags, expected", [
+    (("en", "EN"), "en"),
+    (("en-US", "EN-us"), "en-us"),
+])
+def test_language_tag_case_does_not_create_missing_translations(tags, expected):
+    g = Graph()
+    g.add((EX.A, RDFS.label, Literal("A", lang=tags[0])))
+    g.add((EX.B, RDFS.label, Literal("B", lang=tags[1])))
+    report = check_lang_tags(g, _make_ns_map())
+    assert report.status == Status.OK
+    assert report.issues == []
+    assert report.languages_used == [expected]
 
 
 def test_missing_tag_detected():
@@ -131,10 +146,15 @@ def test_external_vocabulary_subject_ignored():
     assert report.issues == []
 
 
-def test_terms_outside_declared_ontology_namespace_ignored():
+@pytest.mark.parametrize("namespace", [
+    "http://other.org/vocab#",
+    "http://example.org/unrelated/",
+    "http://example.org/ontoOther#",
+])
+def test_terms_outside_declared_ontology_namespace_ignored(namespace):
     """With an explicit owl:Ontology, only subjects in its own namespace are
     checked, even for a namespace that isn't a well-known vocabulary."""
-    other = Namespace("http://other.org/vocab#")
+    other = Namespace(namespace)
     g = Graph()
     g.add((URIRef("http://example.org/onto"), RDF.type, OWL.Ontology))
     g.add((URIRef("http://example.org/onto#A"), RDFS.label, Literal("A", lang="en")))

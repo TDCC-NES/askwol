@@ -84,7 +84,7 @@ askwol checks ontology quality and publishing practices, including:
 
 askwol also generates a class diagram and links findings to guidance explaining the relevant ontology publishing practice.
 
-Findings are graded by severity: **errors** (formal logic or OWL 2 DL problems), **warnings** (likely mistakes or serious interoperability problems), and **recommendations** (publishing best practice). Reports count individual findings. The JSON output has a `severity_summary` with the counts, the findings, and a `has_errors` flag.
+Findings are graded by severity: **errors** (parsing failures or logical or structural problems), **warnings** (likely mistakes or serious interoperability problems), and **recommendations** (publishing best practice). Reports count individual findings. The JSON output has a `severity_summary` with the counts, the findings, and a `has_errors` flag.
 
 ## Supported formats
 

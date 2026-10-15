@@ -8,10 +8,10 @@ import pytest
 from pydantic import BaseModel
 from rich.console import Console
 
-from askwol.checks import CHECKS
+from askwol.checks import CHECKS, DATATYPE_SCOPE, REASONER_SCOPE
 from askwol.models import ValidationReport
 from askwol.pipeline import run_full_validation
-from askwol.report import print_report, report_as_markdown
+from askwol.report import print_report, report_as_json, report_as_markdown
 from askwol.report_html import render_report
 
 
@@ -98,3 +98,42 @@ async def test_terminal_rdf_values_cannot_become_rich_markup():
     assert payload in output.getvalue()
     # Table cells as well as inline titles and warnings retain literal values.
     assert output.getvalue().count(payload) > 15
+
+
+async def test_corrected_unknown_results_and_exemptions_across_formats(tmp_path):
+    source = tmp_path / 'ontology.ttl'
+    source.write_text('''
+@prefix : <https://example.org/ontology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix dct: <http://purl.org/dc/terms/> .
+<https://example.org/ontology> a owl:Ontology ; dct:license <https://example.org/licence> .
+:Old a owl:Class ; owl:deprecated true .
+:p a owl:DatatypeProperty ; rdfs:domain :Old ; rdfs:range <https://example.org/unknown#Datatype> ;
+   rdfs:label "p" ; rdfs:comment "A property." .
+''')
+    report, _ = await run_full_validation(source, skip_resolution=True, include_mermaid=False)
+    restored = ValidationReport.model_validate_json(report_as_json(report))
+    assert restored.reasoner.consistent is None
+    assert restored.license.checks[0].is_open is None
+    assert restored.license.checks[0].category == 'unrecognised'
+    assert restored.definition_docs.with_label == 1
+    assert restored.definition_docs.with_comment == 1
+    assert restored.definition_docs.deprecated_count == 1
+    assert not restored.definition_docs.missing_label
+    assert not restored.definition_docs.missing_comment
+    assert restored.severity_summary.errors == 0
+    assert any(f.rule == 'datatypes.unrecognised' and f.severity == 'warning'
+               for f in restored.findings())
+
+    terminal = StringIO()
+    print_report(restored, Console(file=terminal, width=220, color_system=None))
+    outputs = [render_report(restored), report_as_markdown(restored), terminal.getvalue()]
+    for output in outputs:
+        assert 'unrecognised' in output
+        assert REASONER_SCOPE in ' '.join(output.split())
+    for output in outputs[1:]:
+        assert 'non-open' not in output.lower()
+    assert DATATYPE_SCOPE in outputs[0] and DATATYPE_SCOPE in outputs[1]
+    assert '1 deprecated term(s) exempt' in outputs[0]
+    assert 'exempt (deprecated)' in outputs[1]

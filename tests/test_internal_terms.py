@@ -122,6 +122,20 @@ def test_host_root_is_not_treated_as_own_namespace():
     assert report.status == Status.OK
 
 
+def test_shared_lexical_prefix_does_not_make_a_neighbouring_ontology_internal():
+    g = Graph()
+    ontology = URIRef("https://example.org/ont")
+    term = URIRef("https://example.org/ont#Person")
+    g.add((ontology, RDF.type, OWL.Ontology))
+    g.add((term, RDF.type, OWL.Class))
+    g.add((term, RDFS.subClassOf, URIRef("https://example.org/ont2#Person")))
+
+    report = check_internal_terms(g)
+
+    assert report.status == Status.OK
+    assert report.referenced == []
+
+
 def test_skips_without_ontology_declaration():
     g = Graph()
     g.add((EX["Person"], RDF.type, OWL.Class))

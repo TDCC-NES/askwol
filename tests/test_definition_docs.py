@@ -36,11 +36,14 @@ def test_external_reused_terms_are_ignored():
     assert report.issues == []
 
 
-def test_deprecated_term_missing_docs_is_not_flagged():
+@pytest.mark.parametrize("properties", [[], [RDFS.label], [RDFS.label, RDFS.comment]])
+def test_deprecated_terms_are_exempt_but_documentation_counts_remain_actual(properties):
     g = Graph()
     g.add((EX["ontology"], RDF.type, OWL.Ontology))
     g.add((EX["OldClass"], RDF.type, OWL.Class))
     g.add((EX["OldClass"], OWL.deprecated, Literal(True)))
+    for prop in properties:
+        g.add((EX["OldClass"], prop, Literal("Documentation", lang="en")))
 
     report = check_definition_documentation(g)
 
@@ -48,8 +51,11 @@ def test_deprecated_term_missing_docs_is_not_flagged():
     assert report.issues == []
     check = report.checks[0]
     assert check.status == Status.OK
-    assert check.has_label is True
-    assert check.has_comment is True
+    assert check.has_label is (RDFS.label in properties)
+    assert check.has_comment is (RDFS.comment in properties)
+    assert report.with_label == int(RDFS.label in properties)
+    assert report.with_comment == int(RDFS.comment in properties)
+    assert report.documented_definitions == int(len(properties) == 2)
     assert check.deprecated == "owl:deprecated"
 
 

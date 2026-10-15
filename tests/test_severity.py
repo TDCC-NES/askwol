@@ -60,7 +60,7 @@ def test_every_check_has_rules_and_every_rule_belongs_to_a_check():
 @pytest.mark.parametrize("rule, severity", [
     (Rule.UNSATISFIABLE_CLASS, Severity.ERROR),
     (Rule.INCONSISTENT_INDIVIDUAL, Severity.ERROR),
-    (Rule.DATATYPE_UNRECOGNISED, Severity.ERROR),
+    (Rule.DATATYPE_UNRECOGNISED, Severity.WARNING),
     (Rule.DOMAIN_RANGE_MISMATCH, Severity.ERROR),
     (Rule.EXTERNAL_TERM_NOT_FOUND, Severity.WARNING),
     (Rule.IMPORT_UNRESOLVED, Severity.WARNING),

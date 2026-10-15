@@ -79,11 +79,7 @@ def check_internal_terms(graph: Graph) -> InternalTermsReport:
             message="no terms are defined in the ontology's own namespace",
         )
 
-    # Parent-path fallback deliberately excluded (see ontology_namespaces'
-    # docstring): a slash ontology IRI like https://host/dataset would
-    # otherwise claim the entire host, misclassifying unrelated IRIs such as
-    # an owl:versionIRI document or a sibling resource under the same host.
-    own_ns = _ontology_namespaces(graph, include_parent_path=False)
+    own_ns = _ontology_namespaces(graph)
     ontology_iris = {str(s) for s in graph.subjects(RDF.type, OWL.Ontology) if isinstance(s, URIRef)}
     version_iris = {
         str(o)

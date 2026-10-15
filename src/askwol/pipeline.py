@@ -118,9 +118,8 @@ async def run_full_validation(
 
     mermaid = build_mermaid(parsed.graph, parsed.namespaces) if include_mermaid else ""
 
-    used_prefixes = set(parsed.namespaces.keys())
     for pfx, uri in parsed.declared_prefixes.items():
-        if pfx not in used_prefixes:
+        if pfx not in parsed.used_prefixes:
             report.unused_prefixes.append(UnusedPrefix(prefix=pfx, uri=uri))
 
     phase("checks")

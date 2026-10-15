@@ -52,8 +52,12 @@ async def check_imports(
         return ImportsReport(status=Status.OK, checks=[])
 
     resolutions = await resolve_all_namespaces(
-        {iri: iri for iri in declared}, cache, timeout=timeout,
+        {iri: iri for iri in declared}, cache, timeout=timeout, use_known_terms=False,
     )
+    for resolution in resolutions:
+        if resolution.status == Status.OK and resolution.is_valid_rdf is not True:
+            resolution.status = Status.FAIL
+            resolution.error = "Import did not provide parseable RDF."
     checks = [ImportsCheck(iri=r.uri, resolution=r) for r in resolutions]
     status = Status.FAIL if any(c.resolution.status == Status.FAIL for c in checks) else Status.OK
     return ImportsReport(status=status, checks=checks)

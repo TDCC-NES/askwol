@@ -15,10 +15,9 @@ this module only computes the display label for whatever it flags.
 
 from __future__ import annotations
 
-from rdflib import Graph, URIRef
-from rdflib.namespace import OWL, RDF
+from rdflib import Graph
 
-from askwol.iri_utils import local_name as _local_name, namespace_of as _namespace_of
+from askwol.iri_utils import local_name as _local_name, ontology_namespaces as _ontology_namespaces
 from askwol.models import NonOntologyTermIssue, NonOntologyTermsReport, Status
 from askwol.shacl_runner import run_shapes
 
@@ -27,12 +26,7 @@ _SHAPES_FILE = "non_ontology_terms.ttl"
 
 def check_non_ontology_terms(graph: Graph) -> NonOntologyTermsReport:
     """Flag own-namespace skos:Concept instances mixed into the schema."""
-    ontology_iris = {
-        str(subject)
-        for subject in graph.subjects(RDF.type, OWL.Ontology)
-        if isinstance(subject, URIRef)
-    }
-    ontology_namespaces = {_namespace_of(iri) for iri in ontology_iris}
+    ontology_namespaces = _ontology_namespaces(graph)
 
     if not ontology_namespaces:
         return NonOntologyTermsReport(

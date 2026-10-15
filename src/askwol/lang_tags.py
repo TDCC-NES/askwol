@@ -88,7 +88,7 @@ def check_lang_tags(graph: Graph, ns_map: dict[str, str]) -> LangTagReport:
                 continue
         if isinstance(s, BNode):
             bnode_subjects.add(s_str)
-        lang = o.language  # None when untagged
+        lang = o.language.lower() if o.language else None
         prop_data[p_str][s_str].add(lang)
 
     if not prop_data:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from itertools import combinations
+from itertools import combinations, combinations_with_replacement
 
 from rdflib import Graph, URIRef
 from rdflib.collection import Collection
@@ -13,19 +13,6 @@ from askwol.iri_utils import EXTERNAL_NAMESPACES, ontology_namespaces as _ontolo
 from askwol.models import ReasonerCheck, ReasonerReport, Status
 
 CLASS_TYPES = {OWL.Class, RDFS.Class}
-PROPERTY_TYPES = {
-    RDF.Property,
-    OWL.ObjectProperty,
-    OWL.DatatypeProperty,
-    OWL.AnnotationProperty,
-    OWL.FunctionalProperty,
-    OWL.InverseFunctionalProperty,
-    OWL.TransitiveProperty,
-    OWL.SymmetricProperty,
-    OWL.AsymmetricProperty,
-    OWL.ReflexiveProperty,
-    OWL.IrreflexiveProperty,
-}
 
 
 def _is_internal(uri: str, ontology_namespaces: set[str]) -> bool:
@@ -55,11 +42,21 @@ def _disjoint_pairs(graph: Graph) -> set[tuple[str, str]]:
     return pairs
 
 
+def _contradictory_classes(classes: set[str], disjoint: set[tuple[str, str]]) -> bool:
+    """Whether membership in these named classes is impossible."""
+    return str(OWL.Nothing) in classes or any(
+        (left, right) in disjoint
+        for left, right in combinations_with_replacement(sorted(classes), 2)
+    )
+
+
 def run_reasoner_checks(graph: Graph) -> ReasonerReport:
-    """Run lightweight consistency checks on the current ontology graph only.
+    """Check selected named-class contradictions using OWL RL/RDF closure.
 
     This intentionally does not follow owl:imports. It reasons only over the
-    triples present in the uploaded ontology.
+    triples present in the uploaded ontology. Individual findings cover named
+    resources, including punned schema terms, regardless of their namespace.
+    Passing these checks does not establish consistency or OWL 2 DL conformance.
     """
     closure = Graph()
     for triple in graph:
@@ -69,27 +66,19 @@ def run_reasoner_checks(graph: Graph) -> ReasonerReport:
     ontology_namespaces = _ontology_namespaces(closure)
     disjoint = _disjoint_pairs(closure)
 
-    schema_nodes = {
-        subject
-        for subject, rdf_type in closure.subject_objects(RDF.type)
-        if isinstance(subject, URIRef) and (rdf_type in CLASS_TYPES or rdf_type in PROPERTY_TYPES or rdf_type == OWL.Ontology)
-    }
-
     inconsistent_individuals: list[str] = []
     seen_individuals = sorted(
         {
             subject
-            for subject, rdf_type in closure.subject_objects(RDF.type)
-            if isinstance(subject, URIRef) and subject not in schema_nodes and _is_internal(str(subject), ontology_namespaces)
+            for subject in closure.subjects(RDF.type)
+            if isinstance(subject, URIRef)
         },
         key=str,
     )
     for individual in seen_individuals:
         types = {str(obj) for obj in closure.objects(individual, RDF.type) if isinstance(obj, URIRef)}
-        for left, right in combinations(sorted(types), 2):
-            if (left, right) in disjoint:
-                inconsistent_individuals.append(str(individual))
-                break
+        if _contradictory_classes(types, disjoint):
+            inconsistent_individuals.append(str(individual))
 
     unsatisfiable_classes: list[str] = []
     named_classes = sorted(
@@ -103,15 +92,7 @@ def run_reasoner_checks(graph: Graph) -> ReasonerReport:
     for cls in named_classes:
         superclasses = {str(cls)}
         superclasses.update(str(obj) for obj in closure.objects(cls, RDFS.subClassOf) if isinstance(obj, URIRef))
-        if str(OWL.Nothing) in superclasses:
-            unsatisfiable_classes.append(str(cls))
-            continue
-        contradiction_found = False
-        for left, right in combinations(sorted(superclasses), 2):
-            if (left, right) in disjoint:
-                contradiction_found = True
-                break
-        if contradiction_found:
+        if _contradictory_classes(superclasses, disjoint):
             unsatisfiable_classes.append(str(cls))
 
     # "Reasoning scope" is metadata about how the check is run (already shown
@@ -134,8 +115,8 @@ def run_reasoner_checks(graph: Graph) -> ReasonerReport:
     else:
         overall_status = Status.OK
         overall_message = (
-            "No logical contradictions or unsatisfiable classes detected in the "
-            "current ontology."
+            "No findings from the selected disjoint-class and owl:Nothing checks. "
+            "Consistency is not established."
         )
     checks.append(
         ReasonerCheck(
@@ -162,7 +143,7 @@ def run_reasoner_checks(graph: Graph) -> ReasonerReport:
                 key="inconsistent_individuals",
                 label="Inconsistent individuals",
                 status=Status.OK,
-                message="No logical contradictions detected among named individuals in the current ontology.",
+                message="No disjoint-class or owl:Nothing contradictions detected among named individuals.",
             )
         )
 
@@ -183,14 +164,14 @@ def run_reasoner_checks(graph: Graph) -> ReasonerReport:
                 key="unsatisfiable_classes",
                 label="Unsatisfiable classes",
                 status=Status.OK,
-                message="No unsatisfiable named classes detected in the current ontology.",
+                message="No unsatisfiable named classes detected by these checks.",
             )
         )
 
     return ReasonerReport(
         scoped_to_current_ontology=True,
         imports_followed=False,
-        consistent=not inconsistent_individuals,
+        consistent=False if inconsistent_individuals else None,
         inconsistent_individuals=inconsistent_individuals,
         unsatisfiable_classes=unsatisfiable_classes,
         checks=checks,

@@ -22,8 +22,13 @@
                 ?this a skos:Concept .
                 FILTER(isIRI(?this))
                 ?ont a owl:Ontology .
-                BIND(REPLACE(STR(?ont), "^(.*[/#])[^/#]*$", "$1") AS ?ontologyNs)
-                FILTER(STRSTARTS(STR(?this), ?ontologyNs))
+                FILTER(isIRI(?ont))
+                BIND(IF(CONTAINS(STR(?ont), "#"), CONCAT(STRBEFORE(STR(?ont), "#"), "#"), STR(?ont)) AS ?ontologyNs)
+                FILTER(
+                    ((STRENDS(?ontologyNs, "#") || STRENDS(?ontologyNs, "/")) && STRSTARTS(STR(?this), ?ontologyNs)) ||
+                    STRSTARTS(STR(?this), CONCAT(?ontologyNs, "#")) ||
+                    STRSTARTS(STR(?this), CONCAT(?ontologyNs, "/"))
+                )
             }
         """ ;
     ] ;

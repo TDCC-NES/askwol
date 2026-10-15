@@ -100,3 +100,59 @@ async def test_imports_ignores_non_uri_objects():
 
     assert report.status == Status.OK
     assert report.checks == []
+
+
+@pytest.mark.parametrize('cached', [False, True])
+@pytest.mark.asyncio
+@respx.mock
+async def test_reachable_non_rdf_import_fails(cached):
+    iri = 'https://example.org/not-rdf'
+    route = respx.get(iri).mock(return_value=httpx.Response(
+        200, text='<html><body>No RDF here.</body></html>',
+        headers={'content-type': 'text/html'},
+    ))
+    graph = Graph()
+    graph.add((ONT, OWL.imports, URIRef(iri)))
+    cache = OntologyCache()
+    if cached:
+        cache.put(iri, None)
+    report = await check_imports(graph, cache)
+    assert report.status == Status.FAIL
+    assert len(report.findings()) == 1
+    assert report.broken[0].resolution.error == 'Import did not provide parseable RDF.'
+    assert route.call_count == (0 if cached else 1)
+
+
+@pytest.mark.parametrize('body, content_type', [
+    (SAMPLE_TURTLE, 'text/turtle'),
+    (b'@prefix ex: <https://example.org/> .', 'text/turtle'),
+    (SAMPLE_TURTLE, 'text/html'),
+])
+@pytest.mark.asyncio
+@respx.mock
+async def test_known_namespace_import_still_requires_rdf_retrieval(body, content_type):
+    iri = 'http://www.w3.org/2001/XMLSchema#'
+    route = respx.get(iri).mock(return_value=httpx.Response(
+        200, content=body, headers={'content-type': content_type},
+    ))
+    graph = Graph()
+    graph.add((ONT, OWL.imports, URIRef(iri)))
+    report = await check_imports(graph, OntologyCache())
+    assert route.call_count == 1
+    assert report.status == Status.OK
+    assert report.checks[0].resolution.is_valid_rdf is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_imports_remain_direct_only():
+    iri = 'https://example.org/direct'
+    respx.get(iri).mock(return_value=httpx.Response(
+        200, content=b'<urn:ontology> <http://www.w3.org/2002/07/owl#imports> <https://example.org/nested> .',
+        headers={'content-type': 'text/turtle'},
+    ))
+    graph = Graph()
+    graph.add((ONT, OWL.imports, URIRef(iri)))
+    report = await check_imports(graph, OntologyCache())
+    assert report.status == Status.OK
+    assert [check.iri for check in report.checks] == [iri]

@@ -132,16 +132,16 @@ def test_multiple_recommended_licenses_warn():
     assert all(c.is_recommended for c in report.checks)
 
 
-def test_rdflicense_prefix_is_known_open():
+def test_known_rdflicense_alias_matches_its_recommended_cc_licence():
     g = Graph()
     g.add((ONT, RDF.type, OWL.Ontology))
     g.add((ONT, DCTERMS.license, URIRef("http://purl.org/NET/rdflicense/cc-by3.0")))
     report = check_license(g)
-    assert report.status == Status.WARN
+    assert report.status == Status.OK
     check = report.checks[0]
     assert check.is_open is True
-    assert check.is_recommended is False
-    assert check.name == "Known open licence"
+    assert check.is_recommended is True
+    assert check.name == "Creative Commons Attribution 3.0"
 
 
 def test_schema_license_predicate_is_checked():
@@ -157,13 +157,76 @@ def test_schema_license_predicate_is_checked():
     Literal("All rights reserved"),
     URIRef("https://example.org/my-custom-license"),
 ])
-def test_unknown_license_fails(license_value):
+def test_unknown_license_is_not_asserted_to_be_non_open(license_value):
     g = Graph()
     g.add((ONT, RDF.type, OWL.Ontology))
     g.add((ONT, DCTERMS.license, license_value))
     report = check_license(g)
-    assert report.status == Status.FAIL
+    assert report.status == Status.WARN
     check = report.checks[0]
+    assert check.is_open is None
+    assert check.is_recommended is False
+    assert check.name == "Unrecognised licence"
+
+
+def test_licence_on_an_unrelated_resource_does_not_license_the_ontology():
+    g = Graph()
+    g.add((ONT, RDF.type, OWL.Ontology))
+    g.add((URIRef("https://example.org/data"), DCTERMS.license,
+           URIRef("https://creativecommons.org/licenses/by/4.0/")))
+    assert check_license(g).checks == []
+
+
+def test_equivalent_declarations_count_as_one_licence():
+    g = Graph()
+    g.add((ONT, RDF.type, OWL.Ontology))
+    g.add((ONT, DCTERMS.license, URIRef("http://creativecommons.org/licenses/by/4.0/")))
+    g.add((ONT, SDO.license, URIRef("https://creativecommons.org/licenses/by/4.0/legalcode.en")))
+    report = check_license(g)
+    assert report.status == Status.OK
+    assert report.license_count == 1
+
+
+def test_different_cc_versions_remain_distinct_licences():
+    g = Graph()
+    g.add((ONT, RDF.type, OWL.Ontology))
+    for version in ("3.0", "4.0"):
+        g.add((ONT, DCTERMS.license, URIRef(f"https://creativecommons.org/licenses/by/{version}/")))
+    report = check_license(g)
+    assert report.status == Status.WARN
+    assert report.license_count == 2
+    assert {check.name for check in report.checks} == {
+        "Creative Commons Attribution 3.0", "Creative Commons Attribution 4.0",
+    }
+
+
+@pytest.mark.parametrize("license_iri", [
+    "https://purl.org/NET/rdflicense/made-up",
+    "https://creativecommons.org/licenses/by/999.0/",
+    "https://creativecommons.org/publicdomain/zero/4.0/",
+    "https://creativecommons.org/licenses/by/4.0/unrelated-page",
+    "ftp://creativecommons.org/licenses/by/4.0/",
+    "creativecommons.org/licenses/by/4.0",
+])
+def test_unverified_licence_urls_are_unrecognised(license_iri):
+    g = Graph()
+    g.add((ONT, RDF.type, OWL.Ontology))
+    g.add((ONT, DCTERMS.license, URIRef(license_iri)))
+    check = check_license(g).checks[0]
+    assert check.is_open is None
+    assert check.is_recommended is False
+    assert check.status == Status.WARN
+
+
+@pytest.mark.parametrize("license_iri", [
+    "http://purl.org/NET/rdflicense/cc-by-nc4.0",
+    "http://purl.org/NET/rdflicense/cc-by-nc-nd4.0",
+])
+def test_known_restrictive_rdflicense_aliases_are_not_open(license_iri):
+    g = Graph()
+    g.add((ONT, RDF.type, OWL.Ontology))
+    g.add((ONT, DCTERMS.license, URIRef(license_iri)))
+    check = check_license(g).checks[0]
     assert check.is_open is False
     assert check.is_recommended is False
-    assert check.name == "Unknown non-open licence"
+    assert check.status == Status.FAIL

@@ -77,7 +77,7 @@ class NamespaceReport(BaseModel):
 
 
 class UnusedPrefix(BaseModel):
-    """A prefix declared but never used in any triple."""
+    """A detected namespace binding with no matching IRI use in the graph."""
 
     prefix: str
     uri: str
@@ -132,9 +132,17 @@ class LicenseCheck(BaseModel):
 
     iri: str
     name: str
-    is_open: bool
+    is_open: bool | None = Field(description="Whether the licence is known to be open; null when unrecognised.")
     is_recommended: bool
     status: Status
+
+    @property
+    def category(self) -> str:
+        if self.is_recommended:
+            return "recommended"
+        if self.is_open is None:
+            return "unrecognised"
+        return "open" if self.is_open else "non-open"
 
 
 class LicenseReport(BaseModel):
@@ -156,11 +164,22 @@ class LicenseReport(BaseModel):
 
     @property
     def open_licenses(self) -> list:
-        return [c for c in self.checks if c.status == Status.WARN]
+        return [c for c in self.checks if c.is_open is True and not c.is_recommended]
 
     @property
     def non_open_licenses(self) -> list:
-        return [c for c in self.checks if c.status == Status.FAIL]
+        return [c for c in self.checks if c.is_open is False]
+
+    @property
+    def unrecognised_licenses(self) -> list:
+        return [c for c in self.checks if c.is_open is None]
+
+    @property
+    def category_counts(self) -> dict[str, int]:
+        return {
+            category: sum(c.category == category for c in self.checks)
+            for category in ("recommended", "open", "non-open", "unrecognised")
+        }
 
     @property
     def license_count(self) -> int:
@@ -171,7 +190,9 @@ class LicenseReport(BaseModel):
             return [Finding.of(Rule.LICENSE_MISSING, message="No licence declared.")]
         found: list[Finding] = []
         for c in self.checks:
-            if c.status == Status.FAIL:
+            if c.is_open is None:
+                found.append(Finding.of(Rule.LICENSE_NOT_OPEN, c.iri, "Licence not recognised; openness could not be established."))
+            elif c.status == Status.FAIL:
                 found.append(Finding.of(Rule.LICENSE_NOT_OPEN, c.iri, f"{c.name} is not an open licence."))
             elif c.status == Status.WARN:
                 found.append(Finding.of(
@@ -258,15 +279,21 @@ class DefinitionDocumentationReport(BaseModel):
 
     @property
     def missing_label(self) -> list[DefinitionDocumentationCheck]:
-        return [c for c in self.checks if not c.has_label]
+        return [c for c in self.checks if not c.has_label and not c.deprecated]
 
     @property
     def missing_comment(self) -> list[DefinitionDocumentationCheck]:
-        return [c for c in self.checks if not c.has_comment]
+        return [c for c in self.checks if not c.has_comment and not c.deprecated]
+
+    @property
+    def deprecated_count(self) -> int:
+        return sum(bool(c.deprecated) for c in self.checks)
 
     def findings(self) -> list[Finding]:
         found: list[Finding] = []
         for c in self.checks:
+            if c.deprecated:
+                continue
             if not c.has_label:
                 found.append(Finding.of(Rule.LABEL_MISSING, c.term, f"{c.display_name} has no rdfs:label."))
             if not c.has_comment:
@@ -592,17 +619,20 @@ class ReasonerReport(BaseModel):
 
     scoped_to_current_ontology: bool = True
     imports_followed: bool = False
-    consistent: bool = True
+    consistent: bool | None = Field(
+        default=None,
+        description="False when these checks detect a contradiction; null when consistency is not established.",
+    )
     inconsistent_individuals: list[str] = Field(default_factory=list)
     unsatisfiable_classes: list[str] = Field(default_factory=list)
     checks: list[ReasonerCheck] = Field(default_factory=list)
 
     def findings(self) -> list[Finding]:
         return [
-            Finding.of(Rule.INCONSISTENT_INDIVIDUAL, iri, "Named individual is inconsistent with its class restrictions.")
+            Finding.of(Rule.INCONSISTENT_INDIVIDUAL, iri, "Named individual has disjoint class memberships or belongs to owl:Nothing under OWL RL/RDF rules.")
             for iri in self.inconsistent_individuals
         ] + [
-            Finding.of(Rule.UNSATISFIABLE_CLASS, iri, "Class is unsatisfiable (equivalent to owl:Nothing).")
+            Finding.of(Rule.UNSATISFIABLE_CLASS, iri, "Named class is unsatisfiable under the selected OWL RL/RDF checks.")
             for iri in self.unsatisfiable_classes
         ]
 

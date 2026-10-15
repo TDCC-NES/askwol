@@ -76,33 +76,24 @@ def ontology_stems(graph: Graph) -> set[str]:
     }
 
 
-def ontology_namespaces(graph: Graph, *, include_parent_path: bool = True) -> set[str]:
-    """Return the namespace(s) declared as this ontology's own (subject of owl:Ontology).
+def ontology_namespaces(graph: Graph) -> set[str]:
+    """Infer conservative, separator-bounded term namespaces from ontology IRIs.
 
-    The ontology IRI itself is commonly used as the namespace directly, or as the
-    namespace minus its trailing "#"/"/" separator (e.g. subject
-    "http://example.org/onto" with terms under "http://example.org/onto#"). Both
-    forms, plus the namespace derived by stripping a local name, are returned so
-    callers can match against however the namespace is actually declared.
-
-    ``include_parent_path=False`` drops that last fallback (stripping the
-    ontology IRI's own trailing local name) when the IRI has no "#" of its
-    own. For a slash IRI like "https://host/dataset", that fallback resolves
-    to "https://host/" - the entire host - which is too broad for callers
-    that need to tell this ontology's own terms apart from unrelated
-    resources under the same host (e.g. internal_terms.py). It is still
-    applied when the IRI already contains "#", since truncating back to an
-    existing "#" only narrows to the ontology's own path segment, never
-    broadens past it.
+    Preserve an existing fragment or trailing slash namespace; otherwise try
+    ``ontologyIRI#`` and ``ontologyIRI/``. An ontology IRI identifies an ontology,
+    not its term namespace, so this heuristic deliberately excludes parent paths
+    and bare string prefixes that would claim unrelated neighbouring resources.
+    Keep the standalone SHACL targets in step with this rule.
     """
     namespaces: set[str] = set()
     for subject in graph.subjects(RDF.type, OWL.Ontology):
         if not isinstance(subject, URIRef):
             continue
         uri = str(subject)
-        namespaces.add(uri)
-        namespaces.add(uri + "#")
-        namespaces.add(uri + "/")
-        if include_parent_path or "#" in uri:
-            namespaces.add(namespace_of(uri))
+        if "#" in uri:
+            namespaces.add(uri.split("#", 1)[0] + "#")
+        elif uri.endswith("/"):
+            namespaces.add(uri)
+        else:
+            namespaces.update((uri + "#", uri + "/"))
     return namespaces

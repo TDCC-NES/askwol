@@ -95,6 +95,11 @@ def test_xsd_valid_types():
     assert all(r.status == Status.OK for r in results), [r.error for r in results]
 
 
+def test_xsd_non_datatype_names_remain_recognised_vocabulary_terms():
+    results = validate_terms("xsd", XSD_NS, {"minInclusive", "pattern", "length", "anyType"}, OntologyCache())
+    assert all(result.status == Status.OK for result in results)
+
+
 def test_xsd_invalid_type():
     cache = OntologyCache()
     results = validate_terms("xsd", XSD_NS, {"madeUpType"}, cache)

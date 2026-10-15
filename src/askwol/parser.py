@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from bisect import bisect_left
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from rdflib import Graph, URIRef, OWL, RDF
+from rdflib import Graph, Literal, URIRef, OWL, RDF
 from rdflib.namespace import DCTERMS
 
 from askwol.rdf_io import load_rdf_source
@@ -23,6 +24,8 @@ class ParsedOntology:
     imports: list[str] = field(default_factory=list)
     # All prefixes declared in the file (including unused ones)
     declared_prefixes: dict[str, str] = field(default_factory=dict)
+    # Bound namespaces used by any IRI, including headers and literal datatypes.
+    used_prefixes: set[str] = field(default_factory=set)
 
 
 def parse_ontology(source: str | Path, base_uri: str | None = None, *, allow_network: bool = True) -> ParsedOntology:
@@ -45,7 +48,7 @@ def parse_ontology(source: str | Path, base_uri: str | None = None, *, allow_net
     g = Graph()
 
     # Capture rdflib's built-in prefixes before parsing
-    builtin_prefixes = {str(pfx) for pfx, _ in g.namespaces()}
+    builtin_prefixes = {str(pfx): str(uri) for pfx, uri in g.namespaces()}
 
     load_rdf_source(g, source, base_uri=base_uri, allow_network=allow_network)
 
@@ -58,7 +61,7 @@ def parse_ontology(source: str | Path, base_uri: str | None = None, *, allow_net
     # Only record prefixes that the file actually declared (not rdflib defaults)
     result.declared_prefixes = {
         pfx: uri for pfx, uri in all_prefixes.items()
-        if pfx not in builtin_prefixes
+        if builtin_prefixes.get(pfx) != uri
     }
 
     # Collect owl:imports
@@ -83,24 +86,36 @@ def parse_ontology(source: str | Path, base_uri: str | None = None, *, allow_net
     # Only namespaces that are actually *used* in triples get included.
     # Terms are only collected from *subject* positions  -  these are the
     # concepts the ontology defines, not the vocabulary it references.
-    seen_ns: set[str] = set()       # URIs already registered for namespace discovery
+    seen_ns: set[str] = set()       # URIRefs seen in any triple position
+    literal_datatypes: set[str] = set()
     seen_terms: set[str] = set()    # subject URIs already added to terms_by_namespace
     for s, p, o in g:
         # Register namespaces from all positions
         for node in (s, p, o):
             if isinstance(node, URIRef):
                 uri = str(node)
-                if uri in header_iris:
-                    continue
                 if uri not in seen_ns:
                     seen_ns.add(uri)
-                    _bucket_uri(uri, result, all_prefixes)
+                    if uri not in header_iris:
+                        _bucket_uri(uri, result, all_prefixes)
+        if isinstance(o, Literal) and o.datatype is not None:
+            literal_datatypes.add(str(o.datatype))
         # Only collect subject URIs as terms to validate
         if isinstance(s, URIRef):
             s_uri = str(s)
             if s_uri not in header_iris and s_uri not in seen_terms:
                 seen_terms.add(s_uri)
                 _add_term(s_uri, result, all_prefixes)
+
+    # Namespace usage is separate from vocabulary-term extraction. After RDF
+    # parsing, aliases cannot be distinguished, so matching any IRI counts all
+    # bindings for that namespace as used. Binary search avoids scanning every
+    # graph IRI once for each (potentially unused) prefix.
+    used_iris = sorted(seen_ns | literal_datatypes)
+    for prefix, namespace in result.declared_prefixes.items():
+        index = bisect_left(used_iris, namespace)
+        if index < len(used_iris) and used_iris[index].startswith(namespace):
+            result.used_prefixes.add(prefix)
 
     return result
 

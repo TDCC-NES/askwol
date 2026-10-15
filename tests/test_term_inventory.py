@@ -1,7 +1,7 @@
 """Tests for term inventory, domains/ranges, and datatype checks."""
 
 import pytest
-from rdflib import Graph, Literal, Namespace
+from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import OWL, RDF, RDFS, XSD
 
 from askwol.models import Status
@@ -309,6 +309,63 @@ def test_datatypes_recognizes_custom_datatype():
 
     assert report.status == Status.OK
     assert any(u.display_name == "personAge" and u.recognised for u in report.usages)
+
+
+@pytest.mark.parametrize("property_type, expected_status", [
+    (OWL.DatatypeProperty, Status.OK),
+    (OWL.ObjectProperty, Status.FAIL),
+])
+def test_custom_datatype_definition_is_not_mistaken_for_an_owl_class(property_type, expected_status):
+    g = _base_graph()
+    g.add((EX["Person"], RDF.type, OWL.Class))
+    g.add((EX["Age"], RDF.type, RDFS.Datatype))
+    g.add((EX["Age"], OWL.equivalentClass, XSD.nonNegativeInteger))
+    g.add((EX["age"], RDF.type, property_type))
+    g.add((EX["age"], RDFS.domain, EX["Person"]))
+    g.add((EX["age"], RDFS.range, EX["Age"]))
+
+    assert check_domains_ranges(g).status == expected_status
+    if property_type == OWL.DatatypeProperty:
+        usage = next(u for u in check_datatypes(g).usages if u.datatype == str(EX["Age"]))
+        assert set(usage.sources) == {"range", "declared"}
+        assert usage.recognised is True
+
+
+@pytest.mark.parametrize("local_name", ["minInclusive", "anyType"])
+def test_xsd_non_datatype_names_are_not_recognised_as_datatypes(local_name):
+    g = _base_graph()
+    g.add((EX["age"], RDF.type, OWL.DatatypeProperty))
+    datatype = URIRef(str(XSD) + local_name)
+    g.add((EX["age"], RDFS.range, datatype))
+
+    report = check_datatypes(g)
+
+    assert report.status == Status.FAIL
+    assert [u.datatype for u in report.unrecognised] == [str(datatype)]
+
+
+def test_datatype_inventory_includes_plain_and_language_tagged_strings():
+    g = _base_graph()
+    g.add((EX["Person"], RDFS.label, Literal("Person", lang="en")))
+    g.add((EX["Person"], RDFS.comment, Literal("A person.")))
+
+    report = check_datatypes(g)
+
+    assert report.status == Status.OK
+    assert {u.datatype for u in report.usages} == {str(XSD.string), str(RDF.langString)}
+    assert all(u.sources == ["literal"] and u.count == 1 for u in report.usages)
+
+
+def test_inventory_excludes_sibling_paths_for_a_bare_ontology_iri():
+    g = Graph()
+    g.add((URIRef("https://example.org/ont"), RDF.type, OWL.Ontology))
+    g.add((EX["Person"], RDF.type, OWL.Class))
+    g.add((URIRef("https://example.org/other#person"), RDF.type, OWL.Class))
+
+    report = check_term_inventory(g)
+
+    assert [entry.term for entry in report.entries] == [str(EX["Person"])]
+    assert report.naming_issues == []
 
 
 def test_datatypes_excludes_range_that_is_a_class_by_usage_only():

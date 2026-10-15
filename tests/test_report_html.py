@@ -270,7 +270,7 @@ class _ReportHTML(HTMLParser):
 def test_valid_rdf_licence_literal_is_text_in_html():
     payload = '</code><script>alert(1)</script><img src=x onerror=alert(2)>'
     graph = Graph().parse(
-        data=f'<urn:ontology> <http://purl.org/dc/terms/license> {json.dumps(payload)} .',
+        data=f'<urn:ontology> a <http://www.w3.org/2002/07/owl#Ontology> ; <http://purl.org/dc/terms/license> {json.dumps(payload)} .',
         format="turtle",
     )
     report = ValidationReport(file="licence.ttl", license=check_license(graph))

@@ -1,21 +1,11 @@
-"""Tests for the unused prefix detection logic.
-
-The logic itself lives inline in `web.py`: a prefix is considered unused
-when it appears in `parsed.declared_prefixes` (literally `@prefix` in the
-file, excluding rdflib's built-in defaults) but not in `parsed.namespaces`
-(which the parser populates only with namespaces that show up in a triple).
-
-These tests exercise that contract end to end through the parser using
-temporary Turtle files, so they catch regressions in either the parser or
-the unused-prefix heuristic. Note: prefixes that rdflib registers by
-default (`owl`, `rdfs`, `foaf`, `dcterms`, ...) are intentionally not
-flagged because the parser cannot tell them apart from the user's `@prefix`
-declarations once parsing is done.
-"""
+"""Unused namespace bindings, independent of vocabulary-term extraction."""
 
 from pathlib import Path
 
+import pytest
+
 from askwol.parser import parse_ontology
+from askwol.pipeline import run_full_validation
 
 
 def _write(tmp_path: Path, content: str) -> Path:
@@ -25,7 +15,7 @@ def _write(tmp_path: Path, content: str) -> Path:
 
 
 def _unused(parsed) -> set[str]:
-    return set(parsed.declared_prefixes) - set(parsed.namespaces)
+    return set(parsed.declared_prefixes) - parsed.used_prefixes
 
 
 def test_all_prefixes_used(tmp_path):
@@ -77,3 +67,21 @@ def test_prefix_used_only_in_predicate_is_counted_as_used(tmp_path):
 :A a owl:Class ; rdfs:comment "rdfs is used as a predicate" .
 """))
     assert "rdfs" not in _unused(parsed)
+
+
+@pytest.mark.parametrize('triples', [
+    'used:ontology a owl:Ontology .',
+    '<urn:ontology> owl:imports used:ontology .',
+    '<urn:term> <urn:value> "value"^^used:datatype .',
+    '<https://example.org/used/Term> a owl:Class .',
+])
+@pytest.mark.asyncio
+async def test_namespace_usage_includes_headers_datatypes_and_aliases(tmp_path, triples):
+    path = _write(tmp_path, '''
+@prefix used: <https://example.org/used/> .
+@prefix alias: <https://example.org/used/> .
+@prefix unused: <https://example.org/unused/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+''' + triples)
+    report, _ = await run_full_validation(path, skip_resolution=True, include_mermaid=False)
+    assert {item.prefix for item in report.unused_prefixes} == {'unused'}

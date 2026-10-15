@@ -132,7 +132,10 @@ async def resolve_namespace(
         try:
             rdr_resp = await client.get(redirect_url, follow_redirects=True)
             if rdr_resp.status_code < 400:
-                g, is_valid_rdf = _try_parse_rdf(rdr_resp.content, base_uri=str(rdr_resp.url))
+                g, is_valid_rdf = _try_parse_rdf(
+                    rdr_resp.content, base_uri=str(rdr_resp.url),
+                    content_type=rdr_resp.headers.get("content-type", ""),
+                )
                 if is_valid_rdf:
                     cache.put(uri, graph=g)
                     return NamespaceCheck(
@@ -166,7 +169,7 @@ async def resolve_namespace(
         )
 
     # Try to parse the response directly as RDF
-    g, is_valid_rdf = _try_parse_rdf(resp.content, base_uri=str(resp.url))
+    g, is_valid_rdf = _try_parse_rdf(resp.content, base_uri=str(resp.url), content_type=ct)
 
     # If that didn't work, the response is probably HTML  -  look for RDF links
     if not is_valid_rdf and "html" in ct.lower():
@@ -175,7 +178,10 @@ async def resolve_namespace(
             try:
                 rdf_resp = await client.get(rdf_url, follow_redirects=True)
                 if rdf_resp.status_code < 400:
-                    g, is_valid_rdf = _try_parse_rdf(rdf_resp.content, base_uri=str(rdf_resp.url))
+                    g, is_valid_rdf = _try_parse_rdf(
+                        rdf_resp.content, base_uri=str(rdf_resp.url),
+                        content_type=rdf_resp.headers.get("content-type", ""),
+                    )
                     if is_valid_rdf:
                         break
             except httpx.HTTPError:
@@ -191,7 +197,9 @@ async def resolve_namespace(
     )
 
 
-def _try_parse_rdf(content: bytes, *, base_uri: str | None = None) -> tuple[Graph, bool]:
+def _try_parse_rdf(
+    content: bytes, *, base_uri: str | None = None, content_type: str = "",
+) -> tuple[Graph, bool]:
     """Try parsing bytes as RDF in multiple formats. Returns (graph, success)."""
     g = Graph()
     rdflib_logger = logging.getLogger("rdflib")
@@ -199,10 +207,13 @@ def _try_parse_rdf(content: bytes, *, base_uri: str | None = None) -> tuple[Grap
     rdflib_logger.setLevel(logging.ERROR)
     try:
         for fmt in ("turtle", "xml", "json-ld", "nt"):
+            # RDFLib's permissive RDF/XML parser can interpret ordinary HTML
+            # as RDF. Still accept other RDF formats from mislabelled servers.
+            if fmt == "xml" and "html" in content_type.lower():
+                continue
             try:
                 parse_rdf_bytes(g, content, format=fmt, base_uri=base_uri)
-                if len(g) > 0:
-                    return g, True
+                return g, True
             except Exception:
                 g = Graph()  # reset on failure
                 continue
@@ -247,6 +258,8 @@ async def resolve_all_namespaces(
     cache: OntologyCache,
     timeout: float = DEFAULT_TIMEOUT,
     max_concurrent: int = MAX_CONCURRENT,
+    *,
+    use_known_terms: bool = True,
 ) -> list[NamespaceCheck]:
     """Resolve all namespace URIs concurrently."""
     sem = asyncio.Semaphore(max_concurrent)
@@ -260,7 +273,7 @@ async def resolve_all_namespaces(
     known_idx: dict[int, NamespaceCheck] = {}
 
     for i, (prefix, uri) in enumerate(namespaces.items()):
-        if uri in KNOWN_TERMS:
+        if use_known_terms and uri in KNOWN_TERMS:
             known_idx[i] = NamespaceCheck(
                 prefix=prefix, uri=uri, status=Status.OK,
                 is_valid_rdf=False,
