@@ -58,8 +58,8 @@ askwol check ontology.ttl --format markdown
 ```
 
 Exit codes:
-- 0: all checks passed
-- 1: issues were found
+- 0: no errors; warnings and recommendations may remain
+- 1: errors found
 
 ## What askwol checks
 
@@ -77,7 +77,6 @@ askwol checks ontology quality and publishing practices, including:
 - domains and ranges
 - datatype usage
 - term documentation
-- dereferenceability of ontology and term IRIs
 - logical modelling issues
 - disjointness
 - selected OWL reasoning and consistency-related checks

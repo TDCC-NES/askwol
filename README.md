@@ -1,162 +1,113 @@
 # askwol 🦉
 
-> **Drop in an OWL ontology - get back a class diagram, namespace and term checks, metadata review, and a clean-up report. In seconds.**
+Check OWL ontologies during modelling and before publication. Get a report on namespaces, terms, metadata, documentation, and selected logical issues, plus an interactive class diagram in the web app.
 
 [![Licence: MIT](https://img.shields.io/badge/Licence-MIT-blue.svg)](https://github.com/TDCC-NES/askwol/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/askwol)](https://pypi.org/project/askwol/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://github.com/TDCC-NES/askwol/actions/workflows/tests.yml/badge.svg)](https://github.com/TDCC-NES/askwol/actions/workflows/tests.yml)
-[![Built with FastAPI](https://img.shields.io/badge/built%20with-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 
-👉 **Try it live:** https://lod-4tu.tudelft.nl/askwol/
+**[Try online](https://lod-4tu.tudelft.nl/askwol/)** · **[Publishing guide](https://lod-4tu.tudelft.nl/askwol/guide)**
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/TDCC-NES/askwol/main/docs/screenshot.png" alt="askwol web UI screenshot" width="720"></p>
+  <img src="https://raw.githubusercontent.com/TDCC-NES/askwol/main/docs/screenshot.png" alt="askwol web UI screenshot" width="720">
+</p>
 
-## Why askwol?
+Supported formats: Turtle (`.ttl`), RDF/XML (`.rdf`, `.owl`), JSON-LD (`.jsonld`), N-Triples (`.nt`), and N3 (`.n3`). See the [full list of checks](https://lod-4tu.tudelft.nl/askwol/#what-do-you-get); each report section links to the matching guide entry.
 
-The W3C originally planned to call their Web Ontology Language **WOL**. Tim Finin [proposed rearranging it to **OWL**](http://lists.w3.org/Archives/Public/www-webont-wg/2001Dec/0169.html), since *"owls are associated with wisdom."* Fittingly, [Owl](https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)) from Milne's *Winnie-the-Pooh* [famously misspells his own name](https://lists.w3.org/Archives/Public/www-webont-wg/2002Sep/0301.html) as **"Wol."**
+Findings count individual issues, not checks:
 
-So the name went WOL → OWL → and, for a tool that *asks* Owl for a wise second opinion on your ontology, back to **askwol**. Wollie, to friends.
+| Severity | Meaning |
+| --- | --- |
+| **Error** | A detected logical issue or violation of selected OWL restrictions. |
+| **Warning** | A likely mistake or interoperability problem. |
+| **Recommendation** | A publishing convention, such as metadata, licensing, or documentation. |
 
-## What do you get?
+Reasoning uses the submitted document without imports. Passing these checks does not establish overall consistency or complete OWL conformance.
 
-An interactive **class diagram** of your ontology, plus a single HTML report (or JSON via the API) with one section per automated check, grouped into five areas: ontology basics, namespaces & reuse, term structure, term documentation, and logic. Every section links to a matching entry in the built-in **publishing guide** at `/guide`, so a failing check always tells you *why* the convention exists.
+## Install
 
-See the full, always-up-to-date list of checks on the [live app](https://lod-4tu.tudelft.nl/askwol/#what-do-you-get) or in the [publishing guide](https://lod-4tu.tudelft.nl/askwol/guide).
-
-## Quick start
-
-Install from [PyPI](https://pypi.org/project/askwol/) with [pipx](https://pipx.pypa.io/stable/) (Python 3.10+):
+Python **3.10+** is required. For the CLI only, install with [pipx](https://pipx.pypa.io/stable/):
 
 ```bash
 pipx install askwol
-askwol check your-ontology.ttl
 ```
 
-For the Python API or local Web UI, install into a virtual environment instead:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate   # may differ depending on your shell
-pip install askwol
-```
-
-Or for development:
+For local development, the web app, and the Python API (macOS/Linux):
 
 ```bash
 git clone https://github.com/TDCC-NES/askwol.git
 cd askwol
-python -m venv .venv
-source .venv/bin/activate   # may differ depending on your shell
-pip install -e ".[dev]"   # Python 3.10+
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[dev]"
 ```
 
-## Usage
+## Run locally
 
-### CLI
+Run from the repository folder containing `pyproject.toml`, using the virtual environment above:
 
 ```bash
-# Rich terminal output
+ASKWOL_ROOT_PATH= PYTHONPATH=src .venv/bin/python -m uvicorn \
+  askwol.web:app --reload --reload-dir src --port 8000
+```
+
+Open the [checker](http://127.0.0.1:8000/), [guide](http://127.0.0.1:8000/guide), or [API docs](http://127.0.0.1:8000/docs). Python changes reload automatically; refresh the browser to see them. Stop with **Ctrl+C**.
+
+## CLI
+
+```bash
 askwol check ontology.ttl
-
-# Markdown / JSON report
-askwol check ontology.ttl --format markdown -o report.md
 askwol check ontology.ttl --format json
-
-# Options
-askwol check ontology.ttl --timeout 60        # default: 30s
-askwol check ontology.ttl --skip-resolution   # parse only
+askwol check ontology.ttl --format markdown -o report.md
+askwol check ontology.ttl --skip-resolution
 ```
 
-Exit codes: `0` no errors, `1` errors found. Warnings and recommendations alone do not change the exit code.
+For a source install, use `.venv/bin/askwol` instead of `askwol`.
 
-### Severity levels
+- `--timeout 60` sets the HTTP timeout in seconds (default: `30`).
+- `--skip-resolution` skips namespace and import HTTP requests; local checks and reasoning still run.
+- Exit code `0` means no errors; `1` means errors were found. Warnings and recommendations do not change the exit code.
 
-Every finding carries one of three severities, in the HTML report, the CLI/Markdown output, and the JSON API (`severity_summary`). Reports count individual findings, not checks: ten classes without a label are ten recommendations.
+## API
 
-| Level | Meaning |
-|-------|---------|
-| ✗ **Error** | A formal logic or OWL 2 DL problem (e.g. an inconsistent individual, an unsatisfiable class, an unrecognised datatype, a domain or range of the wrong kind). |
-| ⚠ **Warning** | A likely mistake or a serious interoperability problem (e.g. an unresolvable namespace or import, a reused term that does not exist in its vocabulary, mixed `http`/`https` IRIs, a term used but never defined). |
-| 💡 **Recommendation** | Ontology publishing best practice (e.g. ontology metadata, an open licence, labels and comments, naming conventions). |
-
-The per-item `status` values (`ok`, `warn`, `fail`, `skip`) in the JSON describe the outcome of one check, not how serious it is. `severity_summary` adds the `has_errors` flag, the count per severity, and the list of findings (rule, check, severity, subject, message). The classification lives in one table, `RULE_SEVERITY` in [`severity.py`](src/askwol/severity.py); the SHACL shapes under `src/askwol/shapes/` are kept in step with it (a test enforces this).
-
-Severity configuration is code-based, not a CLI or runtime setting. Each rule can be classified independently. Unknown datatypes are counted under Datatypes, not again under External term definitions; skipped checks contribute no findings.
-
-The reasoner performs limited checks on the current document, without imports. No detected findings is not a guarantee of consistency or OWL 2 DL conformance.
-
-Moving a few `status` values: a missing label, comment, or ontology-header property is now `warn` (it was `fail`), and `MetadataCheck.severity` (`required`/`recommended`) is now `tier` (`core`/`additional`).
-
-### Web UI
-
-Run the Web UI locally
-
-With the virtual environment activated:
+Upload a file to the running app for a JSON report:
 
 ```bash
-python -m uvicorn askwol.web:app --port 8000
+curl -F "file=@ontology.ttl" http://127.0.0.1:8000/api/validate
 ```
 
-Open http://127.0.0.1:8000.
+JSON includes `severity_summary` with finding counts and `has_errors`. Per-check `status` values (`ok`, `warn`, `fail`, `skip`) describe outcomes, not severity. `/health` reports service availability.
 
-For development with automatic reloading:
-```bash
-python -m uvicorn askwol.web:app --reload --reload-dir src --port 8000
+To run the same checks from Python:
+
+```python
+import asyncio
+from askwol.pipeline import run_full_validation
+
+report, _ = asyncio.run(run_full_validation("ontology.ttl", include_mermaid=False))
+print(report.model_dump_json(indent=2))
 ```
 
-Open http://127.0.0.1:8000/. Endpoints: `GET /` (upload form), `POST /validate` (HTML report), `POST /api/validate` (JSON), `GET /guide` (publishing guide), `GET /health`, `GET /docs` (Swagger / OpenAPI).
+## Docker
 
-## Deployment (Docker)
-
-The repo ships with a `Dockerfile` and `docker-compose.yml` so that the web app can be deployed on any Linux server with Docker.
-
-### Run locally
+From the repository root, build and start the app, or rebuild after changes:
 
 ```bash
-# build and start detached
-docker compose up -d --build
-
-# rebuild AND recreate after code changes
-# (plain `--build` can reuse the old container, leaving stale code running)
 docker compose up -d --build --force-recreate
-
-# logs / stop
-docker compose logs -f askwol
-docker compose down
 ```
 
-Then open http://localhost:8000. If the page still looks stale after a rebuild,
-hard-refresh the browser (Cmd/Ctrl+Shift+R) to clear cached assets.
+The app is available at http://127.0.0.1:8000/. Logs: `docker compose logs -f askwol`. Stop: `docker compose down`.
 
-#### Development with hot-reload
-
-`docker-compose.override.yml.example` bind-mounts `src/` and runs uvicorn with
-`--reload`. Copy it once and Compose merges it automatically:
+For automatic reloading during development:
 
 ```bash
 cp docker-compose.override.yml.example docker-compose.override.yml
-docker compose up --build      # first run, and whenever deps change
-# edit files under src/askwol/ - uvicorn reloads on save
+docker compose up --build
 ```
 
-The override file is gitignored, so it never reaches the server.
+Keep that development override off production servers. The supplied production configuration uses **one web worker**, binds to `127.0.0.1:8000`, and persists usage data in `./data/`.
 
-### Deploy on a server
-
-Prerequisites: a Linux host with Docker, a domain pointing to it, and a reverse proxy such as [Caddy](https://caddyserver.com/),  [Apache mod_proxy](https://httpd.apache.org/docs/current/mod/mod_proxy.html), or [Nginx Reverse Proxy](https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/).
-
-```bash
-# on the server
-git clone https://github.com/TDCC-NES/askwol.git /opt/askwol
-cd /opt/askwol
-# do NOT copy docker-compose.override.yml.example here - without it, the
-# production CMD from the Dockerfile (2 workers, no reload) is used.
-docker compose up -d --build --force-recreate
-```
-
-The container binds to `127.0.0.1:8000` only. Point your reverse proxy at it, e.g. a minimal Caddyfile:
+On a server, clone the repository, run the start command above, and put an HTTPS reverse proxy in front of it. For example, with Caddy:
 
 ```caddy
 askwol.example.com {
@@ -166,30 +117,17 @@ askwol.example.com {
 }
 ```
 
-Caddy will obtain a Let's Encrypt certificate automatically. Updates:
+For updates, run `git pull`, then repeat the build/start command.
 
-```bash
-cd /opt/askwol && git pull && docker compose up -d --build --force-recreate
+### Serving under a sub-path
+
+For a deployment at `/askwol/`, put this in the repository's `.env` file:
+
+```dotenv
+ASKWOL_ROOT_PATH=/askwol
 ```
 
-#### Serving under a sub-path
-
-If askwol sits at the root of a domain (`https://askwol.example.com/`), nothing
-extra is needed.
-
-If you serve it under a path prefix (e.g. `https://server/askwol/`), set
-`ASKWOL_ROOT_PATH` to that prefix. askwol then rewrites its internal navigation
-links to include the prefix, so every internal link resolves correctly without
-relying on JavaScript or a trailing slash.
-
-```yaml
-# docker-compose.override.yml, or an .env file
-environment:
-  - ASKWOL_ROOT_PATH=/askwol
-```
-
-Point the reverse proxy at `127.0.0.1:8000` and strip the prefix before
-forwarding, e.g. with Caddy:
+The reverse proxy must strip the prefix before forwarding. With Caddy:
 
 ```caddy
 server.example.com {
@@ -199,71 +137,46 @@ server.example.com {
 }
 ```
 
-**Security notes:** askwol fetches arbitrary URLs (namespace resolution + URL upload). Outbound requests to private, loopback, and other internal IP ranges are blocked automatically (SSRF guard in [`resolver.py`](https://github.com/TDCC-NES/askwol/blob/main/src/askwol/resolver.py)). Each client IP is capped at `ASKWOL_RATE_LIMIT` requests per minute (default 20; set to `0` to disable) on `/validate` and `/api/validate`. Uploads are capped at 20 MB in the app itself; also enforce a request-size limit on the reverse proxy as defence-in-depth.
+## Configuration
 
-**Validation limits:** each validation runs in its own isolated process, never inline in a web worker, so a slow or hung ontology can be killed without affecting other requests. A hard timeout (`ASKWOL_VALIDATION_TIMEOUT`, default 300 seconds) kills a job outright and returns a `504`. A global concurrency limit (`ASKWOL_MAX_CONCURRENT_VALIDATIONS`, default 2; keep at or below the host's CPU core count) caps how many validations run at once, and rejects excess requests immediately with a `503` instead of queueing them. Generous size caps (`ASKWOL_MAX_TRIPLES` default 500000, `ASKWOL_MAX_NAMESPACES` default 500, `ASKWOL_MAX_IMPORTS` default 200) reject oversized ontologies right after parsing, before any expensive check runs. `/validate`, `/api/validate`, and the CLI all share the same validation pipeline and the same limits. If your reverse proxy sets its own timeout for these routes, set it comfortably above `ASKWOL_VALIDATION_TIMEOUT` so askwol's own timeout response is what clients actually see.
-
-**Cancelled requests:** if the client disconnects while a validation is running (the user presses Stop or Cancel, reloads, or closes the tab, or an API client times out), askwol stops the job: the worker process is killed, its concurrency slot is freed immediately, and nothing is recorded as usage. This only works if the disconnect reaches askwol. nginx (with its default `proxy_ignore_client_abort off`) and Caddy pass a client abort on to the upstream; Apache's `mod_proxy` may not notice it while waiting for the backend, in which case validations simply run to completion as before. Cancelled jobs are kept in the `validation_jobs` table with outcome `cancelled` (status `499`, nginx's "client closed request").
-
-### Usage tracking
-
-A lightweight, privacy-friendly tracker logs each validation request to a local SQLite database. No cookies, no JavaScript, no third-party services. IPs are hashed with a per-database secret so they cannot be recovered from the stored data.
-
-Recorded per event: timestamp, request kind (`validate`, `validate_upload`, or `validate_api`), source (the submitted URL or filename), HTTP status, duration in ms, and a truncated SHA-256 hash of the client IP. Requests the client abandons before a result is produced (see "Cancelled requests" above) are not recorded, so a reload or a repeated click does not count twice.
-
-Environment variables:
+Native Python runs read environment variables, not `.env` files. Docker Compose forwards `ASKWOL_ROOT_PATH` and `ASKWOL_STATS_TOKEN` from `.env`; add other overrides under the service's `environment` in a Compose override file. Restart native runs or recreate Compose containers after changing settings.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ASKWOL_USAGE_DB` | `data/usage.db` | Path to the SQLite file. Local runs and the Docker setup both write here (`/data/usage.db` in the container maps to `./data/` on the host). |
-| `ASKWOL_STATS_TOKEN` | *(unset)* | Required to view the `/stats` JSON dashboard. If unset, `/stats` returns 503. |
-| `ASKWOL_USAGE_DISABLED` | *(unset)* | Set to `1` to disable tracking entirely. |
+| `ASKWOL_RATE_LIMIT` | `20` | Validation requests per client IP per minute, per worker; `0` disables. |
+| `ASKWOL_VALIDATION_TIMEOUT` | `300` | Maximum seconds per web job. |
+| `ASKWOL_MAX_CONCURRENT_VALIDATIONS` | `2` | Concurrent web jobs per worker. |
+| `ASKWOL_MAX_TRIPLES` | `500000` | Maximum triples per ontology. |
+| `ASKWOL_MAX_NAMESPACES` | `500` | Maximum declared prefixes per ontology. |
+| `ASKWOL_MAX_IMPORTS` | `200` | Maximum declared imports per ontology. |
+| `ASKWOL_USAGE_DB` | `data/usage.db` | Usage database path; Docker uses `/data/usage.db`. |
+| `ASKWOL_USAGE_DISABLED` | unset | Set to `1` to disable usage tracking. |
+| `ASKWOL_STATS_TOKEN` | unset | Enables access to usage statistics. |
 
-Enable the dashboard:
+Web uploads are capped at **20 MB**. Requests to private/internal network addresses are blocked. Web jobs run in isolated subprocesses: timeouts return `504`, and excess concurrent requests return `503`. Set the proxy timeout above the job timeout and enforce a proxy upload limit. The CLI shares the ontology size caps, but runs without the web job timeout or concurrency limit.
 
-```bash
-echo "ASKWOL_STATS_TOKEN=$(openssl rand -hex 32)" >> .env
-docker compose up -d
-curl "http://127.0.0.1:8000/stats?token=$(grep ASKWOL_STATS_TOKEN .env | cut -d= -f2)"
-```
+A client disconnect cancels its job when the reverse proxy forwards the disconnect. Cancelled requests do not count as usage.
 
-Returns aggregated usage counts: total events, unique IP hashes, and events per day (all-time), plus the most-validated sources, split into URLs and uploaded files.
+### Usage tracking
 
-### Python API
+A local SQLite database records timestamps, source URLs or filenames, HTTP statuses, durations, and IP hashes salted with a per-database secret. No cookies or third-party tracking services are used.
 
-```python
-import asyncio
-from askwol.parser import parse_ontology
-from askwol.cache import OntologyCache
-from askwol.resolver import resolve_all_namespaces
-from askwol.term_validator import validate_terms
-
-parsed = parse_ontology("ontology.ttl")
-cache = OntologyCache()
-checks = asyncio.run(resolve_all_namespaces(parsed.namespaces, cache))
-
-for prefix, uri in parsed.namespaces.items():
-    for r in validate_terms(prefix, uri, parsed.terms_by_namespace.get(prefix, set()), cache):
-        print(f"{r.prefix}:{r.local_name} -> {r.status}")
-```
-
-## Supported formats
-
-Turtle (`.ttl`), RDF/XML (`.rdf`, `.owl`), JSON-LD (`.jsonld`), N-Triples (`.nt`), N3 (`.n3`)
+Set `ASKWOL_STATS_TOKEN` to a long random value (generate one with `openssl rand -hex 32`) and apply it as described above. `/stats` is the HTML dashboard; `/api/stats` returns JSON. Pass `?token=YOUR_TOKEN` to authenticate; local requests can omit it once a token is configured. Totals and daily counts cover all recorded activity; average duration uses the last 30 days.
 
 ## Tests
 
+After the source installation above, run from the repository root:
+
 ```bash
-pytest tests/ -v
+.venv/bin/python -m pytest tests/ -q
 ```
 
-The test suite covers every check on good and bad inputs, HTML report
-rendering, and the FastAPI routes via `TestClient`, plus a pinned smoke test
-on [`html/ontologies/broken.ttl`](https://github.com/TDCC-NES/askwol/blob/main/html/ontologies/broken.ttl) that fails if any
-check ever stops detecting issues (clean counterpart:
-[`html/ontologies/sample.ttl`](https://github.com/TDCC-NES/askwol/blob/main/html/ontologies/sample.ttl)). Drop either into
-the upload form at http://localhost:8000/ to see a full report.
+For manual checks, upload [`sample.ttl`](https://github.com/TDCC-NES/askwol/blob/main/html/ontologies/sample.ttl) or [`broken.ttl`](https://github.com/TDCC-NES/askwol/blob/main/html/ontologies/broken.ttl) through the local app. Contribution guidelines: [CONTRIBUTING.md](https://github.com/TDCC-NES/askwol/blob/main/CONTRIBUTING.md).
+
+## Why askwol?
+
+The name plays on OWL and [“Wol,” Owl's misspelled name](https://lists.w3.org/Archives/Public/www-webont-wg/2002Sep/0301.html) in *Winnie-the-Pooh*: ask Owl for a second opinion on your ontology. Wollie, to friends.
 
 ## Licence
 
-MIT - see [LICENSE](https://github.com/TDCC-NES/askwol/blob/main/LICENSE).
+[MIT](https://github.com/TDCC-NES/askwol/blob/main/LICENSE).

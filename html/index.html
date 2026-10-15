@@ -4,10 +4,12 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Linked Open Data & Ontology Tools from TDCC-NES & 4TU.ResearchData</title>
+	<link rel="canonical" href="https://lod-4tu.tudelft.nl/">
 	<meta name="google-site-verification" content="8ypgVD7ncKb5Hl2PpSN6fmK1EbZEmWl_RjSXv0O9FOs">
-	<meta name="description" content="Linked open data and ontology tools for making research data FAIR, from TDCC-NES and 4TU.ResearchData.">
+	<meta name="description" content="Check OWL ontologies with Ask Wol and follow our ontology publishing guide. Free tools and guidance from TDCC-NES and 4TU.ResearchData.">
 	<meta property="og:title" content="Linked Open Data & Ontology Tools from TDCC-NES & 4TU.ResearchData">
-	<meta property="og:description" content="Linked open data and ontology tools for making research data FAIR, from TDCC-NES and 4TU.ResearchData.">
+	<meta property="og:description" content="Check OWL ontologies with Ask Wol and follow our ontology publishing guide. Free tools and guidance from TDCC-NES and 4TU.ResearchData.">
+	<meta property="og:url" content="https://lod-4tu.tudelft.nl/">
 	<style>
 		body {
 			font-family: 'Gill Sans', sans-serif;
@@ -29,6 +31,7 @@
 		.logo-tdcc img,
 		.logo-4tu img {
 			width: 100%;
+			height: auto;
 			display: block;
 		}
 		.card {
@@ -49,11 +52,17 @@
 			text-decoration: none;
 		}
 		.card-title a {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.6em;
 			color: rgb(24, 60, 120);
 			font-weight: bold;
 		}
+		.card-title img {
+			flex: none;
+		}
 		.card-tagline {
-			font-size: 70%;
+			font-size: 1rem;
 			color: #666;
 			margin: 0.5em 0 0;
 		}
@@ -65,20 +74,36 @@
 		.card-credit a {
 			color: inherit;
 		}
+		.card-guide {
+			margin: 0.8em 0 0;
+		}
 	</style>
 </head>
 <body>
 	<header>
-		<a class="logo-tdcc" href="https://tdcc.nl/nes/"><img src="https://tdcc.nl/wp-content/uploads/2023/02/TDCC-NES-Logo_RGB-2048x1725.png" alt="TDCC-NES"></a>
-		<a class="logo-4tu" href="https://data.4tu.nl/"><img src="https://data.4tu.nl/static/images/logo.png" alt="4TU.ResearchData"></a>
+		<a class="logo-tdcc" href="https://tdcc.nl/nes/"><img src="/images/tdcc-nes.webp" alt="TDCC-NES" width="2048" height="1725"></a>
+		<a class="logo-4tu" href="https://data.4tu.nl/"><img src="/images/4tu-researchdata.webp" alt="4TU.ResearchData" width="4939" height="1801"></a>
 	</header>
 	<main>
+		<h1>Linked Open Data &amp; Ontology Tools</h1>
 		<div class="card">
-			<p class="card-title"><a href="/askwol/">🦉 Ask Wol</a></p>
-			<p class="card-tagline">A class diagram and checks for OWL ontologies, linked to practical guidance.</p>
-			<p class="card-credit">by the <a href="https://tdcc.nl/nes/ontology-engineers/">TDCC-NES Ontology Engineers</a></p>
+			<h2 class="card-title">
+				<a href="/askwol/">
+					<img src="/askwol/static/wollie-h1.png" alt="" width="43" height="56">
+					<span>Ask Wol: Online OWL Ontology Checker</span>
+				</a>
+			</h2>
+			<p class="card-tagline">
+				Free, open-source ontology checks and class diagrams.
+				Enter a URL or upload an OWL ontology.
+			</p>
+			<p class="card-guide">
+				<a href="/askwol/guide">How to publish an OWL ontology</a>
+			</p>
+			<p class="card-credit">
+				by the <a href="https://tdcc.nl/nes/ontology-engineers/">TDCC-NES Ontology Engineers</a>
+			</p>
 		</div>
 	</main>
 </body>
-</html> 
-
+</html>

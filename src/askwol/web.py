@@ -437,6 +437,7 @@ def _apply_prefix(html: str) -> str:
     return (
         html.replace('href="./"', f'href="{ROOT_PATH}/"')
         .replace('href="guide"', f'href="{ROOT_PATH}/guide"')
+        .replace('href="guide#', f'href="{ROOT_PATH}/guide#')
         .replace('href="docs"', f'href="{ROOT_PATH}/docs"')
         .replace('action="validate"', f'action="{ROOT_PATH}/validate"')
         .replace('="static/', f'="{ROOT_PATH}/static/')
@@ -933,8 +934,8 @@ def _render_stats_page(data: dict[str, object]) -> str:
     <div class="shell">
         <div class="topnav">
             <span class="brand"><span class="brand-mark" aria-hidden="true"><img src="static/wollie-h1.png" alt="" width="18" height="24"></span> Ask Wol usage</span>
-            <a href="./">Home</a>
-            <a href="guide">Publishing guide</a>
+            <a href="./">OWL ontology checker</a>
+            <a href="guide">OWL ontology publishing guide</a>
             <a href="docs">API docs</a>
         </div>
         <div class="hero">

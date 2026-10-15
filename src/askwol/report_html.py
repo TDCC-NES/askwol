@@ -156,7 +156,7 @@ def render_report(report: ValidationReport, mermaid: str = "") -> str:
         "  .footer { margin-top: 2em; font-size: 0.85em; color: #aaa; text-align: center; }",
         "</style>",
         "</head><body>",
-        '<p class="topnav"><strong>Navigation:</strong> <a href="./">Home</a> &middot; <a href="guide">Publishing guide</a> &middot; <a href="docs">API docs</a></p>',
+        '<p class="topnav"><strong>Navigation:</strong> <a href="./">OWL ontology checker</a> &middot; <a href="guide">OWL ontology publishing guide</a> &middot; <a href="docs">API docs</a></p>',
         f'<h1>Results for {source_html}</h1>',
     ]
 

@@ -10,6 +10,7 @@ in the same order.
 from __future__ import annotations
 
 import re
+from datetime import date
 from html import escape, unescape
 
 from askwol.branding import PAGE_ICON_LINKS
@@ -20,24 +21,24 @@ UPLOAD_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OWL Ontology Checker & Reviewer | Ask Wol</title>
+<title>Free Online OWL Ontology Checker | Ask Wol</title>
 <link rel="canonical" href="https://lod-4tu.tudelft.nl/askwol/">
-<meta name="description" content="askwol is a free, open-source OWL ontology reviewer. Get an instant class diagram plus namespace, term, metadata, documentation, IRI, language-tag, and reasoner checks for your RDF or OWL ontology.">
+<meta name="description" content="Free online OWL ontology checks with Wollie. Upload a file or enter a URL for a class diagram and checks on namespaces, terms, metadata, and documentation.">
 <meta name="keywords" content="OWL, ontology, RDF, Semantic Web, ontology validator, ontology review, SHACL, linked data, knowledge graph, Turtle, JSON-LD">
 <meta name="author" content="TDCC-NES Ontology Engineers">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#4a7c59">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="askwol">
-<meta property="og:title" content="Ask Wol: OWL ontology reviewer">
-<meta property="og:description" content="Instant OWL ontology review: class diagram, namespace and term checks, metadata and documentation review, and a clean-up report.">
+<meta property="og:title" content="Free Online OWL Ontology Checker | Ask Wol">
+<meta property="og:description" content="Free online OWL ontology checks with Wollie. Upload a file or enter a URL for a class diagram and checks on namespaces, terms, metadata, and documentation.">
 <meta property="og:image" content="https://lod-4tu.tudelft.nl/askwol/static/wollie-og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Wollie, a hand-drawn owl">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Ask Wol: OWL ontology reviewer">
-<meta name="twitter:description" content="Instant OWL ontology review: class diagram, namespace and term checks, metadata and documentation review, and a clean-up report.">
+<meta name="twitter:title" content="Free Online OWL Ontology Checker | Ask Wol">
+<meta name="twitter:description" content="Free online OWL ontology checks with Wollie. Upload a file or enter a URL for a class diagram and checks on namespaces, terms, metadata, and documentation.">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -152,17 +153,20 @@ UPLOAD_HTML = """<!DOCTYPE html>
 <body>
   <p class="topnav">
     <strong>Navigation:</strong>
-    <a href="./">Home</a> &middot;
-    <a href="guide">Publishing guide</a> &middot;
+    <a href="./">OWL ontology checker</a> &middot;
+    <a href="guide">OWL ontology publishing guide</a> &middot;
     <a href="docs">API docs</a>
   </p>
 <h1>
   <img class="logo" src="static/wollie-h1.png" alt="" width="43" height="56">
   <span><span class="brand">Ask Wol <span class="beta-badge">Beta</span></span> <span class="tagline">OWL Ontology Checker &amp; Reviewer</span></span>
 </h1>
-  <p>Your friendly owl (Wollie, to friends) for instant <a href="https://www.w3.org/OWL/">OWL</a>
-  ontology reviews: a visual class diagram, namespace and term checks,
-  metadata and documentation review, and a clean-up report.</p>
+  <p>Your friendly owl (Wollie, to friends) for free online
+  <a href="https://www.w3.org/OWL/">OWL</a> ontology checks
+  during modelling and before publication.
+  Enter a URL or upload a file to get a class diagram and a review report
+  covering namespaces, terms, metadata, documentation, and selected logical issues.</p>
+  <p>Preparing to publish? Follow the <a href="guide">OWL ontology publishing guide</a>.</p>
 
   <form class="card" id="validate-form" action="validate" method="post" enctype="multipart/form-data" data-progress-url="validate/progress">
     <div class="tabs" role="tablist">
@@ -393,7 +397,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
     })();
   </script>
 
-  <h2 id="what-do-you-get">What do you get?</h2>
+  <h2 id="what-do-you-get">What does Ask Wol check?</h2>
   <p>An interactive <strong>class diagram</strong> of your ontology, plus one
   HTML report (or JSON via the API) with a section per check. The checks are
   grouped into five areas, and each links to the matching entry in the
@@ -412,6 +416,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
     <li><a href="https://protege.stanford.edu/" target="_blank" rel="noopener">Prot&eacute;g&eacute;</a>: the standard free, open-source ontology editor.</li>
     <li><a href="https://www.michaeldebellis.com/post/new-protege-pizza-tutorial" target="_blank" rel="noopener">The Pizza Tutorial</a>: a revised Prot&eacute;g&eacute; 5 version of the classic hands-on OWL tutorial.</li>
     <li><a href="https://lov.linkeddata.es/dataset" target="_blank" rel="noopener">Linked Open Vocabularies (LOV)</a>: a searchable catalogue of established RDF vocabularies and ontologies, for finding terms to reuse.</li>
+    <li><a href="https://ontochoice.github.io/choosing-terms-and-ontologies/" target="_blank" rel="noopener">OntoChoice</a>: a collaborative initiative on selecting, evaluating, and reusing ontologies and terms.</li>
     <li><a href="https://oops.linkeddata.es/" target="_blank" rel="noopener">OOPS!</a>: an online scanner for common ontology pitfalls.</li>
     <li><a href="https://w3id.org/foops/" target="_blank" rel="noopener">FOOPS!</a>: an online tool for assessing the FAIRness of ontologies and vocabularies.</li> 
     <li><a href="https://robot.obolibrary.org/" target="_blank" rel="noopener">ROBOT</a>: a command-line tool for automating ontology engineering workflows.</li>
@@ -526,7 +531,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <div class="tip">Fill in these metadata so that both humans and machines
   can understand the provenance and reuse conditions of your ontology.</div>
   
-  <h3 id="versioning">Versioning</h3>
+  <h4 id="versioning">Versioning</h4>
   <p>Version information is part of good ontology metadata.
   <span class="tag spec">Spec</span> OWL 2 defines
   <a href="https://www.w3.org/TR/owl2-syntax/#def_version_iri" target="_blank" rel="noopener"><code>owl:versionIRI</code></a>
@@ -556,8 +561,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "group": "check",
         "category": "basics",
         "anchor": "imports",
-        "title": "Declare imports, and keep them resolving",
-        "toc_label": "Imports",
+        "title": "",
+        "toc_label": "Resolving ontology imports",
         "body": """\
   <p><span class="tag spec">Spec</span> To include another ontology&rsquo;s
   axioms in yours, use
@@ -592,8 +597,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "group": "check",
         "category": "basics",
         "anchor": "iri-strategy",
-        "title": "Pick one IRI strategy (hash or slash) and stick to it",
-        "toc_label": "IRI strategy",
+        "title": "",
+        "toc_label": "Choosing hash or slash IRIs",
         "body": """\
   <p><strong>What askwol checks:</strong> every term defined inside your
   ontology&rsquo;s own namespace is classified as either <em>hash style</em>
@@ -610,7 +615,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   confuses consumers about whether <code>/Person</code> is the same term
   as <code>#Person</code>.</div>
 
-  <h3>Hash vs. slash, in plain terms</h3>
+  <h4 id="hash-vs-slash">Hash vs. slash, in plain terms</h4>
   <p><span class="tag practice">TDCC guideline</span> Neither RDF nor OWL
   requires hash or slash IRIs; both are valid (the W3C
   <a href="https://www.w3.org/TR/cooluris/" target="_blank" rel="noopener">&ldquo;Cool URIs for the
@@ -632,7 +637,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     by FOAF, Schema.org, Dublin Core, and DBpedia.</li>
   </ul>
 
-  <h3>Recommendation</h3>
+  <h4 id="iri-strategy-recommendation">Recommendation</h4>
   <p><span class="tag practice">TDCC guideline</span> If in doubt, <strong>go
   with slash</strong>: it scales. Use hash only for a vocabulary you know
   will stay small. The Cool URIs note concludes:</p>
@@ -678,7 +683,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   exact IRI matches, including SPARQL and any tool that does string
   comparison on URIs.</p>
 
-  <h3>The legacy problem</h3>
+  <h4 id="legacy-namespaces">The legacy problem</h4>
   <p>Most foundational vocabularies were minted before HTTPS was ubiquitous.
   OWL, RDFS, FOAF, Dublin Core, SKOS and PROV-O all use
   <code>http://</code>. Changing them would break billions of existing
@@ -688,7 +693,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   You would be creating a <em>different</em> IRI that matches nothing in
   other people&rsquo;s data.</div>
 
-  <h3>For your own ontology</h3>
+  <h4 id="own-ontology-scheme">For your own ontology</h4>
   <ul>
     <li>New vocabularies: <strong><code>https://</code> is fine and recommended.</strong>
     Schema.org switched to <code>https</code> as its canonical scheme.</li>
@@ -753,8 +758,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "group": "check",
         "category": "reuse",
         "anchor": "resolvable",
-        "title": "Make namespaces resolvable",
-        "toc_label": "Namespaces",
+        "title": "",
+        "toc_label": "Making ontology namespaces resolvable",
         "body": """\
   <p>A <strong>namespace</strong> is the URI that a prefix expands to. In
   <code>@prefix foaf: &lt;http://xmlns.com/foaf/0.1/&gt;</code> the prefix is
@@ -904,7 +909,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <pre>&lt;#Person&gt;   a owl:Class .
 &lt;#hasParent&gt; a owl:ObjectProperty .
 &lt;#birthDate&gt; a owl:DatatypeProperty .</pre>
-  <h3>Naming conventions</h3>
+  <h4 id="naming-conventions">Naming conventions</h4>
   <p><span class="tag practice">TDCC guideline</span> Capitalisation is a
   community convention, not an OWL or RDFS rule; nothing stops you from
   naming a class <code>person</code> or a property <code>HasName</code>.
@@ -995,8 +1000,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "group": "check",
         "category": "structure",
         "anchor": "datatypes",
-        "title": "Use recognised datatypes",
-        "toc_label": "Datatypes",
+        "title": "",
+        "toc_label": "Checking OWL datatypes",
         "body": """\
   <p><span class="tag spec">Spec</span> RDF typed literals use datatype
   IRIs, commonly from
@@ -1133,7 +1138,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
                "persoon"@nl ;
     rdfs:comment "A human being."@en ,
                     "Een menselijk wezen."@nl .</pre>
-  <h3>Consistency rules</h3>
+  <h4 id="language-consistency-rules">Consistency rules</h4>
   <p><span class="tag practice">TDCC guideline</span> Neither RDF nor BCP 47
   requires every subject to carry the same set of languages; askwol checks
   for it anyway, because an inconsistency here is usually a missed
@@ -1179,7 +1184,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   satisfiable; a reasoner can derive consequences from your axioms and
   detect contradictions you didn&rsquo;t intend. askwol displays a summary
   and two types of logical finding in the
-  <a href="/#reasoner">Reasoner checks</a> section of the report:</p>
+  <strong>Reasoner checks</strong> section of the report:</p>
   <ul>
     <li><strong>Logical findings</strong>: a summary of the selected
     contradiction and class-satisfiability checks. No detected findings
@@ -1233,8 +1238,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     {
         "group": "practice",
         "anchor": "server-config",
-        "title": "Serve it right: content negotiation",
-        "toc_label": "Server configuration",
+        "title": "",
+        "toc_label": "Serving ontology files with content negotiation",
         "body": """\
   <p>Once published, your ontology&rsquo;s IRI should <em>resolve</em>: a client
   that dereferences it must get the RDF back. Two server-side settings make
@@ -1333,7 +1338,7 @@ _CLUSTER_NUMBERS = {c["key"]: i + 1 for i, c in enumerate(CHECK_CATEGORIES)}
 # API docs, which already speak Markdown.
 CHECKS: list[dict[str, str]] = [
     {"report_anchor": "ontology-metadata", "title": "Ontology metadata", "guide_anchor": "metadata", "category": "basics",
-     "description": "a SHACL check on the ontology header: title, description, creator, and version are the core properties; created and modified dates and publisher are additional. Every missing property is reported as a recommendation."},
+     "description": "SHACL validation of the ontology header against Ask Wol's built-in shapes: title, description, creator, and version are the core properties; created and modified dates and publisher are additional. Every missing property is reported as a recommendation."},
     {"report_anchor": "imports", "title": "Imports", "guide_anchor": "imports", "category": "basics",
      "description": "every `owl:imports` target declared in the ontology header is fetched over HTTP and parsed as RDF, the same way a reasoner would follow it."},
     {"report_anchor": "iri-strategy", "title": "IRI strategy", "guide_anchor": "iri-strategy", "category": "basics",
@@ -1454,7 +1459,10 @@ def _render_checks_overview() -> str:
         num = _GUIDE_NUMBERS[check["guide_anchor"]]
         title = escape(check["title"], quote=False)
         desc = _md_to_html(check["description"])
-        parts.append(f'    <li><span class="num">{num}</span> <strong>{title}</strong>: {desc}</li>')
+        parts.append(
+            f'    <li><span class="num">{num}</span> '
+            f'<strong><a href="guide#{check["guide_anchor"]}">{title}</a></strong>: {desc}</li>'
+        )
     parts.append("  </ul>")
     return "\n".join(parts)
 
@@ -1561,7 +1569,25 @@ def _render_guide_body() -> str:
         if s["title"] and s["title"] != s["toc_label"]:
             heading += f'\n  <p class="section-lead">{s["title"]}</p>'
         blocks.append(f'{heading}\n{s["body"]}')
-    return "\n".join(blocks)
+
+    def _permalink(match: re.Match) -> str:
+        level, attrs, anchor, label = match.groups()
+        accessible_label = escape(f"Link to {unescape(label)}", quote=True)
+        return (
+            f'<{level}{attrs}>{label} '
+            f'<a class="heading-anchor" href="#{anchor}" aria-label="{accessible_label}">#</a>'
+            f'</{level}>'
+        )
+
+    return re.sub(
+        r'<(h[234])([^>]*\bid="([^"]+)"[^>]*)>(.*?)</\1>',
+        _permalink,
+        "\n".join(blocks),
+    )
+
+
+# Update only after reviewing the guide's technical content.
+GUIDE_LAST_REVIEWED = date(2026, 10, 14)
 
 
 GUIDE_HTML = f"""<!DOCTYPE html>
@@ -1591,7 +1617,9 @@ GUIDE_HTML = f"""<!DOCTYPE html>
 {{
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "OWL ontology publishing guide",
+  "headline": "How to Publish an OWL Ontology",
+  "url": "https://lod-4tu.tudelft.nl/askwol/guide",
+  "mainEntityOfPage": "https://lod-4tu.tudelft.nl/askwol/guide",
   "description": "A practical guide to publishing OWL ontologies: IRI strategy, http vs https, resolvable namespaces, external and internal term definitions, labels and comments, language tags, reasoner checks, and prefix hygiene.",
   "author": {{"@type": "Organization", "name": "TDCC-NES Ontology Engineers", "url": "https://tdcc.nl/nes/ontology-engineers/"}},
   "publisher": {{"@type": "Organization", "name": "TDCC-NES Ontology Engineers"}},
@@ -1605,10 +1633,16 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   h1 {{ margin: 0.4em 0 0.1em; display: flex; align-items: center; gap: 0.9rem; font-size: 1.9rem; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; }}
   h1 .logo {{ height: 3rem; width: auto; flex: none; }}
   h2 {{ color: #555; margin-top: 2em; border-bottom: 1px solid #eee; padding-bottom: 0.2em; }}
-  h3 {{ color: #666; margin-top: 1.5em; }}
+  h3, h4 {{ color: #666; margin-top: 1.5em; }}
   .cluster-band {{ color: #4a7c59; font-size: 0.82em; font-weight: 700; margin: 2.2em 0 0; padding-bottom: 0.2em; border-bottom: 2px solid #cfe0d5; letter-spacing: 0.06em; text-transform: uppercase; }}
   .check-heading {{ color: #333; font-size: 1.25em; font-weight: 600; margin-top: 1.8em; border: none; padding: 0; }}
+  .heading-anchor {{ opacity: 0; margin-left: 0.3em; font-size: 0.85em; font-weight: 400; text-decoration: none; }}
+  h2:hover .heading-anchor, h3:hover .heading-anchor, h4:hover .heading-anchor,
+  h2:focus-within .heading-anchor, h3:focus-within .heading-anchor, h4:focus-within .heading-anchor {{ opacity: 1; }}
+  .heading-anchor:focus-visible {{ outline: 2px solid currentColor; outline-offset: 2px; }}
+  @media (hover: none) {{ .heading-anchor {{ opacity: 1; }} }}
   .section-lead {{ color: #555; font-size: 1.05em; font-style: italic; margin: 0.4em 0 1.1em; }}
+  .byline {{ color: #555; font-size: 0.9em; }}
   a {{ color: #4a7c59; }}
   code {{ background: #f0f0f0; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; }}
   pre {{ background: #f7f7f7; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; line-height: 1.5; }}
@@ -1633,14 +1667,22 @@ GUIDE_HTML = f"""<!DOCTYPE html>
 <body>
   <p class="topnav">
     <strong>Navigation:</strong>
-    <a href="./">Home</a> &middot;
-    <a href="guide">Publishing guide</a> &middot;
+    <a href="./">OWL ontology checker</a> &middot;
+    <a href="guide">OWL ontology publishing guide</a> &middot;
     <a href="docs">API docs</a>
   </p>
   <h1><img class="logo" src="static/wollie-h1.png" alt="" width="43" height="56"><span>How to Publish an OWL Ontology</span></h1>
   <p>A practical checklist for building OWL ontologies that are
   interoperable, resolvable, and maintainable. These are the things
   <a href="./">askwol</a> checks, and why they matter.</p>
+  <p class="byline">By the <a href="https://tdcc.nl/nes/ontology-engineers/">TDCC-NES Ontology Engineers</a>
+  (Kathrin F&uuml;llenbach and Dani Metilli). Last reviewed:
+  <time datetime="{GUIDE_LAST_REVIEWED.isoformat()}">{GUIDE_LAST_REVIEWED.day} {GUIDE_LAST_REVIEWED:%B %Y}</time>.</p>
+
+  <div class="toc">
+    <strong>Contents</strong>
+{_render_guide_toc()}
+  </div>
 
   <div class="tip">Want a worked example? The
   <a href="https://lod-4tu.tudelft.nl/ontologies/sample.ttl" target="_blank" rel="noopener">askwol sample ontology</a>
@@ -1677,11 +1719,6 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   <p><strong>&#x1F4A1; Recommendation</strong> ontology publishing best
   practice (for example ontology metadata, an open licence, labels and
   comments, or naming conventions).</p>
-  </div>
-
-  <div class="toc">
-    <strong>Contents</strong>
-{_render_guide_toc()}
   </div>
 
 {_render_guide_body()}
