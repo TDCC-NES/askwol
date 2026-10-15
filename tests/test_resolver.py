@@ -22,7 +22,7 @@ SAMPLE_TURTLE = b"""
 @pytest.mark.asyncio
 @respx.mock
 async def test_resolve_namespace_success():
-    respx.get("http://example.org/onto#").mock(
+    route = respx.get("http://example.org/onto#").mock(
         return_value=httpx.Response(
             200,
             content=SAMPLE_TURTLE,
@@ -33,10 +33,15 @@ async def test_resolve_namespace_success():
     cache = OntologyCache()
     async with httpx.AsyncClient() as client:
         result = await resolve_namespace("ex", "http://example.org/onto#", client, cache)
+        cached = await resolve_namespace("alias", "http://example.org/onto#", client, cache)
 
     assert result.status == Status.OK
     assert result.http_status == 200
     assert result.is_valid_rdf is True
+    assert result.retrieved_url == "http://example.org/onto#"
+    assert result.discovery_note is None
+    assert cached.model_dump() == {**result.model_dump(), "prefix": "alias"}
+    assert route.call_count == 1
     # Should be cached now
     assert cache.has("http://example.org/onto#")
 
@@ -44,29 +49,33 @@ async def test_resolve_namespace_success():
 @pytest.mark.asyncio
 @respx.mock
 async def test_resolve_namespace_404():
-    respx.get("http://example.org/missing/").mock(
-        return_value=httpx.Response(404)
+    route = respx.get("http://example.org/missing/").mock(
+        return_value=httpx.Response(404, headers={"content-type": "text/html"})
     )
 
     cache = OntologyCache()
     async with httpx.AsyncClient() as client:
         result = await resolve_namespace("miss", "http://example.org/missing/", client, cache)
+        cached = await resolve_namespace("miss", "http://example.org/missing/", client, cache)
 
     assert result.status == Status.FAIL
     assert result.http_status == 404
+    assert result.content_type == "text/html"
+    assert cached == result
+    assert route.call_count == 1
 
 
 @pytest.mark.asyncio
 @respx.mock
 async def test_resolve_namespace_http_error():
-    respx.get("http://example.org/timeout/").mock(side_effect=httpx.ConnectTimeout("timeout"))
+    respx.get("http://example.org/timeout/").mock(side_effect=httpx.ConnectTimeout(""))
 
     cache = OntologyCache()
     async with httpx.AsyncClient() as client:
         result = await resolve_namespace("to", "http://example.org/timeout/", client, cache)
 
     assert result.status == Status.FAIL
-    assert "timeout" in result.error.lower()
+    assert "timed out" in result.error.lower()
 
 
 @pytest.mark.asyncio
@@ -137,5 +146,94 @@ async def test_redirected_rdf_and_discovered_links_use_final_document_base():
     cache = OntologyCache()
     async with httpx.AsyncClient() as client:
         result = await resolve_namespace("ex", original, client, cache)
+        cached = await resolve_namespace("ex", original, client, cache)
     assert result.is_valid_rdf
+    assert result.uri == original
+    assert result.retrieved_url == "https://example.org/rdf/vocab.ttl"
+    assert result.content_type == "text/html"
+    assert result.discovery_note and "HTML" in result.discovery_note
+    assert cached == result
     assert str(next(cache.get(original).subjects())) == "https://example.org/rdf/vocab.ttl#Term"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_configured_alternative_is_disclosed_and_cached(monkeypatch):
+    original = "https://example.org/vocabulary#"
+    alternative = "https://example.org/ontology.ttl"
+    monkeypatch.setattr("askwol.resolver.NAMESPACE_REDIRECTS", {original: alternative})
+    route = respx.get(alternative).mock(return_value=httpx.Response(
+        200, content=SAMPLE_TURTLE, headers={"content-type": "text/turtle"},
+    ))
+    cache = OntologyCache()
+    async with httpx.AsyncClient() as client:
+        first = await resolve_namespace("ex", original, client, cache)
+        second = await resolve_namespace("ex", original, client, cache)
+    assert first.status == Status.OK
+    assert first.retrieved_url == alternative
+    assert "configured alternative" in first.discovery_note
+    assert first == second
+    assert route.call_count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_resolver_jsonld_context_obeys_client_timeout(monkeypatch):
+    from askwol import rdf_io
+
+    observed_timeouts = []
+
+    def context_document(url, **kwargs):
+        observed_timeouts.append(kwargs["timeout"])
+        return b'{"@context": {}}', url, "application/ld+json"
+
+    monkeypatch.setattr(rdf_io, "fetch_document", context_document)
+    iri = "https://example.org/ontology.jsonld"
+    respx.get(iri).mock(return_value=httpx.Response(
+        200, json={
+            "@context": "https://example.org/context",
+            "@id": "https://example.org/Thing",
+            "@type": "http://www.w3.org/2002/07/owl#Class",
+        }, headers={"content-type": "application/ld+json"},
+    ))
+    async with httpx.AsyncClient(timeout=0.25) as client:
+        result = await resolve_namespace("ex", iri, client, OntologyCache())
+    assert result.is_valid_rdf is True
+    assert observed_timeouts == [0.25]
+
+
+@pytest.mark.parametrize("uri", ["https://example.org/\x00", "https://example.org:bad/vocabulary"])
+@pytest.mark.asyncio
+@respx.mock
+async def test_malformed_namespace_url_produces_informative_cached_failure(uri):
+    cache = OntologyCache()
+    async with httpx.AsyncClient() as client:
+        first = await resolve_namespace("ex", uri, client, cache)
+        second = await resolve_namespace("ex", uri, client, cache)
+    assert first.status == Status.FAIL
+    assert "Invalid document URL" in first.error
+    assert "namespace or import URL" in first.error
+    assert first == second
+
+
+@pytest.mark.parametrize("invalid_link", [
+    "https://example.org:bad/broken.ttl", "https://[bad]/broken.ttl",
+])
+@pytest.mark.asyncio
+@respx.mock
+async def test_invalid_discovered_document_url_does_not_hide_later_valid_link(invalid_link):
+    iri = "https://example.org/vocabulary"
+    respx.get(iri).mock(return_value=httpx.Response(
+        200, text=(
+            f'<html><a href="{invalid_link}">Broken</a>'
+            '<a href="valid.ttl">RDF</a></html>'
+        ), headers={"content-type": "text/html"},
+    ))
+    respx.get("https://example.org/valid.ttl").mock(return_value=httpx.Response(
+        200, content=SAMPLE_TURTLE, headers={"content-type": "text/turtle"},
+    ))
+    async with httpx.AsyncClient() as client:
+        result = await resolve_namespace("ex", iri, client, OntologyCache())
+    assert result.status == Status.OK
+    assert result.is_valid_rdf is True
+    assert result.retrieved_url == "https://example.org/valid.ttl"

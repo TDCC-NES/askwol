@@ -9,10 +9,114 @@ from pydantic import BaseModel
 from rich.console import Console
 
 from askwol.checks import CHECKS, DATATYPE_SCOPE, REASONER_SCOPE
-from askwol.models import ValidationReport
+from askwol.agent_api import compact_report
+from askwol.models import (
+    ImportsCheck,
+    ImportsReport,
+    InputDiagnostic,
+    NamespaceCheck,
+    NamespaceReport,
+    Status,
+    ValidationReport,
+)
 from askwol.pipeline import run_full_validation
 from askwol.report import print_report, report_as_json, report_as_markdown
 from askwol.report_html import render_report
+
+
+def _human_outputs(report):
+    terminal = StringIO()
+    print_report(report, Console(file=terminal, width=220, color_system=None))
+    return render_report(report), report_as_markdown(report), terminal.getvalue()
+
+
+async def test_failed_parsing_does_not_report_unrun_checks_as_passed(tmp_path):
+    source = tmp_path / "invalid.ttl"
+    source.write_text("this is not valid Turtle !!")
+    report, _ = await run_full_validation(source, skip_resolution=True, include_mermaid=False)
+
+    assert report.parse_errors
+    for output in _human_outputs(report):
+        assert "Ontology checks were not run" in output
+        assert "Unused prefixes" not in output
+        assert "no external terms to check" not in output
+        assert "Namespaces checked" not in output
+    assert all(check.status == "skipped" for check in compact_report(report).checks)
+
+
+def test_input_diagnostic_is_actionable_without_duplicate_parse_message():
+    diagnostic = InputDiagnostic(
+        code="html_instead_of_rdf", message="This is an HTML file viewer.",
+        suggested_url="https://github.com/example/ontology/raw/main/ontology.ttl",
+        guide_url="https://lod-4tu.tudelft.nl/askwol/guide#server-config",
+    )
+    report = ValidationReport(file="ontology.ttl", input_error=diagnostic, parse_errors=[diagnostic.message])
+
+    for output in _human_outputs(report):
+        assert "Input error" in output
+        assert "Parse error" not in output and "Parse Errors" not in output
+        assert output.count(diagnostic.message) == 1
+        assert diagnostic.suggested_url in output
+        assert diagnostic.guide_url in output
+        assert "Ontology checks were not run" in output
+
+
+def test_source_guidance_is_literal_and_does_not_add_findings():
+    warning = '<img src=x onerror=alert(1)> uses file:///tmp/local#Term [bold]'
+    report = ValidationReport(file="ontology.ttl", input_warnings=[warning])
+    html, markdown, text = _human_outputs(report)
+
+    assert "Source guidance" in html and "Source guidance" in markdown and "Source guidance" in text
+    assert "<img src=x" not in html and "&lt;img" in html
+    assert "<img src=x" not in markdown and "&lt;img" in markdown
+    assert warning in text
+    assert report.findings() == []
+    assert compact_report(report).input_warnings == [warning]
+    assert compact_report(report).severity_summary == report.severity_summary
+
+
+async def test_default_text_identifies_missing_documentation_and_links_its_guides(tmp_path):
+    source = tmp_path / "undocumented.ttl"
+    source.write_text('''@prefix : <https://example.org/ontology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+<https://example.org/ontology> a owl:Ontology .
+:UndocumentedCanary a owl:Class .
+''')
+    report, _ = await run_full_validation(source, skip_resolution=True, include_mermaid=False)
+    _, markdown, text = _human_outputs(report)
+
+    assert "https://example.org/ontology#UndocumentedCanary" in text
+    assert "rdfs:label" in text and "rdfs:comment" in text
+    for check in ("labels", "comments"):
+        finding = next(finding for finding in report.findings() if finding.check == check)
+        assert text.count(finding.guide_url) == 1
+        assert markdown.count(f"](<{finding.guide_url}>)") == 1
+
+
+def test_discovered_import_retains_warning_and_both_sources_in_every_report():
+    original = "https://example.org/ontology"
+    retrieved = "https://example.org/releases/ontology.ttl"
+    note = "RDF found through an HTML link. Other tools may need a direct RDF address."
+    resolution = NamespaceCheck(
+        prefix="import", uri=original, status=Status.WARN, http_status=200,
+        content_type="text/html", is_valid_rdf=True,
+        retrieved_url=retrieved, discovery_note=note,
+    )
+    report = ValidationReport(file="ontology.ttl", imports=ImportsReport(
+        status=Status.WARN, checks=[ImportsCheck(iri=original, resolution=resolution)],
+    ), namespaces=[NamespaceReport(prefix="ex", uri=original, resolution=resolution.model_copy(update={"status": Status.OK}))])
+
+    for output in _human_outputs(report):
+        assert original in output and retrieved in output and note in output
+        assert "declared import(s), all resolve" not in output
+        assert "declared, all resolve" not in output
+        assert 'title="all resolve"' not in output
+    compact = compact_report(report)
+    finding = compact.severity_summary.findings[0]
+    assert finding.rule == "imports.discovered" and finding.severity == "warning"
+    assert finding.subject == original and retrieved in finding.message
+    assert compact.severity_summary == report.severity_summary
+    assert compact.severity_summary.warnings == 1
 
 
 async def test_pipeline_findings_survive_each_output_format(monkeypatch):

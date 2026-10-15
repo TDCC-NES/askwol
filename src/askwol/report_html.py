@@ -6,7 +6,7 @@ from html import escape
 from urllib.parse import urlsplit
 
 from askwol.branding import FAVICON_LINK
-from askwol.models import NamespaceReport, Status, ValidationReport
+from askwol.models import NamespaceCheck, NamespaceReport, Status, ValidationReport
 from askwol.report_data import ReportView
 from askwol.severity import (
     RULE_SEVERITY,
@@ -128,9 +128,9 @@ class _HtmlReport:
 
     def render(self) -> str:
         self._header()
-        if self.report.parse_errors:
-            for err in self.report.parse_errors:
-                self.parts.append(f'<div class="error"><strong>Parse error:</strong> {escape(err)}</div>')
+        self._input_messages()
+        if self.report.input_error or self.report.parse_errors:
+            self.parts.append('<p>Ontology checks were not run.</p>')
             self.parts.append('</body></html>')
             return "\n".join(self.parts)
 
@@ -165,6 +165,36 @@ class _HtmlReport:
         self._reasoner()
         self._footer()
         return "\n".join(self.parts)
+
+    def _input_messages(self) -> None:
+        if self.report.input_warnings:
+            self.parts.extend([
+                '<section class="section" aria-label="Source guidance">',
+                '<h2>Source guidance</h2>',
+                '<ul>',
+                *(f'<li>{escape(warning)}</li>' for warning in self.report.input_warnings),
+                '</ul></section>',
+            ])
+        diagnostic = self.report.input_error
+        if diagnostic:
+            label = "Parse error" if diagnostic.code == "invalid_rdf" else "Input error"
+            self.parts.append(f'<div class="error"><strong>{label}:</strong> {escape(diagnostic.message)}')
+            if diagnostic.suggested_url:
+                url = diagnostic.suggested_url
+                self.parts.append(f'<p>Suggested URL: {_external_link(url, "<code>" + escape(url) + "</code>")}</p>')
+            if diagnostic.guide_url:
+                self.parts.append(f'<p>{_external_link(diagnostic.guide_url, "Learn more about ontology URLs")}</p>')
+            self.parts.append('</div>')
+        for err in self.report.parse_errors:
+            if diagnostic is None or err != diagnostic.message:
+                self.parts.append(f'<div class="error"><strong>Parse error:</strong> {escape(err)}</div>')
+
+    def _resolution_provenance(self, resolution: NamespaceCheck) -> None:
+        if resolution.discovery_note:
+            self.parts.append(f'<p>{escape(resolution.discovery_note)}</p>')
+        if resolution.retrieved_url and resolution.retrieved_url != resolution.uri:
+            url = resolution.retrieved_url
+            self.parts.append(f'<p>Retrieved RDF: {_external_link(url, "<code>" + escape(url) + "</code>")}</p>')
 
     def _header(self) -> None:
         source = escape(self.report.file)
@@ -347,6 +377,9 @@ class _HtmlReport:
                 return [self._row('imports', 'Imports', 'no imports declared')]
             if imp.skipped:
                 return [self._row('imports', 'Imports', 'resolution skipped', na=True)]
+            if imp.discovered:
+                return [self._row('imports', 'Imports',
+                             f'{len(imp.discovered)} found via linked/alternative RDF, {len(imp.broken)} unresolved')]
             return [self._row('imports', 'Imports',
                          f'{len(imp.checks) - len(imp.broken)}/{len(imp.checks)} declared import(s) resolve')]
         if report_anchor == 'license':
@@ -442,6 +475,7 @@ class _HtmlReport:
             self.parts.append("</p>")
         if res.error:
             self.parts.append(f"<p style='color:#c00'>{escape(res.error)}</p>")
+        self._resolution_provenance(res)
 
         # Term counts only - per-term details are shown in the External terms
         # definition section below to avoid duplicating the same information.
@@ -541,6 +575,10 @@ class _HtmlReport:
             broken = imp.broken
             if imp.skipped:
                 i_label = 'resolution skipped'
+            elif imp.discovered:
+                i_label = f'{len(imp.discovered)} found via linked/alternative RDF'
+                if broken:
+                    i_label += f', {len(broken)} broken'
             else:
                 i_label = f'{len(broken)} broken' if broken else ('all resolve' if imp.checks else 'none declared')
             self.parts.append('<section class="section">')
@@ -551,14 +589,18 @@ class _HtmlReport:
                 self.parts.append(self._subtitle(f'{len(imp.checks)} declared import(s), resolution skipped'))
             elif broken:
                 self.parts.append(self._subtitle(f'{len(broken)} of {len(imp.checks)} declared import(s) do not resolve'))
+            elif imp.discovered:
+                self.parts.append(self._subtitle(f'{len(imp.discovered)} declared import(s) required linked/alternative RDF documents; other tools may not discover them.'))
             elif imp.checks:
                 self.parts.append(self._subtitle(f'{len(imp.checks)} declared import(s), all resolve'))
             else:
                 self.parts.append(self._subtitle('no owl:imports declared'))
             if imp.checks:
-                self.parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show imports ({len(imp.checks)})</summary>')
+                opened = ' open' if imp.discovered else ''
+                self.parts.append(f'<details{opened}><summary style="cursor:pointer;font-weight:600;">Show imports ({len(imp.checks)})</summary>')
                 for c in imp.checks:
-                    mark = _item_mark(c.resolution.status, Rule.IMPORT_UNRESOLVED)
+                    rule = Rule.IMPORT_DISCOVERED if c.resolution.status == Status.WARN else Rule.IMPORT_UNRESOLVED
+                    mark = _item_mark(c.resolution.status, rule)
                     iri = escape(c.iri)
                     self.parts.append(f'<div class="ns"><div class="ns-header">{mark} &lt;{_external_link(c.iri, iri)}&gt;</div>')
                     self.parts.append('<div class="ns-body">')
@@ -572,6 +614,7 @@ class _HtmlReport:
                         self.parts.append("</p>")
                     if res.error:
                         self.parts.append(f"<p style='color:#c00'>{escape(res.error)}</p>")
+                    self._resolution_provenance(res)
                     self.parts.append('</div></div>')
                 self.parts.append('</details>')
             self.parts.append('</section>')

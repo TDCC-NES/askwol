@@ -7,9 +7,10 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from rdflib import Graph, Literal, URIRef, OWL, RDF
+from rdflib import OWL, RDF, Graph, Literal, URIRef
 from rdflib.namespace import DCTERMS
 
+from askwol.network import DEFAULT_TIMEOUT
 from askwol.rdf_io import load_rdf_source
 
 
@@ -28,7 +29,10 @@ class ParsedOntology:
     used_prefixes: set[str] = field(default_factory=set)
 
 
-def parse_ontology(source: str | Path, base_uri: str | None = None, *, allow_network: bool = True) -> ParsedOntology:
+def parse_ontology(
+    source: str | Path, base_uri: str | None = None, *, allow_network: bool = True,
+    format: str | None = None, timeout: float | None = DEFAULT_TIMEOUT,
+) -> ParsedOntology:
     """Parse an ontology file and extract its structure.
 
     Args:
@@ -50,7 +54,12 @@ def parse_ontology(source: str | Path, base_uri: str | None = None, *, allow_net
     # Capture rdflib's built-in prefixes before parsing
     builtin_prefixes = {str(pfx): str(uri) for pfx, uri in g.namespaces()}
 
-    load_rdf_source(g, source, base_uri=base_uri, allow_network=allow_network)
+    options = {}
+    if format is not None:
+        options["format"] = format
+    if timeout != DEFAULT_TIMEOUT:
+        options["timeout"] = timeout
+    load_rdf_source(g, source, base_uri=base_uri, allow_network=allow_network, **options)
 
     # Build a lookup of ALL registered prefixes (including rdflib built-ins)
     all_prefixes: dict[str, str] = {

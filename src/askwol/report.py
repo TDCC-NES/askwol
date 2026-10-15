@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from html import escape as escape_html
+from urllib.parse import quote, urlsplit
+
 from rich.console import Console
 from rich.markup import escape as escape_markup
 from rich.text import Text
@@ -36,6 +39,34 @@ def _md_severity(rule: Rule) -> str:
     return RULE_SEVERITY[rule].value
 
 
+def _md_text(value: str) -> str:
+    """Keep source diagnostics and provenance as literal Markdown text."""
+    value = escape_html(value, quote=False).replace("\\", "\\\\")
+    for char in "`*_[]|#":
+        value = value.replace(char, "\\" + char)
+    return value.replace("\n", "<br>")
+
+
+def _md_link(url: str) -> str:
+    body = _md_text(url)
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return body
+    if (parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc
+            or any(ord(char) <= 32 or ord(char) == 127 for char in url)):
+        return body
+    target = quote(url, safe=":/?#[]@!$&'*+,;=%")
+    return f"[{body}](<{target}>)"
+
+
+def _guidance_links(summary: SeveritySummary) -> list[tuple[str, str]]:
+    """One guide link per check with actionable findings."""
+    found = {finding.check: finding.guide_url for finding in summary.findings if finding.guide_url}
+    return [(_CHECK_TITLES[check["report_anchor"]], found[check["report_anchor"]])
+            for check in CHECKS if check["report_anchor"] in found]
+
+
 def _check_rollup(summary: SeveritySummary) -> list[tuple[Severity, str, int]]:
     """Count each check's findings separately for each severity."""
     rollup: list[tuple[Severity, str, int]] = []
@@ -68,6 +99,12 @@ class _MarkdownReport:
 
     def render(self) -> str:
         self._header()
+        self._input_messages()
+        if self.report.input_error or self.report.parse_errors:
+            self.w("**Ontology checks were not run.**")
+            self.w("")
+            self._severity_counts()
+            return "\n".join(self.lines)
         self._summary()
         self._imports()
         self._iri_strategy()
@@ -85,6 +122,7 @@ class _MarkdownReport:
         self._reasoner()
         self._language_tags()
         self._non_ontology_terms()
+        self._guidance()
         return "\n".join(self.lines)
 
     def _header(self) -> None:
@@ -93,11 +131,49 @@ class _MarkdownReport:
         self.w(f"**File:** `{self.report.file}`")
         self.w("")
 
-        if self.report.parse_errors:
+    def _input_messages(self) -> None:
+        if self.report.input_warnings:
+            self.w("## Source guidance")
+            self.w("")
+            for warning in self.report.input_warnings:
+                self.w(f"- {_md_text(warning)}")
+            self.w("")
+        diagnostic = self.report.input_error
+        if diagnostic:
+            label = "Parse Errors" if diagnostic.code == "invalid_rdf" else "Input error"
+            self.w(f"## {label}")
+            self.w("")
+            self.w(_md_text(diagnostic.message))
+            if diagnostic.suggested_url:
+                self.w("")
+                self.w(f"Suggested URL: {_md_link(diagnostic.suggested_url)}")
+            if diagnostic.guide_url:
+                self.w("")
+                self.w(f"Learn more: {_md_link(diagnostic.guide_url)}")
+            self.w("")
+        remaining_errors = [err for err in self.report.parse_errors
+                            if diagnostic is None or err != diagnostic.message]
+        if remaining_errors:
             self.w("## Parse Errors")
             self.w("")
-            for err in self.report.parse_errors:
-                self.w(f"- {err}")
+            for err in remaining_errors:
+                self.w(f"- {_md_text(err)}")
+            self.w("")
+
+    def _severity_counts(self) -> None:
+        counts = "  ".join(
+            f"{SEVERITY_STYLES[sev].glyph} {count_label(sev, self.summary.count(sev))}" for sev in SEVERITY_ORDER
+        )
+        self.w(f"> {counts}")
+        self.w("")
+
+    def _guidance(self) -> None:
+        links = _guidance_links(self.summary)
+        if links:
+            self.w("## Learn more")
+            self.w("")
+            for title, url in links:
+                self.w(f"- {title}: {_md_link(url)}")
             self.w("")
 
     def _summary(self) -> None:
@@ -145,11 +221,7 @@ class _MarkdownReport:
             self.w(f"| Terms not checkable (namespace unavailable) | {self.skip_terms} |")
         self.w("")
 
-        counts = "  ".join(
-            f"{SEVERITY_STYLES[sev].glyph} {count_label(sev, self.summary.count(sev))}" for sev in SEVERITY_ORDER
-        )
-        self.w(f"> {counts}")
-        self.w("")
+        self._severity_counts()
         rollup = _check_rollup(self.summary)
         if rollup:
             self.w("| Level | Check | Findings |")
@@ -172,6 +244,8 @@ class _MarkdownReport:
                 self.w(f"> {len(imp.checks)} declared import(s), resolution skipped")
             elif imp.broken:
                 self.w(f"> {len(imp.broken)} of {len(imp.checks)} declared import(s) do not resolve")
+            elif imp.discovered:
+                self.w(f"> {len(imp.discovered)} declared import(s) required linked/alternative RDF documents; other tools may not discover them.")
             elif imp.checks:
                 self.w(f"> {len(imp.checks)} declared import(s), all resolve")
             else:
@@ -193,7 +267,12 @@ class _MarkdownReport:
                         bits.append("valid RDF" if res.is_valid_rdf else "invalid RDF")
                     if res.error:
                         bits.append(res.error)
-                    self.w(f"| {c.iri} | {status_label} | {', '.join(bits)} |")
+                    detail = ", ".join(_md_text(bit) for bit in bits)
+                    if res.discovery_note:
+                        detail += f"; {_md_text(res.discovery_note)}"
+                    if res.retrieved_url and res.retrieved_url != res.uri:
+                        detail += f"; Retrieved RDF: {_md_link(res.retrieved_url)}"
+                    self.w(f"| {_md_link(c.iri)} | {status_label} | {detail} |")
                 self.w("")
 
     def _iri_strategy(self) -> None:
@@ -325,14 +404,24 @@ class _MarkdownReport:
             self.w("")
             self.w("These namespaces returned parseable RDF for the subject-position term checks.")
             self.w("")
-            self.w("| Prefix | URI | Terms | Verified |")
-            self.w("|--------|-----|-------|----------|")
+            provenance_present = any(
+                ns.resolution.discovery_note or (
+                    ns.resolution.retrieved_url and ns.resolution.retrieved_url != ns.uri
+                ) for ns in self.ok_ns
+            )
+            self.w("| Prefix | URI | Terms | Verified |" + (" Retrieval |" if provenance_present else ""))
+            self.w("|--------|-----|-------|----------|" + ("-----------|" if provenance_present else ""))
             for ns in self.ok_ns:
                 terms = self.report.external_terms_for_namespace(ns)
                 ok = sum(t.status == Status.OK for t in terms)
                 total = len(terms)
                 check = "all" if ok == total else f"{ok}/{total}"
-                self.w(f"| `{ns.prefix}` | {ns.uri} | {total} | {check} |")
+                provenance = _md_text(ns.resolution.discovery_note or "")
+                retrieved = ns.resolution.retrieved_url
+                if retrieved and retrieved != ns.uri:
+                    provenance += f" Retrieved RDF: {_md_link(retrieved)}"
+                row = f"| `{ns.prefix}` | {ns.uri} | {total} | {check} |"
+                self.w(row + (f" {provenance} |" if provenance_present else ""))
             self.w("")
 
         if self.html_ns:
@@ -727,6 +816,8 @@ def _overview_line(report: ValidationReport, anchor: str, view: ReportView) -> t
             return True, "no owl:imports declared"
         if imp.skipped:
             return False, "resolution skipped"
+        if imp.discovered:
+            return True, f"{len(imp.discovered)} found via linked/alternative RDF, {len(imp.broken)} unresolved"
         return True, f"{len(imp.checks) - len(imp.broken)}/{len(imp.checks)} declared imports resolve"
     if anchor == "iri-strategy":
         iri = report.iri_strategy
@@ -909,6 +1000,12 @@ class _ConsoleReport:
 
     def render(self) -> None:
         self._header()
+        self._input_messages()
+        if self.report.input_error or self.report.parse_errors:
+            self.console.print("Ontology checks were not run.")
+            self._summary()
+            return
+        _print_overview(self.report, self.console, self.view)
         self._imports()
         self._license()
         self._iri_strategy()
@@ -923,23 +1020,69 @@ class _ConsoleReport:
         self._inventory()
         self._domains_ranges()
         self._datatypes()
+        self._documentation()
         self._language_tags()
         self._reasoner()
         self._summary()
+        self._guidance()
 
     def _header(self) -> None:
         self.console.print()
         self.console.rule(Text("Ontology Check: " + self.report.file, style="bold"))
         self.console.print()
 
-        if self.report.parse_errors:
+    def _input_messages(self) -> None:
+        if self.report.input_warnings:
+            self.console.print("[bold]Source guidance:[/bold]")
+            for warning in self.report.input_warnings:
+                self.console.print(Text("  " + warning))
+            self.console.print()
+        diagnostic = self.report.input_error
+        if diagnostic:
+            label = "Parse errors" if diagnostic.code == "invalid_rdf" else "Input error"
+            self.console.print(f"[bold red]{label}:[/bold red]")
+            self.console.print(Text("  " + diagnostic.message))
+            if diagnostic.suggested_url:
+                self.console.print(Text("Suggested URL: " + diagnostic.suggested_url))
+            if diagnostic.guide_url:
+                self.console.print(Text("Learn more: " + diagnostic.guide_url))
+            self.console.print()
+        remaining_errors = [err for err in self.report.parse_errors
+                            if diagnostic is None or err != diagnostic.message]
+        if remaining_errors:
             self.console.print("[bold red]Parse errors:[/bold red]")
-            for err in self.report.parse_errors:
+            for err in remaining_errors:
                 self.console.print("  " + err, markup=False)
             self.console.print()
 
-        # Clustered checks overview, mirroring the web report and markdown output.
-        _print_overview(self.report, self.console, self.view)
+    def _guidance(self) -> None:
+        links = _guidance_links(self.summary)
+        if links:
+            self.console.print("[bold]Learn more:[/bold]")
+            for title, url in links:
+                self.console.print(Text(f"  {title}: {url}"))
+            self.console.print()
+
+    def _documentation(self) -> None:
+        docs = self.report.definition_docs
+        if docs is None:
+            return
+        missing = [check for check in docs.checks
+                   if not check.deprecated and (not check.has_label or not check.has_comment)]
+        if missing:
+            table = Table(title="Missing labels and comments", show_lines=True)
+            table.add_column("Term")
+            table.add_column("Full IRI")
+            table.add_column("Missing")
+            for check in missing:
+                properties = []
+                if not check.has_label:
+                    properties.append("rdfs:label")
+                if not check.has_comment:
+                    properties.append("rdfs:comment")
+                table.add_row(Text(check.display_name), Text(check.term), Text(", ".join(properties)))
+            self.console.print(table)
+            self.console.print()
 
     def _imports(self) -> None:
         # Imports
@@ -950,6 +1093,8 @@ class _ConsoleReport:
                 self.console.print(f"[dim]- Imports  -  {len(imp.checks)} declared, resolution skipped[/dim]")
             elif imp.broken:
                 self.console.print(_flag(RULE_SEVERITY[Rule.IMPORT_UNRESOLVED], f"Imports  -  {len(imp.broken)} of {len(imp.checks)} do not resolve"))
+            elif imp.discovered:
+                self.console.print(_flag(RULE_SEVERITY[Rule.IMPORT_DISCOVERED], f"Imports  -  {len(imp.discovered)} required linked/alternative RDF documents; other tools may not discover them"))
             else:
                 self.console.print(f"[green]\u2713 Imports  -  {len(imp.checks)} declared, all resolve[/green]")
             imp_table = Table(title="Imports", show_lines=True)
@@ -967,7 +1112,12 @@ class _ConsoleReport:
                     bits.append("valid RDF" if res.is_valid_rdf else "invalid RDF")
                 if res.error:
                     bits.append(res.error)
-                imp_table.add_row(Text(c.iri), _item_badge(res.status, Rule.IMPORT_UNRESOLVED), Text(", ".join(bits)))
+                if res.discovery_note:
+                    bits.append(res.discovery_note)
+                if res.retrieved_url and res.retrieved_url != res.uri:
+                    bits.append("Retrieved RDF: " + res.retrieved_url)
+                rule = Rule.IMPORT_DISCOVERED if res.status == Status.WARN else Rule.IMPORT_UNRESOLVED
+                imp_table.add_row(Text(c.iri), _item_badge(res.status, rule), Text(", ".join(bits)))
             self.console.print(imp_table)
 
     def _license(self) -> None:
@@ -1045,13 +1195,26 @@ class _ConsoleReport:
         ns_table.add_column("HTTP", justify="center")
         ns_table.add_column("Valid RDF", justify="center")
         ns_table.add_column("Status", justify="center")
+        provenance_present = any(
+            ns.resolution.discovery_note or (
+                ns.resolution.retrieved_url and ns.resolution.retrieved_url != ns.uri
+            ) for ns in self.report.namespaces
+        )
+        if provenance_present:
+            ns_table.add_column("Retrieval")
 
         for ns in self.report.namespaces:
             r = ns.resolution
             status_str = _item_badge(r.status, Rule.NAMESPACE_UNRESOLVED)
             http_str = str(r.http_status) if r.http_status else "-"
             rdf_str = "yes" if r.is_valid_rdf else ("no" if r.is_valid_rdf is False else "-")
-            ns_table.add_row(Text(ns.prefix or "(default)"), Text(ns.uri), http_str, rdf_str, status_str)
+            provenance = r.discovery_note or ""
+            if r.retrieved_url and r.retrieved_url != r.uri:
+                provenance += (" " if provenance else "") + "Retrieved RDF: " + r.retrieved_url
+            row = [Text(ns.prefix or "(default)"), Text(ns.uri), http_str, rdf_str, status_str]
+            if provenance_present:
+                row.append(Text(provenance))
+            ns_table.add_row(*row)
 
         self.console.print(ns_table)
         self.console.print()

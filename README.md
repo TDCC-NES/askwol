@@ -60,12 +60,16 @@ askwol check ontology.ttl
 askwol check ontology.ttl --format json
 askwol check ontology.ttl --format markdown -o report.md
 askwol check ontology.ttl --skip-resolution
+askwol check ontology.data --input-format turtle --base-uri https://example.org/ontology
 ```
 
 For a source install, use `.venv/bin/askwol` instead of `askwol`.
 
-- `--timeout 60` sets the HTTP timeout in seconds (default: `30`).
-- `--skip-resolution` skips namespace and import HTTP requests; local checks and reasoning still run.
+- The CLI accepts local files. Download the raw RDF first when starting with a URL; a GitHub `/blob/` URL is an HTML file viewer.
+- `--input-format turtle` selects the RDF input syntax. `--format` selects the report output format.
+- `--base-uri https://example.org/ontology` supplies a base IRI for relative identifiers; it does not download a URL. An explicit `@base` or `xml:base` in the document is respected.
+- `--timeout 60` sets the HTTP timeout in seconds, including remote JSON-LD contexts (default: `30`).
+- `--skip-resolution` disables network access, including remote JSON-LD contexts; local checks and reasoning still run when parsing succeeds.
 - Exit code `0` means no errors; `1` means errors were found. Warnings and recommendations do not change the exit code.
 
 ## API
@@ -76,7 +80,20 @@ Upload a file to the running app for a JSON report:
 curl -F "file=@ontology.ttl" http://127.0.0.1:8000/api/validate
 ```
 
-JSON includes `severity_summary` with finding counts and `has_errors`. Per-check `status` values (`ok`, `warn`, `fail`, `skip`) describe outcomes, not severity. `/health` reports service availability.
+Both HTTP API endpoints accept RDF contents, rather than source URLs. For GitHub, select **Raw** and download the file contents first. Optional multipart fields select the syntax and base IRI:
+
+```bash
+curl -F "file=@ontology.data" -F "format=turtle" \
+  -F "base_uri=https://example.org/ontology" http://127.0.0.1:8000/api/validate
+```
+
+Alternatively, POST JSON to `/api/validate/content` with `format`, `content` (RDF text, or a JSON-LD object/array), and optional `base_uri`. Add `?compact=true` to either endpoint for findings and execution coverage without term inventories.
+
+JSON includes `severity_summary` with finding counts and `has_errors`. Input failures return HTTP `422`, with an `input_error` containing a stable `code`, an explanatory `message`, and optional `suggested_url` and `guide_url`. Full reports also retain `parse_errors` for compatibility. Ontology checks are skipped when input fails. Invalid request envelopes instead return a `detail` list. Per-check `status` values (`ok`, `warn`, `fail`, `skip`) describe outcomes, not severity. `/health` reports service availability.
+
+All interfaces reject HTML file viewers, even if their filenames end in `.owl`. Format selection uses an explicit input format, then a recognized content type, then the filename extension. Unknown local filenames default to Turtle; URLs need a recognized content type or RDF extension. `input_warnings` provides separate, unscored source guidance when identifiers resolve to `file://` locations. Supply the intended base IRI or declare it in the document to make relative identifiers independent of temporary upload paths. The web upload form has the same optional settings.
+
+Reports disclose the actual RDF retrieval URL when namespace or import resolution discovers RDF through an HTML link or a known alternative. Imports that require this discovery receive a warning because other ontology tools may not follow it.
 
 To run the same checks from Python:
 
@@ -153,7 +170,7 @@ Native Python runs read environment variables, not `.env` files. Docker Compose 
 | `ASKWOL_USAGE_DISABLED` | unset | Set to `1` to disable usage tracking. |
 | `ASKWOL_STATS_TOKEN` | unset | Enables access to usage statistics. |
 
-Web uploads are capped at **20 MB**. Requests to private/internal network addresses are blocked. Web jobs run in isolated subprocesses: timeouts return `504`, and excess concurrent requests return `503`. Set the proxy timeout above the job timeout and enforce a proxy upload limit. The CLI shares the ontology size caps, but runs without the web job timeout or concurrency limit.
+Web uploads and URL responses are capped at **20 MB**; Python source-URL retrieval is capped at **10 MiB**. Local CLI/Python files have no byte cap and share the ontology size caps above. Requests to private/internal network addresses are blocked. Web jobs run in isolated subprocesses: timeouts return `504`, and excess concurrent requests return `503`. Set the proxy timeout above the job timeout and enforce a proxy upload limit. The CLI runs without the web job timeout or concurrency limit.
 
 A client disconnect cancels its job when the reverse proxy forwards the disconnect. Cancelled requests do not count as usage.
 

@@ -26,6 +26,8 @@ class NamespaceCheck(BaseModel):
     content_type: str | None = None
     is_valid_rdf: bool | None = None
     error: str | None = None
+    retrieved_url: str | None = None
+    discovery_note: str | None = None
 
 
 class TermCheck(BaseModel):
@@ -516,6 +518,10 @@ class ImportsReport(BaseModel):
         return [c for c in self.checks if c.resolution.status == Status.FAIL]
 
     @property
+    def discovered(self) -> list[ImportsCheck]:
+        return [c for c in self.checks if c.resolution.status == Status.WARN]
+
+    @property
     def skipped(self) -> bool:
         """True when imports are declared but resolution was not attempted."""
         return bool(self.checks) and all(c.resolution.status == Status.SKIP for c in self.checks)
@@ -525,7 +531,17 @@ class ImportsReport(BaseModel):
         return len(self.checks)
 
     def findings(self) -> list[Finding]:
-        return [Finding.of(Rule.IMPORT_UNRESOLVED, c.iri, c.resolution.error) for c in self.broken]
+        return [Finding.of(Rule.IMPORT_UNRESOLVED, c.iri, c.resolution.error) for c in self.broken] + [
+            Finding.of(
+                Rule.IMPORT_DISCOVERED,
+                c.iri,
+                " ".join(part for part in (
+                    c.resolution.discovery_note,
+                    f"Retrieved RDF: {c.resolution.retrieved_url}" if c.resolution.retrieved_url else None,
+                ) if part),
+            )
+            for c in self.discovered
+        ]
 
 
 class IRINamespaceStrategy(BaseModel):
@@ -647,12 +663,23 @@ class ReasonerReport(BaseModel):
         return [finding for finding in findings if finding.rule == rule]
 
 
+class InputDiagnostic(BaseModel):
+    """A source or parsing problem that prevented ontology checks."""
+
+    code: str
+    message: str
+    suggested_url: str | None = None
+    guide_url: str | None = None
+
+
 class ValidationReport(BaseModel):
     """Full validation report for an ontology file."""
 
     file: str
     namespaces: list[NamespaceReport] = Field(default_factory=list)
     parse_errors: list[str] = Field(default_factory=list)
+    input_error: InputDiagnostic | None = None
+    input_warnings: list[str] = Field(default_factory=list)
     unused_prefixes: list[UnusedPrefix] = Field(default_factory=list)
     lang_tags: LangTagReport | None = None
     non_ontology_terms: NonOntologyTermsReport | None = None
@@ -699,7 +726,8 @@ class ValidationReport(BaseModel):
 
     def findings(self) -> list[Finding]:
         """Every individual finding across all checks."""
-        found = [Finding.of(Rule.PARSE_ERROR, message=err) for err in self.parse_errors]
+        errors = self.parse_errors or ([self.input_error.message] if self.input_error else [])
+        found = [Finding.of(Rule.PARSE_ERROR, message=err) for err in errors]
         # An unrecognised datatype is reported once, by the datatypes check,
         # even when the datatype's namespace check also rejects it.
         for ns in self.namespaces:

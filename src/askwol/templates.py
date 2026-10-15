@@ -117,9 +117,12 @@ UPLOAD_HTML = """<!DOCTYPE html>
 
   /* Inputs */
   label { display: block; font-size: 0.85em; color: var(--muted); margin-bottom: 0.35em; font-weight: 500; text-transform: uppercase; letter-spacing: 0.02em; }
-  input[type=url], input[type=file] { width: 100%; padding: 0.6em 0.75em; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95em; font-family: inherit; background: #fff; }
-  input[type=url]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(74,124,89,0.15); }
+  input[type=url], input[type=text], input[type=file], select { width: 100%; padding: 0.6em 0.75em; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95em; font-family: inherit; background: #fff; }
+  input[type=url]:focus, input[type=text]:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(74,124,89,0.15); }
   input[type=file] { padding: 0.5em; }
+  .input-settings { margin-top: 1em; }
+  .input-settings summary { cursor: pointer; }
+  .input-settings label { margin-top: 1em; }
   .input-help { margin: 0.4em 0 0; font-size: 0.85em; color: var(--muted); }
   .github-guidance { padding-bottom: 1.2em; border-bottom: 1px solid var(--border); margin-bottom: 1.2em; }
   .github-guidance h2 { margin-top: 0; font-size: 1.1em; }
@@ -215,8 +218,23 @@ UPLOAD_HTML = """<!DOCTYPE html>
 
     <div id="panel-file" class="tab-panel">
       <label for="file-input">Ontology file</label>
-      <input type="file" id="file-input" name="file" accept=".ttl,.rdf,.owl,.jsonld,.nt,.n3" required disabled>
+      <input type="file" id="file-input" name="file" accept=".ttl,.rdf,.owl,.rdfs,.xml,.jsonld,.json,.nt,.n3" required disabled>
       <div class="examples-label" style="margin-top:0.8em">Accepts Turtle, RDF/XML, JSON-LD, N-Triples, or N3.</div>
+      <details class="input-settings">
+        <summary>Optional input settings</summary>
+        <label for="input-format">RDF format</label>
+        <select id="input-format" name="format" disabled>
+          <option value="">Automatic</option>
+          <option value="turtle">Turtle</option>
+          <option value="xml">RDF/XML</option>
+          <option value="json-ld">JSON-LD</option>
+          <option value="nt">N-Triples</option>
+          <option value="n3">N3</option>
+        </select>
+        <label for="base-uri">Base IRI for relative identifiers</label>
+        <input type="text" id="base-uri" name="base_uri" placeholder="https://example.org/ontology" aria-describedby="base-help" disabled>
+        <p id="base-help" class="input-help">If your file uses relative identifiers, supply its intended base IRI or declare <code>@base</code> (Turtle) or <code>xml:base</code> (RDF/XML) in the file. This setting does not download a URL. <a href="guide#server-config">Learn more</a>.</p>
+      </details>
     </div>
 
     <div class="actions">
@@ -236,17 +254,18 @@ UPLOAD_HTML = """<!DOCTYPE html>
     </div>
   </form>
   <script>
-    // Tab switching: also clears the inactive panel's value so server gets only one input
+    // Disable inactive controls so the server receives only the selected input.
     const urlInput = document.getElementById('url-input');
-    const fileInput = document.getElementById('file-input');
     document.querySelectorAll('.tab').forEach(function(tab) {
       tab.addEventListener('click', function() {
         const target = tab.dataset.tab;
         document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === tab));
         document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + target));
-        // Disable the inactive input so it isn't submitted
-        if (target === 'url') { fileInput.disabled = true; urlInput.disabled = false; }
-        else { urlInput.disabled = true; fileInput.disabled = false; }
+        document.querySelectorAll('.tab-panel').forEach(function(panel) {
+          panel.querySelectorAll('input, select').forEach(function(input) {
+            input.disabled = panel.id !== 'panel-' + target;
+          });
+        });
       });
     });
     document.querySelectorAll('.chip[data-url]').forEach(function(btn) {
@@ -1290,6 +1309,19 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p>A raw file URL is a retrieval location. Keep the ontology, namespace,
   and term IRIs published by the vocabulary owner; do not replace these
   identifiers with a GitHub download URL.</p>
+  <p><strong>Relative identifiers need a base IRI.</strong> A term such as
+  <code>&lt;#Person&gt;</code> resolves against the document&rsquo;s base.
+  Declare <code>@base</code> in Turtle or <code>xml:base</code> in RDF/XML,
+  or supply the intended base through the upload settings, API
+  <code>base_uri</code>, or CLI <code>--base-uri</code>. Without a declared
+  base, a URL uses its final retrieval location; an uploaded or local file
+  can produce <code>file://</code> identifiers tied to that file location.
+  Choose the intended identifiers explicitly before publishing.</p>
+  <p>Some tools discover RDF through links in HTML pages or known alternative
+  locations. Other tools may not follow those links. Ask Wol discloses this
+  discovery and warns when an <code>owl:imports</code> target relies on it.
+  Configure the declared import IRI to serve RDF directly, through content
+  negotiation, or through an HTTP redirect.</p>
   <div class="tip">Keep the <strong>namespace IRI</strong> and the
   <strong>document URL</strong> consistent. In the
   <a href="https://lod-4tu.tudelft.nl/ontologies/sample.ttl" target="_blank" rel="noopener">askwol sample ontology</a>,

@@ -64,6 +64,7 @@ def test_every_check_has_rules_and_every_rule_belongs_to_a_check():
     (Rule.DOMAIN_RANGE_MISMATCH, Severity.ERROR),
     (Rule.EXTERNAL_TERM_NOT_FOUND, Severity.WARNING),
     (Rule.IMPORT_UNRESOLVED, Severity.WARNING),
+    (Rule.IMPORT_DISCOVERED, Severity.WARNING),
     (Rule.NAMESPACE_UNRESOLVED, Severity.WARNING),
     (Rule.IRI_SCHEME_MIXED, Severity.WARNING),
     (Rule.DOMAIN_RANGE_MISSING, Severity.RECOMMENDATION),

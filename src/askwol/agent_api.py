@@ -4,21 +4,16 @@ from __future__ import annotations
 
 import json
 from typing import Any, Literal
-from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from askwol.checks import CHECKS, REASONER_SCOPE
-from askwol.models import ReasonerReport, Status, ValidationReport
+from askwol.input_utils import RDF_FORMAT_SUFFIXES, validate_base_uri
+from askwol.models import InputDiagnostic, ReasonerReport, Status, ValidationReport
 from askwol.severity import SeveritySummary
 
 RDFFormat = Literal["json-ld", "turtle", "xml", "nt", "n3"]
 CoverageStatus = Literal["completed", "partial", "skipped", "unavailable"]
-
-_FORMAT_SUFFIXES = {
-    "json-ld": ".jsonld", "turtle": ".ttl", "xml": ".rdf", "nt": ".nt", "n3": ".n3",
-}
-
 
 class OntologyContent(BaseModel):
     """An RDF document carried inside a JSON request, rather than a file upload."""
@@ -39,19 +34,7 @@ class OntologyContent(BaseModel):
     def validate_base_uri(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        try:
-            parsed = urlsplit(value)
-            valid = (
-                bool(parsed.scheme)
-                and (parsed.scheme not in {"http", "https"} or bool(parsed.hostname))
-                and not any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value)
-            )
-            parsed.port  # Also reject malformed port numbers.
-        except ValueError:
-            valid = False
-        if not valid:
-            raise ValueError("base_uri must be an absolute IRI without whitespace or control characters")
-        return value
+        return validate_base_uri(value)
 
     @model_validator(mode="after")
     def validate_content(self) -> OntologyContent:
@@ -66,7 +49,7 @@ class OntologyContent(BaseModel):
     @property
     def suffix(self) -> str:
         """Filename suffix recognised by the existing RDF loader."""
-        return _FORMAT_SUFFIXES[self.format]
+        return RDF_FORMAT_SUFFIXES[self.format]
 
     def as_bytes(self) -> bytes:
         """Preserve source text; serialise structured JSON-LD as UTF-8."""
@@ -132,6 +115,8 @@ class CompactValidationReport(BaseModel):
     severity_summary: SeveritySummary
     checks: list[CheckCoverage]
     reasoner: ReasoningScope | None = None
+    input_error: InputDiagnostic | None = None
+    input_warnings: list[str] = Field(default_factory=list)
 
 
 _SECTION_FIELDS = {
@@ -171,7 +156,7 @@ def compact_report(report: ValidationReport) -> CompactValidationReport:
     coverage: list[CheckCoverage] = []
     for definition in CHECKS:
         check = definition["report_anchor"]
-        if report.parse_errors:
+        if report.input_error or report.parse_errors:
             result = CheckCoverage(check=check, status="skipped")
         elif check == "namespaces":
             result = _resolution_coverage(check, [ns.resolution.status for ns in report.namespaces])
@@ -195,4 +180,6 @@ def compact_report(report: ValidationReport) -> CompactValidationReport:
         severity_summary=report.severity_summary,
         checks=coverage,
         reasoner=ReasoningScope.from_report(report.reasoner) if report.reasoner is not None else None,
+        input_error=report.input_error,
+        input_warnings=report.input_warnings,
     )

@@ -9,12 +9,15 @@ web app) and directly by the CLI, so ``/validate``, ``/api/validate``, and
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
+
+from rdflib import Literal, URIRef
 
 from askwol.cache import OntologyCache
 from askwol.definition_docs import check_definition_documentation
 from askwol.imports_check import check_imports, skipped_imports
+from askwol.input_utils import InputError, input_diagnostic
 from askwol.internal_terms import check_internal_terms
 from askwol.iri_scheme import check_iri_scheme
 from askwol.iri_strategy import check_iri_strategy
@@ -23,13 +26,24 @@ from askwol.lang_tags import check_lang_tags
 from askwol.license_check import check_license
 from askwol.mermaid_diagram import build_mermaid
 from askwol.metadata_validator import validate_ontology_metadata
-from askwol.models import NamespaceCheck, NamespaceReport, Status, UnusedPrefix, ValidationReport
+from askwol.models import (
+    InputDiagnostic,
+    NamespaceCheck,
+    NamespaceReport,
+    Status,
+    UnusedPrefix,
+    ValidationReport,
+)
 from askwol.non_ontology_terms import check_non_ontology_terms
 from askwol.parser import parse_ontology
 from askwol.reasoner_checks import run_reasoner_checks
 from askwol.resolver import DEFAULT_TIMEOUT, resolve_all_namespaces
 from askwol.shacl_runner import shape_result_cache
-from askwol.term_inventory import check_datatypes, check_domains_ranges, check_term_inventory
+from askwol.term_inventory import (
+    check_datatypes,
+    check_domains_ranges,
+    check_term_inventory,
+)
 from askwol.term_validator import validate_terms
 
 # Generous caps against pathological or oversized ontologies. Checked right
@@ -72,11 +86,28 @@ def _skip_check(prefix: str, uri: str) -> NamespaceCheck:
     return NamespaceCheck(prefix=prefix, uri=uri, status=Status.SKIP, error="Resolution skipped")
 
 
+def _input_failure(report: ValidationReport, exc: Exception, source: str | Path) -> None:
+    report.input_error = InputDiagnostic(**input_diagnostic(exc, source))
+    # Preserve the legacy error list for existing clients and severity counts.
+    report.parse_errors.append(report.input_error.message)
+
+
+def _has_file_identifiers(graph) -> bool:
+    for triple in graph:
+        for term in triple:
+            if isinstance(term, URIRef) and str(term).lower().startswith("file:"):
+                return True
+            if isinstance(term, Literal) and term.datatype and str(term.datatype).lower().startswith("file:"):
+                return True
+    return False
+
+
 async def run_full_validation(
     source: str | Path,
     *,
     display_name: str | None = None,
     base_uri: str | None = None,
+    format: str | None = None,
     include_mermaid: bool = True,
     skip_resolution: bool = False,
     timeout: float = DEFAULT_TIMEOUT,
@@ -90,9 +121,10 @@ async def run_full_validation(
         display_name: Name shown in the report (e.g. the original URL or
             upload filename). Defaults to ``str(source)``.
         base_uri: The ontology's real published URI, for relative IRIs.
+        format: Explicit RDF input syntax, overriding MIME/filename inference.
         include_mermaid: Whether to also build the class diagram.
         skip_resolution: Skip namespace/import HTTP resolution (offline mode).
-        timeout: Per-HTTP-call timeout for namespace/import resolution.
+        timeout: Per-HTTP-call timeout for source, context, namespace and import retrieval.
         cache: Ontology cache to reuse; a fresh one is created if omitted.
         phase: Called with a short phase name as the pipeline progresses,
             so a caller (e.g. the isolated worker) can report progress.
@@ -105,16 +137,28 @@ async def run_full_validation(
 
     phase("parsing")
     try:
-        parsed = parse_ontology(source, base_uri=base_uri, allow_network=not skip_resolution)
-    except Exception as exc:
-        report.parse_errors.append(str(exc))
+        parse_options = {}
+        if format is not None:
+            parse_options["format"] = format
+        if timeout != DEFAULT_TIMEOUT:
+            parse_options["timeout"] = timeout
+        parsed = parse_ontology(source, base_uri=base_uri, allow_network=not skip_resolution, **parse_options)
+    except Exception as exc:  # noqa: BLE001 -- parser plugins expose several exception families.
+        _input_failure(report, exc, source)
         return report, ""
 
     try:
         _check_size_limits(parsed)
     except OntologyTooLargeError as exc:
-        report.parse_errors.append(str(exc))
+        _input_failure(report, InputError("resource_limit", str(exc)), source)
         return report, ""
+
+    if _has_file_identifiers(parsed.graph):
+        report.input_warnings.append(
+            "Some RDF identifiers use file:// URIs and depend on a local or temporary file location. "
+            "For resources intended to have published IRIs, declare an absolute @base (Turtle) or "
+            "xml:base (RDF/XML), or supply --base-uri (CLI) or base_uri (API/upload)."
+        )
 
     mermaid = build_mermaid(parsed.graph, parsed.namespaces) if include_mermaid else ""
 

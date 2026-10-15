@@ -39,6 +39,7 @@ class Rule(str, Enum):
     PARSE_ERROR = "parse.error"
     METADATA_MISSING = "ontology-metadata.missing"
     IMPORT_UNRESOLVED = "imports.unresolved"
+    IMPORT_DISCOVERED = "imports.discovered"
     IRI_STRATEGY_MIXED = "iri-strategy.mixed"
     IRI_SCHEME_MIXED = "iri-scheme.mixed"
     LICENSE_MISSING = "license.missing"
@@ -75,6 +76,7 @@ RULE_SEVERITY: dict[Rule, Severity] = {
     Rule.PARSE_ERROR: _E,
     Rule.METADATA_MISSING: _R,
     Rule.IMPORT_UNRESOLVED: _W,
+    Rule.IMPORT_DISCOVERED: _W,
     Rule.IRI_STRATEGY_MIXED: _W,
     Rule.IRI_SCHEME_MIXED: _W,
     Rule.LICENSE_MISSING: _R,
