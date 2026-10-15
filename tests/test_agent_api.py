@@ -13,6 +13,7 @@ from askwol.checks import CHECKS, REASONER_SCOPE
 from askwol.models import (
     ImportsCheck,
     ImportsReport,
+    InputDiagnostic,
     InternalTermsReport,
     NamespaceCheck,
     NamespaceReport,
@@ -116,6 +117,27 @@ def test_parse_failure_retains_findings_and_marks_checks_not_run():
     assert "parse_errors" not in compact.model_dump()
 
 
+def test_compact_preserves_structured_input_diagnostics_and_source_guidance():
+    report = ValidationReport(
+        file="ontology.owl",
+        input_error=InputDiagnostic(
+            code="html_instead_of_rdf", message="The source is HTML.",
+            suggested_url="https://example.org/ontology.owl",
+            guide_url="https://lod-4tu.tudelft.nl/askwol/guide#server-config",
+        ),
+        input_warnings=["Relative IRIs were resolved against a local file URL."],
+    )
+
+    full = report.model_dump(mode="json")
+    compact = compact_report(report).model_dump(mode="json")
+
+    assert compact["input_error"] == full["input_error"]
+    assert compact["input_warnings"] == full["input_warnings"]
+    assert compact["severity_summary"] == full["severity_summary"]
+    assert compact["severity_summary"]["errors"] == 1
+    assert all(check["status"] == "skipped" for check in compact["checks"])
+
+
 def test_absent_sections_are_unavailable_and_findings_do_not_mark_checks_skipped():
     report = ValidationReport(
         file="ontology.ttl",
@@ -154,5 +176,5 @@ async def test_compact_pipeline_result_preserves_all_findings_without_term_inven
     assert compact.reasoner.scoped_to_current_ontology is True
     assert compact.reasoner.imports_followed is False
     assert compact.reasoner.consistent is None
-    assert set(payload) == {"file", "severity_summary", "checks", "reasoner"}
+    assert set(payload) == {"file", "severity_summary", "checks", "reasoner", "input_error", "input_warnings"}
     assert "term_inventory" not in payload

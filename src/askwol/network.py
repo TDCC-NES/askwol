@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import socket
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 
 import httpx
+
+from askwol.input_utils import InputError
 
 DEFAULT_TIMEOUT = 30.0
 MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
@@ -68,17 +71,19 @@ def block_private_network_request(request: httpx.Request) -> None:
     _check_addresses(request, infos)
 
 
-def fetch_document(url: str, *, accept: str, max_bytes: int = MAX_DOCUMENT_BYTES) -> tuple[bytes, str, str]:
+def fetch_document(
+    url: str, *, accept: str, max_bytes: int = MAX_DOCUMENT_BYTES,
+    timeout: float | None = DEFAULT_TIMEOUT,
+) -> tuple[bytes, str, str]:
     """Fetch bounded content without allowing private redirects or local files."""
     with httpx.Client(
-        timeout=DEFAULT_TIMEOUT, follow_redirects=True, max_redirects=10,
+        timeout=timeout, follow_redirects=True, max_redirects=10,
         event_hooks={"request": [block_private_network_request]},
-    ) as client:
-        with client.stream("GET", url, headers={"Accept": accept}) as response:
-            response.raise_for_status()
-            content = bytearray()
-            for chunk in response.iter_bytes():
-                if len(content) + len(chunk) > max_bytes:
-                    raise ValueError(f"RDF document exceeds the {max_bytes:,}-byte limit")
-                content.extend(chunk)
-            return bytes(content), str(response.url), response.headers.get("content-type", "")
+    ) as client, client.stream("GET", url, headers={"Accept": accept}) as response:
+        response.raise_for_status()
+        content = bytearray()
+        for chunk in response.iter_bytes():
+            if len(content) + len(chunk) > max_bytes:
+                raise InputError("resource_limit", f"RDF document exceeds the {max_bytes:,}-byte limit. Try a smaller file.")
+            content.extend(chunk)
+        return bytes(content), str(response.url), response.headers.get("content-type", "")

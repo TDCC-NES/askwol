@@ -21,20 +21,22 @@ from askwol.rdf_io import parse_rdf_bytes
 from askwol.term_validator import KNOWN_TERMS
 
 
-def _friendly_error(exc: httpx.HTTPError) -> str:
+def _friendly_error(exc: httpx.HTTPError | httpx.InvalidURL) -> str:
     """Turn a raw httpx exception into a short, user-friendly message."""
     if isinstance(exc, SSRFBlockedError):
         return str(exc)
+    if any(isinstance(error, httpx.InvalidURL) for error in (exc, exc.__cause__, exc.__context__)):
+        return "Invalid document URL  -  check the namespace or import URL and any server redirects"
     msg = str(exc)
     if "nodename nor servname" in msg or "Name or service not known" in msg:
         return "Server not found  -  the domain name could not be resolved"
-    if "timed out" in msg.lower() or "TimeoutException" in type(exc).__name__:
+    if isinstance(exc, httpx.TimeoutException) or "timed out" in msg.lower():
         return "Connection timed out  -  the server did not respond in time"
     if "Connection refused" in msg:
         return "Connection refused  -  the server is not accepting connections"
     if "SSL" in msg or "certificate" in msg.lower():
         return "SSL/TLS error  -  could not establish a secure connection"
-    if "Too many redirects" in msg:
+    if isinstance(exc, httpx.TooManyRedirects) or "Too many redirects" in msg:
         return "Too many redirects  -  the server kept redirecting"
     return f"Could not connect to the server ({type(exc).__name__})"
 
@@ -116,15 +118,10 @@ async def resolve_namespace(
     3. If response is HTML, scan for <link> tags or .ttl/.rdf/.owl file links
     4. Try fetching each discovered RDF link
     """
-    if cache.has(uri):
-        cached_err = cache.get_error(uri)
-        if cached_err:
-            return NamespaceCheck(
-                prefix=prefix, uri=uri, status=Status.FAIL, error=cached_err
-            )
-        return NamespaceCheck(
-            prefix=prefix, uri=uri, status=Status.OK, is_valid_rdf=cache.get(uri) is not None
-        )
+    cached = cache.get_resolution(uri, prefix)
+    if cached is not None:
+        return cached
+    timeout = client.timeout.read
 
     # If we have a known redirect URL, try it first
     redirect_url = NAMESPACE_REDIRECTS.get(uri)
@@ -135,16 +132,23 @@ async def resolve_namespace(
                 g, is_valid_rdf = _try_parse_rdf(
                     rdr_resp.content, base_uri=str(rdr_resp.url),
                     content_type=rdr_resp.headers.get("content-type", ""),
+                    timeout=timeout,
                 )
                 if is_valid_rdf:
-                    cache.put(uri, graph=g)
-                    return NamespaceCheck(
+                    result = NamespaceCheck(
                         prefix=prefix, uri=uri, status=Status.OK,
                         http_status=rdr_resp.status_code,
                         content_type=rdr_resp.headers.get("content-type", ""),
                         is_valid_rdf=True,
+                        retrieved_url=str(rdr_resp.url),
+                        discovery_note=(
+                            "RDF was retrieved from a configured alternative URL instead of the "
+                            "requested URL. Other ontology tools may not use this alternative."
+                        ),
                     )
-        except httpx.HTTPError:
+                    cache.put(uri, graph=g, resolution=result)
+                    return result
+        except (httpx.HTTPError, httpx.InvalidURL):
             pass  # fall through to normal resolution
 
     try:
@@ -153,23 +157,30 @@ async def resolve_namespace(
             headers={"Accept": RDF_ACCEPT},
             follow_redirects=True,
         )
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, httpx.InvalidURL) as exc:
         err = _friendly_error(exc)
-        cache.put(uri, graph=None, error=err)
-        return NamespaceCheck(prefix=prefix, uri=uri, status=Status.FAIL, error=err)
+        result = NamespaceCheck(prefix=prefix, uri=uri, status=Status.FAIL, error=err)
+        cache.put(uri, graph=None, resolution=result)
+        return result
 
     ct = resp.headers.get("content-type", "")
 
     if resp.status_code >= 400:
         err = _friendly_http_status(resp.status_code)
-        cache.put(uri, graph=None, error=err)
-        return NamespaceCheck(
+        result = NamespaceCheck(
             prefix=prefix, uri=uri, status=Status.FAIL,
             http_status=resp.status_code, content_type=ct, error=err,
+            retrieved_url=str(resp.url),
         )
+        cache.put(uri, graph=None, resolution=result)
+        return result
 
     # Try to parse the response directly as RDF
-    g, is_valid_rdf = _try_parse_rdf(resp.content, base_uri=str(resp.url), content_type=ct)
+    g, is_valid_rdf = _try_parse_rdf(
+        resp.content, base_uri=str(resp.url), content_type=ct, timeout=timeout,
+    )
+    retrieved_url = str(resp.url)
+    discovery_note = None
 
     # If that didn't work, the response is probably HTML  -  look for RDF links
     if not is_valid_rdf and "html" in ct.lower():
@@ -181,24 +192,32 @@ async def resolve_namespace(
                     g, is_valid_rdf = _try_parse_rdf(
                         rdf_resp.content, base_uri=str(rdf_resp.url),
                         content_type=rdf_resp.headers.get("content-type", ""),
+                        timeout=timeout,
                     )
                     if is_valid_rdf:
+                        retrieved_url = str(rdf_resp.url)
+                        discovery_note = (
+                            "This URL returned an HTML page. RDF was retrieved from a linked "
+                            "document; other ontology tools may not follow these links."
+                        )
                         break
-            except httpx.HTTPError:
+            except (httpx.HTTPError, httpx.InvalidURL):
                 continue
 
-    cache.put(uri, graph=g if is_valid_rdf else None)
-
-    return NamespaceCheck(
+    result = NamespaceCheck(
         prefix=prefix, uri=uri,
         status=Status.OK,
         http_status=resp.status_code, content_type=ct,
         is_valid_rdf=is_valid_rdf,
+        retrieved_url=retrieved_url, discovery_note=discovery_note,
     )
+    cache.put(uri, graph=g if is_valid_rdf else None, resolution=result)
+    return result
 
 
 def _try_parse_rdf(
     content: bytes, *, base_uri: str | None = None, content_type: str = "",
+    timeout: float | None = DEFAULT_TIMEOUT,
 ) -> tuple[Graph, bool]:
     """Try parsing bytes as RDF in multiple formats. Returns (graph, success)."""
     g = Graph()
@@ -212,7 +231,7 @@ def _try_parse_rdf(
             if fmt == "xml" and "html" in content_type.lower():
                 continue
             try:
-                parse_rdf_bytes(g, content, format=fmt, base_uri=base_uri)
+                parse_rdf_bytes(g, content, format=fmt, base_uri=base_uri, timeout=timeout)
                 return g, True
             except Exception:
                 g = Graph()  # reset on failure
@@ -229,26 +248,26 @@ def _extract_rdf_links(html: str, base_url: str) -> list[str]:
     urls: list[str] = []
     seen: set[str] = set()
 
-    # <link href="..." type="text/turtle">
-    for match in _LINK_RE.finditer(html):
-        url = urljoin(base_url, match.group(1))
+    def add_link(href: str) -> None:
+        try:
+            url = urljoin(base_url, href)
+        except ValueError:
+            return
         if url not in seen:
             urls.append(url)
             seen.add(url)
+
+    # <link href="..." type="text/turtle">
+    for match in _LINK_RE.finditer(html):
+        add_link(match.group(1))
 
     # <link type="text/turtle" href="...">  (reversed attribute order)
     for match in _LINK_RE_REV.finditer(html):
-        url = urljoin(base_url, match.group(2))
-        if url not in seen:
-            urls.append(url)
-            seen.add(url)
+        add_link(match.group(2))
 
     # <a href="something.ttl">
     for match in _RDF_FILE_RE.finditer(html):
-        url = urljoin(base_url, match.group(1))
-        if url not in seen:
-            urls.append(url)
-            seen.add(url)
+        add_link(match.group(1))
 
     return urls
 

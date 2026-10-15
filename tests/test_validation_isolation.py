@@ -48,6 +48,19 @@ async def _post_file(client: httpx.AsyncClient, path: str, content: bytes = MINI
 
 
 @pytest.mark.asyncio
+async def test_real_worker_preserves_structured_html_input_error():
+    async with httpx.AsyncClient(transport=ASGITransport(app=web.app), base_url="http://test") as client:
+        response = await client.post("/api/validate?compact=true", files={
+            "file": ("viewer.owl", b"<html><body>File viewer</body></html>", "application/rdf+xml"),
+        })
+    assert response.status_code == 422, response.text
+    report = response.json()
+    assert report["input_error"]["code"] == "html_instead_of_rdf"
+    assert "Raw" in report["input_error"]["message"]
+    assert all(check["status"] == "skipped" for check in report["checks"])
+
+
+@pytest.mark.asyncio
 async def test_hanging_validation_returns_504(monkeypatch):
     monkeypatch.setattr(runner, "WORKER_CMD", _SLEEP_FOREVER_CMD)
     monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 1.0)

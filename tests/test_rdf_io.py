@@ -5,9 +5,10 @@ import json
 import httpx
 import pytest
 import respx
-from rdflib import Graph, Literal, RDF, RDFS, URIRef
+from rdflib import RDF, RDFS, Graph, Literal, URIRef
 
 from askwol import network, rdf_io
+from askwol.input_utils import InputError
 from askwol.parser import parse_ontology
 from askwol.pipeline import run_full_validation
 from askwol.resolver import _try_parse_rdf
@@ -167,3 +168,75 @@ def test_jsonld_keeps_default_and_named_graphs_separate(tmp_path):
     assert set(graph) == {(default_term, value, Literal("Default graph"))}
     named = Graph(store=graph.store, identifier=URIRef("https://example.org/named"))
     assert set(named) == {(named_term, value, Literal("Named graph"))}
+
+
+@pytest.mark.parametrize("content_type", ["TEXT/TURTLE ; charset=utf-8", "application/x-turtle"])
+@respx.mock
+def test_remote_mime_type_takes_precedence_over_misleading_suffix(content_type):
+    url = "https://example.org/ontology.owl"
+    respx.get(url).mock(return_value=httpx.Response(
+        200, content=b'<https://example.org/A> a <http://www.w3.org/2002/07/owl#Class> .',
+        headers={"content-type": content_type},
+    ))
+    assert len(parse_ontology(url).graph) == 1
+
+
+@pytest.mark.parametrize("content_type", ["text/html", "text/plain"])
+@respx.mock
+def test_remote_html_is_rejected_even_with_owl_filename(content_type):
+    url = "https://example.org/ontology.owl"
+    respx.get(url).mock(return_value=httpx.Response(
+        200, content=b'<html><body>File viewer</body></html>', headers={"content-type": content_type},
+    ))
+    with pytest.raises(InputError) as captured:
+        parse_ontology(url)
+    assert captured.value.code == "html_instead_of_rdf"
+
+
+@respx.mock
+def test_python_github_viewer_url_explains_raw_link_without_fetching():
+    url = "https://github.com/example/ontology/blob/feature/new/ontology.owl"
+    with pytest.raises(InputError) as captured:
+        parse_ontology(url)
+    assert captured.value.code == "github_file_viewer"
+    assert captured.value.suggested_url == "https://github.com/example/ontology/raw/feature/new/ontology.owl"
+    assert not respx.calls
+
+
+@pytest.mark.parametrize("timeout", [1.25, None])
+@respx.mock
+def test_source_and_secondary_context_fetch_use_requested_timeout(timeout):
+    ontology = "https://example.org/ontology.jsonld"
+    context = "https://example.org/context.jsonld"
+    timeouts = []
+
+    def response(request):
+        timeouts.append(request.extensions["timeout"])
+        document = {"@context": context, "@id": "https://example.org/Thing", "label": "Thing"}
+        if str(request.url) == context:
+            document = {"@context": {"label": str(RDFS.label)}}
+        return httpx.Response(200, json=document, headers={"content-type": "application/ld+json"})
+
+    respx.get(ontology).mock(side_effect=response)
+    respx.get(context).mock(side_effect=response)
+    graph = parse_ontology(ontology, timeout=timeout).graph
+    assert len(graph) == 1
+    assert timeouts == [httpx.Timeout(timeout).as_dict()] * 2
+
+
+@respx.mock
+def test_context_serving_html_gets_input_diagnostic_before_json_parsing(tmp_path):
+    context = "https://example.org/context.jsonld"
+    respx.get(context).mock(return_value=httpx.Response(
+        200, text='<html><body>Context viewer</body></html>', headers={"content-type": "text/html"},
+    ))
+    path = write_jsonld(tmp_path, {"@context": context, "@id": "https://example.org/Thing"})
+    with pytest.raises(InputError) as captured:
+        parse_ontology(path)
+    assert captured.value.code == "html_instead_of_rdf"
+
+
+def test_parser_rejects_malformed_url_before_fetching():
+    with pytest.raises(InputError) as captured:
+        parse_ontology("https://[bad")
+    assert captured.value.code == "invalid_url"

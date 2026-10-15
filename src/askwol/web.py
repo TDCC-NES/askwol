@@ -9,10 +9,13 @@ import threading
 import time
 from html import escape
 from pathlib import Path
-from urllib.parse import unquote, urlencode, urlsplit
+from urllib.parse import urlencode, urlsplit
 
 import httpx
 from fastapi import FastAPI, File, Form, Query, Request, UploadFile
+from fastapi.encoders import jsonable_encoder
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import ValidationError
 from starlette.datastructures import MutableHeaders
@@ -29,7 +32,17 @@ from askwol.agent_api import (
 )
 from askwol.branding import STATIC_DIR
 from askwol.checks import render_checks_api_description
-from askwol.models import ValidationReport
+from askwol.input_utils import (
+    RDF_FORMAT_SUFFIXES,
+    InputError,
+    input_diagnostic,
+    select_rdf_format,
+    validate_base_uri,
+)
+from askwol.input_utils import (
+    github_raw_url as _github_raw_url,
+)
+from askwol.models import InputDiagnostic, ValidationReport
 from askwol.report_html import render_report
 from askwol.resolver import block_private_network_requests
 from askwol.stats_web import create_stats_router
@@ -155,6 +168,23 @@ app = FastAPI(
     version="0.2.0",
     root_path=ROOT_PATH,
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    if request.url.path.endswith("/api/validate"):
+        for error in errors:
+            if tuple(error["loc"]) == ("body", "file") and (
+                error["type"] == "missing"
+                or (isinstance(error.get("input"), str) and "://" in error["input"])
+            ):
+                error["msg"] = (
+                    "Upload an RDF file in the 'file' field; this endpoint does not download source URLs. "
+                    "For GitHub, select Raw and download the file contents first."
+                )
+                return JSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
+    return await request_validation_exception_handler(request, exc)
 
 
 class _NoindexOpenapiMiddleware:
@@ -293,6 +323,8 @@ async def validate(
     request: Request,
     file: UploadFile | None = File(None),
     url: str | None = Form(None),
+    base_uri: str | None = Form(None),
+    input_format: str | None = Form(None, alias="format"),
 ):
     """Validate an uploaded file directly, or (Post/Redirect/Get) redirect a
     submitted URL to its own GET /validate?url=... link - see validate_get."""
@@ -316,7 +348,9 @@ async def validate(
         kind = "validate_upload"
         try:
             with progress.track(client_ip, source, steps=progress.UPLOAD_FLOW):
-                response = await _unless_client_disconnects(request, _validate_upload(file))
+                response = await _unless_client_disconnects(
+                    request, _validate_upload(file, base_uri=base_uri, input_format=input_format),
+                )
         except ClientDisconnectedError:
             return _abandoned_response()
     else:
@@ -347,28 +381,6 @@ async def validate_progress(request: Request, source: str = ""):
         progress.snapshot(_client_ip(request), source),
         headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex"},
     )
-
-
-# Recognised ontology file extensions. Used only as a narrow escape hatch for
-# generic or absent Content-Type responses (see _validate_url below) - never
-# as the primary signal for what counts as RDF.
-RDF_FILE_EXTENSIONS = frozenset({".ttl", ".rdf", ".owl", ".rdfs", ".jsonld", ".nt", ".n3", ".xml"})
-
-
-def _github_raw_url(url: str) -> str | None:
-    """Let GitHub resolve the unchanged ref/path, including slash-containing refs."""
-    parsed = urlsplit(url)
-    if parsed.scheme not in ("http", "https") or parsed.netloc.lower() != "github.com":
-        return None
-    parts = parsed.path.split("/", 4)
-    if (
-        len(parts) != 5 or not parts[1] or not parts[2] or parts[3] != "blob"
-        or "/" not in parts[4] or parts[4].startswith("/") or parts[4].endswith("/")
-    ):
-        return None
-    # The /raw/ route uses the same ref/path as /blob/. Strip viewer query
-    # parameters and line fragments, without decoding the file path.
-    return f"https://github.com/{parts[1]}/{parts[2]}/raw/{parts[4]}"
 
 
 def _github_url_guidance(url: str, raw_url: str) -> HTMLResponse:
@@ -404,13 +416,27 @@ document.getElementById('copy-raw-url').addEventListener('click', async function
     return HTMLResponse(_apply_prefix(html), status_code=415)
 
 
+def _input_error_report(source: str, exc: Exception) -> ValidationReport:
+    diagnostic = InputDiagnostic(**input_diagnostic(exc, source))
+    return ValidationReport(file=source, parse_errors=[diagnostic.message], input_error=diagnostic)
+
+
+def _html_input_error(source: str, exc: Exception, status_code: int = 422) -> HTMLResponse:
+    return HTMLResponse(_apply_prefix(render_report(_input_error_report(source, exc))), status_code=status_code)
+
+
 async def _validate_url(url: str) -> HTMLResponse:
-    raw_url = _github_raw_url(url)
-    if raw_url:
-        return _github_url_guidance(url, raw_url)
-    parsed_url = urlsplit(url)
-    if parsed_url.scheme not in ("http", "https"):
-        return HTMLResponse("<p>Only http and https URLs are supported.</p>", status_code=400)
+    try:
+        raw_url = _github_raw_url(url)
+        if raw_url:
+            return _github_url_guidance(url, raw_url)
+        parsed_url = urlsplit(url)
+        _ = parsed_url.port
+        if (parsed_url.scheme not in ("http", "https") or not parsed_url.hostname
+                or any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in url)):
+            raise ValueError("Enter an absolute http or https URL with a hostname.")
+    except ValueError as exc:
+        return _html_input_error(url, InputError("invalid_url", f"Invalid ontology URL: {exc}"), 400)
 
     # Ask the server for RDF via content negotiation. Many namespace URIs
     # return HTML by default and only serve RDF when explicitly asked.
@@ -427,51 +453,10 @@ async def _validate_url(url: str) -> HTMLResponse:
         ) as client, client.stream("GET", url, headers={"Accept": accept_header}) as resp:
             resp.raise_for_status()
 
-            # Pick a suffix from the Content-Type so the parser can sniff the
-            # format. Fall back to the URL path, then to .ttl.
-            ctype = (resp.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
-            ctype_suffix = {
-                "text/turtle": ".ttl",
-                "application/x-turtle": ".ttl",
-                "application/rdf+xml": ".rdf",
-                "application/xml": ".rdf",
-                "text/xml": ".rdf",
-                "application/ld+json": ".jsonld",
-                "application/json": ".jsonld",
-                "application/n-triples": ".nt",
-                # Note: text/plain is intentionally NOT mapped. Many servers (e.g.
-                # raw.githubusercontent.com) serve Turtle or RDF as text/plain, so we
-                # fall back to the URL path extension instead of assuming N-Triples.
-                "text/n3": ".n3",
-            }.get(ctype)
-
-            # This is direct user input ("validate this URL as my ontology"), so be
-            # strict about what counts as RDF: trust a recognised media type above,
-            # or a generic or absent Content-Type whose URL path ends in a known
-            # ontology file extension (the raw.githubusercontent.com case). Anything
-            # else is rejected outright rather than optimistically parsed - some
-            # servers redirect namespace URIs to catalogue/metadata endpoints that
-            # return non-standard content types (e.g. "text/anot+turtle") which are
-            # syntactically valid RDF but aren't the ontology itself.
-            path_suffix = Path(unquote(parsed_url.path)).suffix
-            trusted_by_extension = (
-                ctype in ("text/plain", "") and path_suffix.lower() in RDF_FILE_EXTENSIONS
-            )
-            if ctype_suffix is None and not trusted_by_extension:
-                if ctype in ("text/html", "application/xhtml+xml"):
-                    return HTMLResponse(
-                        f"<p>The URL <code>{escape(url)}</code> returned an HTML page "
-                        f"(<code>{escape(ctype)}</code>) instead of RDF. Try a direct link "
-                        f"to the ontology file (e.g. <code>.ttl</code> or <code>.rdf</code>).</p>",
-                        status_code=415,
-                    )
-                return HTMLResponse(
-                    f"<p>The URL <code>{escape(url)}</code> returned "
-                    f"<code>{escape(ctype or '(no content-type)')}</code>, which isn't a "
-                    f"recognised RDF format. Try a direct link to the ontology file "
-                    f"(e.g. <code>.ttl</code> or <code>.rdf</code>).</p>",
-                    status_code=415,
-                )
+            try:
+                rdf_format = select_rdf_format(str(resp.url), content_type=resp.headers.get("content-type"))
+            except InputError as exc:
+                return _html_input_error(url, exc, 415)
 
             chunks: list[bytes] = []
             total = 0
@@ -486,10 +471,10 @@ async def _validate_url(url: str) -> HTMLResponse:
                 chunks.append(chunk)
             content = b"".join(chunks)
             final_url = str(resp.url)
-    except httpx.HTTPError as exc:
-        return HTMLResponse(f"<p>Could not fetch URL: {escape(str(exc))}</p>", status_code=422)
+    except (httpx.HTTPError, httpx.InvalidURL) as exc:
+        return _html_input_error(url, exc)
 
-    suffix = ctype_suffix or path_suffix or ".ttl"
+    suffix = RDF_FORMAT_SUFFIXES[rdf_format]
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(content)
         tmp_path = Path(tmp.name)
@@ -497,17 +482,26 @@ async def _validate_url(url: str) -> HTMLResponse:
     return await _run_validation(tmp_path, url, base_uri=final_url)
 
 
-async def _validate_upload(file: UploadFile) -> HTMLResponse:
+async def _validate_upload(
+    file: UploadFile, *, base_uri: str | None = None, input_format: str | None = None,
+) -> HTMLResponse:
+    source = file.filename or "upload"
     try:
         content = await _read_upload_capped(file)
+        if base_uri:
+            base_uri = validate_base_uri(base_uri)
+        rdf_format = select_rdf_format(source, content_type=file.content_type, format=input_format or None)
     except UploadTooLargeError as exc:
         return HTMLResponse(f"<p>{escape(str(exc))}.</p>", status_code=413)
-    suffix = Path(file.filename or "ontology.ttl").suffix or ".ttl"
+    except ValueError as exc:
+        return _html_input_error(source, exc)
+    suffix = RDF_FORMAT_SUFFIXES[rdf_format]
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(content)
         tmp_path = Path(tmp.name)
 
-    return await _run_validation(tmp_path, file.filename or "upload")
+    return await _run_validation(tmp_path, source, base_uri=base_uri or None)
+
 
 async def _run_validation(tmp_path: Path, source_name: str, base_uri: str | None = None) -> HTMLResponse:
     try:
@@ -524,7 +518,7 @@ async def _run_validation(tmp_path: Path, source_name: str, base_uri: str | None
     finally:
         tmp_path.unlink(missing_ok=True)
 
-    status_code = 422 if report.parse_errors else 200
+    status_code = 422 if report.input_error or report.parse_errors else 200
     return HTMLResponse(_apply_prefix(render_report(report, mermaid)), status_code=status_code)
 
 
@@ -533,7 +527,7 @@ _API_RESPONSES = {
     200: {"description": "Validation completed; inspect findings and check coverage"},
     422: {
         "model": _API_REPORT | ApiValidationError,
-        "description": "RDF parse-error report, or invalid request with a detail list",
+        "description": "Input or RDF parse-error report, or invalid request with a detail list",
     },
     413: {"model": ApiError, "description": "Ontology file or JSON request exceeds the 20 MB size limit"},
     429: {"model": ApiError, "description": "Too many requests from this client"},
@@ -561,7 +555,7 @@ async def _api_validation_response(
                 request, run_isolated_validation(tmp_path, source, kind="validate_api", base_uri=base_uri),
             )
             result = compact_report(report) if compact else report
-            return JSONResponse(result.model_dump(mode="json"), status_code=422 if report.parse_errors else 200)
+            return JSONResponse(result.model_dump(mode="json"), status_code=422 if report.input_error or report.parse_errors else 200)
         except ValidationBusyError:
             return JSONResponse({"detail": BUSY_MESSAGE}, status_code=503)
         except ValidationTimeoutError:
@@ -587,7 +581,12 @@ def _record_api_response(response: Response, source: str, started: float, client
     "/api/validate",
     response_model=_API_REPORT,
     summary="Validate an ontology file",
-    description=render_checks_api_description(),
+    description=(
+        "Upload the raw RDF file in the `file` field. This endpoint does not download source URLs. "
+        "For GitHub, select Raw and download the file contents first. "
+        "Optional `format` selects the RDF syntax; `base_uri` resolves relative IRIs.\n\n"
+        + render_checks_api_description()
+    ),
     tags=["validation"],
     responses={**_API_RESPONSES, 400: {"model": ApiError, "description": "Malformed multipart upload"}},
 )
@@ -595,6 +594,8 @@ async def validate_api(
     request: Request,
     file: UploadFile = File(..., description="OWL ontology file (Turtle, RDF/XML, JSON-LD, N-Triples, or N3)"),
     compact: bool = _COMPACT_QUERY,
+    base_uri: str | None = Form(None),
+    input_format: str | None = Form(None, alias="format"),
 ):
     """Validate a file through the same isolated runner as the HTML tool."""
     started = time.perf_counter()
@@ -605,11 +606,20 @@ async def validate_api(
     else:
         try:
             content = await _read_upload_capped(file)
+            if base_uri:
+                base_uri = validate_base_uri(base_uri)
+            rdf_format = select_rdf_format(source, content_type=file.content_type, format=input_format or None)
         except UploadTooLargeError as exc:
             response = JSONResponse({"detail": str(exc)}, status_code=413)
+        except ValueError as exc:
+            report = _input_error_report(source, exc)
+            result = compact_report(report) if compact else report
+            response = JSONResponse(result.model_dump(mode="json"), status_code=422)
         else:
-            suffix = Path(file.filename or "ontology.ttl").suffix or ".ttl"
-            response = await _api_validation_response(request, content, source, suffix, compact=compact)
+            suffix = RDF_FORMAT_SUFFIXES[rdf_format]
+            response = await _api_validation_response(
+                request, content, source, suffix, compact=compact, base_uri=base_uri or None,
+            )
     return _record_api_response(response, source, started, client_ip)
 
 
@@ -663,6 +673,11 @@ async def validate_content_api(request: Request, compact: bool = _COMPACT_QUERY)
         except ValidationError as exc:
             errors = exc.errors(include_url=False, include_context=False, include_input=False)
             for error in errors:
+                if error["loc"] == ("url",):
+                    error["msg"] = (
+                        "Send RDF text or JSON-LD in 'content'; this endpoint does not download source URLs. "
+                        "For GitHub, select Raw and download the file contents first."
+                    )
                 error["loc"] = ["body", *error["loc"]]
             response = JSONResponse({"detail": errors}, status_code=422)
         else:

@@ -12,16 +12,24 @@ from urllib.request import url2pathname
 from rdflib import Dataset, Graph
 from rdflib.plugins.parsers.jsonld import Parser as JsonLDParser
 from rdflib.plugins.shared.jsonld.context import Context
-from rdflib.util import guess_format
 
-from askwol.network import MAX_CONTEXT_BYTES, fetch_document
+from askwol.input_utils import (
+    GUIDE_URL,
+    InputError,
+    github_raw_url,
+    reject_html_content,
+    select_rdf_format,
+    validate_base_uri,
+)
+from askwol.network import DEFAULT_TIMEOUT, MAX_CONTEXT_BYTES, fetch_document
 
 MAX_CONTEXTS = 32
 
 
 class _ContextLoader:
-    def __init__(self, allow_network: bool):
+    def __init__(self, allow_network: bool, timeout: float | None = DEFAULT_TIMEOUT):
         self.allow_network = allow_network
+        self.timeout = timeout
         self.documents: dict[str, dict] = {}
         self.final_urls: dict[str, str] = {}
 
@@ -29,14 +37,18 @@ class _ContextLoader:
         if url in self.documents:
             return self.documents[url]
         if not self.allow_network:
-            raise ValueError("Remote JSON-LD contexts are disabled in offline mode")
+            raise InputError("offline_network_disabled", "Remote JSON-LD contexts are disabled in offline mode")
         if urlsplit(url).scheme not in ("http", "https"):
             raise ValueError("JSON-LD contexts must use public HTTP(S) URLs")
         if len(self.documents) >= MAX_CONTEXTS:
-            raise ValueError(f"JSON-LD exceeds the {MAX_CONTEXTS}-context limit")
-        content, final_url, _content_type = fetch_document(
+            raise InputError("resource_limit", f"JSON-LD exceeds the {MAX_CONTEXTS}-context limit")
+        timeout_options = {"timeout": self.timeout} if self.timeout != DEFAULT_TIMEOUT else {}
+        content, final_url, content_type = fetch_document(
             url, accept="application/ld+json, application/json", max_bytes=MAX_CONTEXT_BYTES,
+            **timeout_options,
         )
+        select_rdf_format(final_url, content_type=content_type, format="json-ld")
+        reject_html_content(content)
         document = json.loads(content)
         if not isinstance(document, dict) or "@context" not in document:
             raise ValueError("Remote JSON-LD document has no @context")
@@ -115,32 +127,69 @@ class _JsonLDDataset(Dataset):
 
 def parse_rdf_bytes(
     graph: Graph, content: bytes, *, format: str, base_uri: str | None = None,
-    allow_network: bool = True,
+    allow_network: bool = True, timeout: float | None = DEFAULT_TIMEOUT,
 ) -> Graph:
-    if format in ("json-ld", "application/ld+json"):
-        context = _SafeContext(_ContextLoader(allow_network), base=base_uri or graph.absolutize(""))
+    format = select_rdf_format("", format=format)
+    reject_html_content(content, format=format)
+    if base_uri is not None:
+        validate_base_uri(base_uri)
+    if format == "json-ld":
+        context = _SafeContext(_ContextLoader(allow_network, timeout), base=base_uri or graph.absolutize(""))
         dataset = _JsonLDDataset(store=graph.store)
         dataset.default_graph = graph
         _SafeJsonLDParser().parse(json.loads(content), context, dataset)
     else:
-        graph.parse(BytesIO(content), format=format, publicID=base_uri)
+        try:
+            graph.parse(BytesIO(content), format=format, publicID=base_uri)
+        except Exception:
+            # A bare <html> can also start valid Turtle. Only classify this
+            # ambiguous case as HTML once RDF parsing has failed.
+            reject_html_content(content)
+            raise
     return graph
 
 
-def load_rdf_source(graph: Graph, source: str | Path, *, base_uri: str | None, allow_network: bool) -> None:
+def load_rdf_source(
+    graph: Graph, source: str | Path, *, base_uri: str | None, allow_network: bool,
+    format: str | None = None, timeout: float | None = DEFAULT_TIMEOUT,
+) -> None:
     source_text = str(source)
-    scheme = urlsplit(source_text).scheme
+    try:
+        parsed_source = urlsplit(source_text)
+        scheme = parsed_source.scheme
+        if scheme in ("http", "https"):
+            if not parsed_source.hostname or any(char.isspace() or ord(char) < 32 for char in source_text):
+                raise ValueError("Missing or invalid host")
+            _ = parsed_source.port
+    except ValueError as exc:
+        raise InputError("invalid_url", "The source URL is malformed. Check its address and try again.") from exc
+    if base_uri is not None:
+        validate_base_uri(base_uri)
     if scheme in ("http", "https"):
         if not allow_network:
-            raise ValueError("Remote ontology sources are disabled in offline mode")
+            raise InputError("offline_network_disabled", "Remote ontology sources are disabled in offline mode")
+        raw_url = github_raw_url(source_text)
+        if raw_url:
+            raise InputError(
+                "github_file_viewer",
+                "This GitHub URL opens an HTML file viewer. Ontology tools need raw RDF contents. "
+                "On GitHub, select Raw and copy that URL, then submit or download the raw file.",
+                suggested_url=raw_url, guide_url=GUIDE_URL,
+            )
+        timeout_options = {"timeout": timeout} if timeout != DEFAULT_TIMEOUT else {}
         content, final_url, content_type = fetch_document(
-            source_text, accept="text/turtle, application/rdf+xml, application/ld+json",
+            source_text, accept="text/turtle, application/rdf+xml;q=0.9, application/ld+json;q=0.8, "
+            "application/n-triples;q=0.7, text/n3;q=0.6, */*;q=0.1",
+            **timeout_options,
         )
-        format = guess_format(urlsplit(final_url).path) or content_type.split(";", 1)[0] or "turtle"
+        format = select_rdf_format(final_url, content_type=content_type, format=format)
         base_uri = base_uri or final_url
     else:
-        path = Path(url2pathname(urlsplit(source_text).path)) if scheme == "file" else Path(source)
+        if scheme and scheme != "file" and "://" in source_text:
+            raise InputError("invalid_url", "Remote ontology sources must use a public HTTP(S) URL.")
+        path = Path(url2pathname(parsed_source.path)) if scheme == "file" else Path(source)
         content = path.read_bytes()
-        format = guess_format(path.name) or "turtle"
+        format = select_rdf_format(str(path), format=format)
         base_uri = base_uri or path.resolve().as_uri()
-    parse_rdf_bytes(graph, content, format=format, base_uri=base_uri, allow_network=allow_network)
+    timeout_options = {"timeout": timeout} if timeout != DEFAULT_TIMEOUT else {}
+    parse_rdf_bytes(graph, content, format=format, base_uri=base_uri, allow_network=allow_network, **timeout_options)

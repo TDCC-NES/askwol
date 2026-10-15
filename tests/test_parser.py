@@ -7,7 +7,9 @@ import pytest
 from defusedxml.common import ExternalReferenceForbidden
 from rdflib import OWL, RDF, URIRef
 
+from askwol import pipeline
 from askwol.parser import parse_ontology
+from askwol.pipeline import run_full_validation
 
 FIXTURE_DIR = Path(__file__).resolve().parent.parent / "html" / "ontologies"
 
@@ -206,5 +208,81 @@ def test_undeclared_namespace_is_registered_once(tmp_path):
     prefixes = [pfx for pfx, uri in parsed.namespaces.items() if uri == "https://example.org/unknown#"]
     assert len(prefixes) == 1
     assert parsed.terms_by_namespace[prefixes[0]] == {"One", "Two", "Three"}
+
+
+def test_explicit_format_reads_turtle_in_an_owl_file(tmp_path):
+    path = tmp_path / "ontology.owl"
+    path.write_text('<https://example.org/Thing> a <http://www.w3.org/2002/07/owl#Class> .')
+    parsed = parse_ontology(path, format="turtle")
+    assert len(parsed.graph) == 1
+
+
+@pytest.mark.parametrize("term", [
+    '<file:///example/Thing> <https://example.org/property> "value" .',
+    '<https://example.org/Thing> <file:///example/property> "value" .',
+    '<https://example.org/Thing> <https://example.org/property> <file:///example/value> .',
+    '<https://example.org/Thing> <https://example.org/property> "value"^^<file:///example/datatype> .',
+])
+async def test_local_identifiers_are_explained_without_adding_findings(tmp_path, term):
+    path = _write(tmp_path, term)
+    report, _ = await run_full_validation(path, skip_resolution=True, include_mermaid=False)
+    assert report.input_error is None
+    assert report.parse_errors == []
+    assert len(report.input_warnings) == 1
+    assert "file://" in report.input_warnings[0]
+    assert "base_uri" in report.input_warnings[0]
+    assert not any(f.message == report.input_warnings[0] for f in report.findings())
+
+
+async def test_explicit_base_removes_temporary_identifiers_without_changing_absolute_iris(tmp_path):
+    path = _write(tmp_path, '''@prefix owl: <http://www.w3.org/2002/07/owl#> .
+<> a owl:Ontology . <#Thing> a owl:Class .
+<https://other.example/Term> a owl:Class .''')
+    report, _ = await run_full_validation(
+        path, base_uri="https://example.org/ontology", skip_resolution=True, include_mermaid=False,
+    )
+    assert report.input_warnings == []
+    parsed = parse_ontology(path, base_uri="https://example.org/ontology")
+    assert URIRef("https://other.example/Term") in set(parsed.graph.subjects())
+
+
+async def test_pipeline_missing_file_is_an_io_error(tmp_path):
+    report, _ = await run_full_validation(tmp_path / "missing.ttl", skip_resolution=True)
+    assert report.input_error.code == "io_error"
+    assert report.parse_errors == [report.input_error.message]
+    assert report.has_errors
+
+
+async def test_pipeline_normalizes_empty_timeout_and_propagates_timeout(monkeypatch):
+    import httpx
+
+    def timeout(source, **kwargs):
+        assert kwargs["timeout"] == 1.25
+        assert kwargs["format"] == "turtle"
+        raise httpx.ReadTimeout("")
+
+    monkeypatch.setattr(pipeline, "parse_ontology", timeout)
+    report, _ = await run_full_validation("ontology.unknown", timeout=1.25, format="turtle")
+    assert report.input_error.code == "fetch_timeout"
+    assert "timed out" in report.input_error.message
+    assert report.parse_errors == [report.input_error.message]
+    assert report.ontology_metadata is None
+
+
+async def test_pipeline_preserves_syntax_failure_with_actionable_format_hint(tmp_path):
+    path = _write(tmp_path, "this is not RDF <<<")
+    report, _ = await run_full_validation(path, skip_resolution=True)
+    assert report.input_error.code == "invalid_rdf"
+    assert "input format" in report.input_error.message
+    assert report.parse_errors == [report.input_error.message]
+
+
+async def test_pipeline_graph_limit_has_distinct_diagnostic(tmp_path, monkeypatch):
+    monkeypatch.setattr(pipeline, "MAX_TRIPLES", 1)
+    path = _write(tmp_path, '<https://example.org/a> <https://example.org/p> "one", "two" .')
+    report, _ = await run_full_validation(path, skip_resolution=True)
+    assert report.input_error.code == "resource_limit"
+    assert report.parse_errors == [report.input_error.message]
+    assert report.ontology_metadata is None
 
 

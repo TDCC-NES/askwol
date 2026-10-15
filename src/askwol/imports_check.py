@@ -55,9 +55,16 @@ async def check_imports(
         {iri: iri for iri in declared}, cache, timeout=timeout, use_known_terms=False,
     )
     for resolution in resolutions:
-        if resolution.status == Status.OK and resolution.is_valid_rdf is not True:
+        if resolution.status in (Status.OK, Status.WARN) and resolution.is_valid_rdf is not True:
             resolution.status = Status.FAIL
             resolution.error = "Import did not provide parseable RDF."
+        elif resolution.status == Status.OK and resolution.discovery_note:
+            resolution.status = Status.WARN
+            resolution.discovery_note += (
+                " For owl:imports, confirm that the declared import URL serves RDF "
+                "directly, by content negotiation, or by an HTTP redirect."
+            )
     checks = [ImportsCheck(iri=r.uri, resolution=r) for r in resolutions]
-    status = Status.FAIL if any(c.resolution.status == Status.FAIL for c in checks) else Status.OK
+    statuses = {c.resolution.status for c in checks}
+    status = Status.FAIL if Status.FAIL in statuses else Status.WARN if Status.WARN in statuses else Status.OK
     return ImportsReport(status=status, checks=checks)

@@ -313,7 +313,7 @@ async def test_each_entry_point_tracks_the_right_flow(monkeypatch):
         tracked["url"] = job.steps if job else None
         return HTMLResponse("ok")
 
-    async def fake_validate_upload(file):
+    async def fake_validate_upload(file, *, base_uri=None, input_format=None):
         job = progress.current.get()
         tracked["upload"] = job.steps if job else None
         return HTMLResponse("ok")

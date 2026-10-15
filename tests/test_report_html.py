@@ -25,6 +25,7 @@ from askwol.models import (
     DomainRangeReport,
     ImportsCheck,
     ImportsReport,
+    InputDiagnostic,
     InternalTermEntry,
     InternalTermIssue,
     InternalTermReference,
@@ -265,6 +266,22 @@ class _ReportHTML(HTMLParser):
 
     def handle_data(self, data):
         self.text.append(data)
+
+
+def test_input_diagnostic_does_not_turn_untrusted_metadata_into_html_or_active_links():
+    payload = '<img src=x onerror=alert(1)>'
+    report = ValidationReport(file="ontology.ttl", input_error=InputDiagnostic(
+        code="html_instead_of_rdf", message=payload,
+        suggested_url="javascript:alert(1)", guide_url="data:text/html,<script>alert(1)</script>",
+    ))
+
+    html = render_report(report)
+    parsed = _ReportHTML(html)
+
+    assert payload in "".join(parsed.text)
+    assert "img" not in parsed.tags
+    assert not any(link.get("href", "").startswith(("javascript:", "data:")) for link in parsed.links)
+    assert "Ontology checks were not run" in html
 
 
 def test_valid_rdf_licence_literal_is_text_in_html():

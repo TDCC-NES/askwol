@@ -10,6 +10,8 @@ from askwol import network
 from askwol.cache import OntologyCache
 from askwol.imports_check import check_imports
 from askwol.models import Status
+from askwol.resolver import resolve_namespace
+from askwol.severity import Rule
 
 ONT = URIRef("https://example.org/ont")
 
@@ -156,3 +158,92 @@ async def test_imports_remain_direct_only():
     report = await check_imports(graph, OntologyCache())
     assert report.status == Status.OK
     assert [check.iri for check in report.checks] == [iri]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_import_html_discovery_warns_without_changing_cached_namespace_result():
+    iri = "https://example.org/imported"
+    raw_url = "https://example.org/imported.ttl"
+    html_route = respx.get(iri).mock(return_value=httpx.Response(
+        200, text='<html><link type="text/turtle" href="imported.ttl"></html>',
+        headers={"content-type": "text/html"},
+    ))
+    rdf_route = respx.get(raw_url).mock(return_value=httpx.Response(
+        200, content=SAMPLE_TURTLE, headers={"content-type": "text/turtle"},
+    ))
+    graph = Graph()
+    graph.add((ONT, OWL.imports, URIRef(iri)))
+    cache = OntologyCache()
+    first = await check_imports(graph, cache)
+    second = await check_imports(graph, cache)
+    async with httpx.AsyncClient() as client:
+        namespace = await resolve_namespace("ex", iri, client, cache)
+
+    assert first.status == Status.WARN
+    assert first == second
+    resolution = first.checks[0].resolution
+    assert resolution.status == Status.WARN
+    assert resolution.is_valid_rdf is True
+    assert resolution.error is None
+    assert resolution.uri == iri
+    assert resolution.content_type == "text/html"
+    assert resolution.retrieved_url == raw_url
+    assert "owl:imports" in resolution.discovery_note
+    assert first.findings()[0].rule == Rule.IMPORT_DISCOVERED
+    assert namespace.status == Status.OK
+    assert namespace.discovery_note and "owl:imports" not in namespace.discovery_note
+    assert html_route.call_count == rdf_route.call_count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_import_configured_alternative_warns(monkeypatch):
+    iri = "https://example.org/imported#"
+    alternative = "https://example.org/imported.ttl"
+    monkeypatch.setattr("askwol.resolver.NAMESPACE_REDIRECTS", {iri: alternative})
+    respx.get(alternative).mock(return_value=httpx.Response(
+        200, content=SAMPLE_TURTLE, headers={"content-type": "text/turtle"},
+    ))
+    graph = Graph()
+    graph.add((ONT, OWL.imports, URIRef(iri)))
+    report = await check_imports(graph, OntologyCache())
+    assert report.status == Status.WARN
+    assert report.checks[0].resolution.retrieved_url == alternative
+    assert report.findings()[0].rule == Rule.IMPORT_DISCOVERED
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_import_http_redirect_is_direct_resolution():
+    iri = "https://example.org/imported"
+    raw_url = "https://example.org/imported.ttl"
+    respx.get(iri).mock(return_value=httpx.Response(302, headers={"location": raw_url}))
+    respx.get(raw_url).mock(return_value=httpx.Response(
+        200, content=SAMPLE_TURTLE, headers={"content-type": "text/turtle"},
+    ))
+    graph = Graph()
+    graph.add((ONT, OWL.imports, URIRef(iri)))
+    report = await check_imports(graph, OntologyCache())
+    assert report.status == Status.OK
+    assert report.checks[0].resolution.retrieved_url == raw_url
+    assert report.checks[0].resolution.discovery_note is None
+    assert report.findings() == []
+
+
+@pytest.mark.parametrize("malformed_redirect", [False, True])
+@pytest.mark.asyncio
+@respx.mock
+async def test_import_with_malformed_url_reports_failure(malformed_redirect):
+    malformed_url = "https://example.org:bad/imported.ttl"
+    iri = "https://example.org/imported" if malformed_redirect else malformed_url
+    if malformed_redirect:
+        respx.get(iri).mock(return_value=httpx.Response(
+            302, headers={"location": malformed_url},
+        ))
+    graph = Graph()
+    graph.add((ONT, OWL.imports, URIRef(iri)))
+    report = await check_imports(graph, OntologyCache())
+    assert report.status == Status.FAIL
+    assert report.broken[0].resolution.error.startswith("Invalid document URL")
+    assert report.findings()[0].rule == Rule.IMPORT_UNRESOLVED
