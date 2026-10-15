@@ -1,7 +1,6 @@
 # Development override: bind-mount src/ and run uvicorn with --reload.
-# Docker Compose merges this file automatically when you run `docker compose up`
-# in this directory. Delete or rename this file (e.g. to .yml.example) on the
-# production server so the production CMD from the Dockerfile is used instead.
+# Copy to docker-compose.override.yml to enable automatic Compose merging.
+# This .example file is inactive and can stay on production servers.
 services:
   askwol:
     volumes:

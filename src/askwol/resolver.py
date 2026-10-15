@@ -3,66 +3,22 @@
 from __future__ import annotations
 
 import asyncio
-import ipaddress
 import logging
 import re
-import socket
-from io import BytesIO
 
 import httpx
 from rdflib import Graph
 
 from askwol.cache import OntologyCache
 from askwol.models import NamespaceCheck, Status
+from askwol.network import (
+    DEFAULT_TIMEOUT as DEFAULT_TIMEOUT,
+    SSRFBlockedError as SSRFBlockedError,
+    _is_unsafe_ip as _is_unsafe_ip,
+    block_private_network_requests,
+)
+from askwol.rdf_io import parse_rdf_bytes
 from askwol.term_validator import KNOWN_TERMS
-
-
-class SSRFBlockedError(httpx.HTTPError):
-    """Raised when a request target resolves to a private/internal address."""
-
-
-def _is_unsafe_ip(ip_str: str) -> bool:
-    """True if the IP is private, loopback, link-local, reserved, or otherwise non-public."""
-    try:
-        ip = ipaddress.ip_address(ip_str)
-    except ValueError:
-        return True
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        ip = ip.ipv4_mapped
-    return (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_reserved
-        or ip.is_multicast
-        or ip.is_unspecified
-    )
-
-
-async def block_private_network_requests(request: httpx.Request) -> None:
-    """httpx request hook: reject requests whose host resolves to a private or
-    internal address (SSRF guard). Namespace URIs and owl:imports targets come
-    from untrusted ontology content, so they could point at cloud metadata
-    endpoints or internal services. httpx invokes request hooks for every hop
-    of a redirect chain, so this also covers redirects to internal hosts.
-    """
-    host = request.url.host
-    if not host:
-        return
-    loop = asyncio.get_running_loop()
-    try:
-        infos = await asyncio.wait_for(
-            loop.run_in_executor(None, socket.getaddrinfo, host, None), timeout=5.0,
-        )
-    except (OSError, TimeoutError, asyncio.TimeoutError):
-        return  # DNS failure/slow DNS - let the real request fail naturally
-    for info in infos:
-        ip_str = info[4][0]
-        if _is_unsafe_ip(ip_str):
-            raise SSRFBlockedError(
-                f"Blocked request to '{host}' ({ip_str}): private/internal "
-                f"addresses are not allowed"
-            )
 
 
 def _friendly_error(exc: httpx.HTTPError) -> str:
@@ -124,7 +80,6 @@ RDF_ACCEPT = ", ".join(
     f"{ct};q={1.0 - i * 0.1:.1f}" for i, ct in enumerate(RDF_ACCEPT_HEADERS)
 )
 
-DEFAULT_TIMEOUT = 30.0
 MAX_CONCURRENT = 10
 
 # Patterns to find RDF links in HTML responses
@@ -168,7 +123,7 @@ async def resolve_namespace(
                 prefix=prefix, uri=uri, status=Status.FAIL, error=cached_err
             )
         return NamespaceCheck(
-            prefix=prefix, uri=uri, status=Status.OK, is_valid_rdf=True
+            prefix=prefix, uri=uri, status=Status.OK, is_valid_rdf=cache.get(uri) is not None
         )
 
     # If we have a known redirect URL, try it first
@@ -177,7 +132,7 @@ async def resolve_namespace(
         try:
             rdr_resp = await client.get(redirect_url, follow_redirects=True)
             if rdr_resp.status_code < 400:
-                g, is_valid_rdf = _try_parse_rdf(rdr_resp.content)
+                g, is_valid_rdf = _try_parse_rdf(rdr_resp.content, base_uri=str(rdr_resp.url))
                 if is_valid_rdf:
                     cache.put(uri, graph=g)
                     return NamespaceCheck(
@@ -211,16 +166,16 @@ async def resolve_namespace(
         )
 
     # Try to parse the response directly as RDF
-    g, is_valid_rdf = _try_parse_rdf(resp.content)
+    g, is_valid_rdf = _try_parse_rdf(resp.content, base_uri=str(resp.url))
 
     # If that didn't work, the response is probably HTML  -  look for RDF links
     if not is_valid_rdf and "html" in ct.lower():
-        rdf_urls = _extract_rdf_links(resp.text, uri)
+        rdf_urls = _extract_rdf_links(resp.text, str(resp.url))
         for rdf_url in rdf_urls:
             try:
                 rdf_resp = await client.get(rdf_url, follow_redirects=True)
                 if rdf_resp.status_code < 400:
-                    g, is_valid_rdf = _try_parse_rdf(rdf_resp.content)
+                    g, is_valid_rdf = _try_parse_rdf(rdf_resp.content, base_uri=str(rdf_resp.url))
                     if is_valid_rdf:
                         break
             except httpx.HTTPError:
@@ -230,13 +185,13 @@ async def resolve_namespace(
 
     return NamespaceCheck(
         prefix=prefix, uri=uri,
-        status=Status.OK if resp.status_code < 400 else Status.FAIL,
+        status=Status.OK,
         http_status=resp.status_code, content_type=ct,
         is_valid_rdf=is_valid_rdf,
     )
 
 
-def _try_parse_rdf(content: bytes) -> tuple[Graph, bool]:
+def _try_parse_rdf(content: bytes, *, base_uri: str | None = None) -> tuple[Graph, bool]:
     """Try parsing bytes as RDF in multiple formats. Returns (graph, success)."""
     g = Graph()
     rdflib_logger = logging.getLogger("rdflib")
@@ -245,7 +200,7 @@ def _try_parse_rdf(content: bytes) -> tuple[Graph, bool]:
     try:
         for fmt in ("turtle", "xml", "json-ld", "nt"):
             try:
-                g.parse(BytesIO(content), format=fmt)
+                parse_rdf_bytes(g, content, format=fmt, base_uri=base_uri)
                 if len(g) > 0:
                     return g, True
             except Exception:

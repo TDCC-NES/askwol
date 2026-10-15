@@ -17,6 +17,7 @@ from fastapi.responses import HTMLResponse
 from httpx import ASGITransport
 
 from askwol import progress, usage, web
+from askwol import validation_runner as runner
 from askwol.models import ValidationReport
 
 IP = "203.0.113.7"
@@ -46,13 +47,12 @@ _PHASED_WORKER = [
 @pytest.fixture(autouse=True)
 def _clean_state(monkeypatch):
     progress._latest.clear()
-    web._validation_slots_in_use = 0
-    monkeypatch.setattr(web, "_TEST_INPROCESS_PIPELINE", None)
+    runner._validation_slots_in_use = 0
     # Keep this module's requests out of the rate-limit budget other modules share.
     monkeypatch.setattr(web, "_rate_limit_buckets", {})
     yield
     progress._latest.clear()
-    web._validation_slots_in_use = 0
+    runner._validation_slots_in_use = 0
 
 
 def _client() -> httpx.AsyncClient:
@@ -255,7 +255,7 @@ async def test_progress_endpoint_is_not_rate_limited(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_progress_follows_a_real_worker_through_its_steps(monkeypatch):
-    monkeypatch.setattr(web, "WORKER_CMD", _PHASED_WORKER)
+    monkeypatch.setattr(runner, "WORKER_CMD", _PHASED_WORKER)
     seen: list[dict] = []
 
     async with _client() as client:
@@ -282,7 +282,7 @@ async def test_progress_follows_a_real_worker_through_its_steps(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_progress_is_scoped_to_the_caller(monkeypatch):
-    monkeypatch.setattr(web, "WORKER_CMD", _PHASED_WORKER)
+    monkeypatch.setattr(runner, "WORKER_CMD", _PHASED_WORKER)
 
     async with _client() as client:
         validation = asyncio.create_task(

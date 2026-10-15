@@ -11,22 +11,38 @@
 	<meta property="og:description" content="Check OWL ontologies with Ask Wol and follow our ontology publishing guide. Free tools and guidance from TDCC-NES and 4TU.ResearchData.">
 	<meta property="og:url" content="https://lod-4tu.tudelft.nl/">
 	<style>
+		* {
+			box-sizing: border-box;
+		}
 		body {
-			font-family: 'Gill Sans', sans-serif;
-			text-align: center;
+			margin: 0;
+			padding: 0 1.5rem 4rem;
+			font-family: 'Gill Sans', 'Segoe UI', sans-serif;
+			font-size: 1.125rem;
+			line-height: 1.6;
+			color: #24354b;
+			background: #fff;
+		}
+		header,
+		main {
+			max-width: 64rem;
+			margin-inline: auto;
+		}
+		header {
+			padding: 2.5rem 0;
+			border-bottom: 1px solid #e3e8ee;
+		}
+		.partners {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+			align-items: center;
+			gap: clamp(1.5rem, 5vw, 4rem);
+			max-width: 32rem;
+			margin-inline: auto;
 		}
 		.logo-tdcc,
 		.logo-4tu {
 			display: block;
-			margin-left: auto;
-			margin-right: auto;
-		}
-		.logo-tdcc {
-			width: 26%;
-		}
-		.logo-4tu {
-			width: 30%;
-			margin-top: 2%;
 		}
 		.logo-tdcc img,
 		.logo-4tu img {
@@ -34,64 +50,117 @@
 			height: auto;
 			display: block;
 		}
+		a {
+			color: #184b7b;
+			text-underline-offset: 0.2em;
+			text-decoration-thickness: 1px;
+		}
+		a:hover {
+			color: #0b355a;
+			text-decoration-thickness: 2px;
+		}
+		a:focus-visible {
+			outline: 3px solid #f09000;
+			outline-offset: 5px;
+			border-radius: 2px;
+		}
+		.intro {
+			margin: 3.5rem 0 2.5rem;
+		}
+		h1 {
+			max-width: 24ch;
+			margin: 0;
+			font-size: clamp(2rem, 4vw, 3rem);
+			font-weight: 600;
+			line-height: 1.2;
+			letter-spacing: -0.025em;
+		}
+		.engineers {
+			margin: 1.25rem 0 0;
+			font-size: 1.25rem;
+		}
 		.card {
-			display: inline-block;
-			margin-top: 6%;
-			padding: 1.2em 2.2em;
-			border-radius: 20px;
-			border: 2px solid rgb(240, 144, 0);
-			background-color: #fff9f2;
-			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+			display: grid;
+			grid-template-columns: auto minmax(0, 1fr);
+			align-items: start;
+			column-gap: 1.5rem;
+			padding: 2rem;
+			border: 1px solid #e3e8ee;
+			border-radius: 12px;
+			background: #f8fafc;
+		}
+		.card > img {
+			grid-row: 1 / span 3;
+		}
+		.card-title,
+		.card-tagline,
+		.card-guide {
+			grid-column: 2;
 		}
 		.card-title {
-			font-size: 150%;
 			margin: 0;
-		}
-		.card-title a,
-		.card-credit a {
-			text-decoration: none;
+			font-size: 1.375rem;
+			font-weight: 400;
+			line-height: 1.4;
 		}
 		.card-title a {
-			display: inline-flex;
-			align-items: center;
-			gap: 0.6em;
-			color: rgb(24, 60, 120);
-			font-weight: bold;
+			text-decoration: none;
 		}
-		.card-title img {
-			flex: none;
+		.card-title a:hover {
+			text-decoration: underline;
 		}
 		.card-tagline {
-			font-size: 1rem;
-			color: #666;
-			margin: 0.5em 0 0;
-		}
-		.card-credit {
-			font-size: 60%;
-			color: #999;
-			margin: 0.8em 0 0;
-		}
-		.card-credit a {
-			color: inherit;
+			max-width: 65ch;
+			margin: 0.75rem 0 0;
+			color: #526174;
 		}
 		.card-guide {
-			margin: 0.8em 0 0;
+			margin: 1.25rem 0 0;
+		}
+		@media (max-width: 36rem) {
+			body {
+				padding-inline: 1.25rem;
+			}
+			header {
+				padding-block: 1.75rem;
+			}
+			.intro {
+				margin-block: 2.5rem 2rem;
+			}
+			.card {
+				column-gap: 1rem;
+				padding: 1.25rem;
+			}
+			.card > img {
+				grid-row: 1;
+				width: 34px;
+				height: auto;
+			}
+			.card-tagline,
+			.card-guide {
+				grid-column: 1 / -1;
+			}
 		}
 	</style>
 </head>
 <body>
 	<header>
-		<a class="logo-tdcc" href="https://tdcc.nl/nes/"><img src="/images/tdcc-nes.webp" alt="TDCC-NES" width="2048" height="1725"></a>
-		<a class="logo-4tu" href="https://data.4tu.nl/"><img src="/images/4tu-researchdata.webp" alt="4TU.ResearchData" width="4939" height="1801"></a>
+		<div class="partners">
+			<a class="logo-tdcc" href="https://tdcc.nl/nes/"><img src="/images/tdcc-nes.webp" alt="TDCC-NES" width="2048" height="1725"></a>
+			<a class="logo-4tu" href="https://data.4tu.nl/"><img src="/images/4tu-researchdata.webp" alt="4TU.ResearchData" width="4939" height="1801"></a>
+		</div>
 	</header>
 	<main>
-		<h1>Linked Open Data &amp; Ontology Tools</h1>
-		<div class="card">
-			<h2 class="card-title">
-				<a href="/askwol/">
-					<img src="/askwol/static/wollie-h1.png" alt="" width="43" height="56">
-					<span>Ask Wol: Online OWL Ontology Checker</span>
-				</a>
+		<div class="intro">
+			<h1>Linked Open Data &amp; Ontology Tools</h1>
+			<p class="engineers">
+				By the <a href="https://tdcc.nl/nes/ontology-engineers/">TDCC-NES Ontology Engineers</a>
+			</p>
+		</div>
+		<section class="card" aria-labelledby="askwol-title">
+			<img src="/askwol/static/wollie-h1.png" alt="" width="43" height="56">
+			<h2 class="card-title" id="askwol-title">
+				<a href="/askwol/">Ask Wol: Online OWL Ontology Checker</a>
 			</h2>
 			<p class="card-tagline">
 				Free, open-source ontology checks and class diagrams.
@@ -100,10 +169,7 @@
 			<p class="card-guide">
 				<a href="/askwol/guide">How to publish an OWL ontology</a>
 			</p>
-			<p class="card-credit">
-				by the <a href="https://tdcc.nl/nes/ontology-engineers/">TDCC-NES Ontology Engineers</a>
-			</p>
-		</div>
+		</section>
 	</main>
 </body>
 </html>

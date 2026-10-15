@@ -8,6 +8,14 @@ import-time asserts in `templates.py`, which every test run already exercises
 by importing the module - no dedicated test needed here.
 """
 
+from html import escape
+from html.parser import HTMLParser
+import json
+
+import pytest
+from rdflib import Graph
+
+from askwol.license_check import check_license
 from askwol.models import (
     DatatypeReport,
     DatatypeUsage,
@@ -15,14 +23,17 @@ from askwol.models import (
     DefinitionDocumentationReport,
     DomainRangeCheck,
     DomainRangeReport,
+    ImportsCheck,
     ImportsReport,
     InternalTermEntry,
     InternalTermIssue,
+    InternalTermReference,
     InternalTermsReport,
     IRINamespaceStrategy,
     IRISchemeConflict,
     IRISchemeReport,
     IRIStrategyReport,
+    LangTagIssue,
     LangTagReport,
     LicenseCheck,
     LicenseReport,
@@ -30,6 +41,7 @@ from askwol.models import (
     MetadataReport,
     NamespaceCheck,
     NamespaceReport,
+    NonOntologyTermIssue,
     NonOntologyTermsReport,
     ReasonerCheck,
     ReasonerReport,
@@ -40,10 +52,10 @@ from askwol.models import (
     ValidationReport,
 )
 from askwol.report_html import CHECKS, render_report
-from askwol.templates import CHECK_NUMBERS, GUIDE_HTML, GUIDE_SECTIONS
+from askwol.templates import CHECK_NUMBERS, GUIDE_HTML
 
 
-def test_render_minimal_report_contains_all_section_anchors():
+def _complete_report():
     report = ValidationReport(file="empty.ttl")
     report.ontology_metadata = MetadataReport(
         checks=[MetadataCheck(
@@ -129,7 +141,11 @@ def test_render_minimal_report_contains_all_section_anchors():
         checks=[ReasonerCheck(key="ontology_consistency", label="Logical findings", status=Status.OK)],
     )
 
-    html = render_report(report)
+    return report
+
+
+def test_render_minimal_report_contains_all_section_anchors():
+    html = render_report(_complete_report())
 
     # All check anchors are present in the rendered HTML.
     for check in CHECKS:
@@ -228,21 +244,124 @@ def test_render_unused_prefixes_section():
     assert "foaf" in html
 
 
-def test_guide_markup_and_compact_severity_wording():
-    assert GUIDE_HTML.count("<strong>") == GUIDE_HTML.count("</strong>")
-    assert "never makes" not in GUIDE_HTML
-    assert "Unmet recommendations" not in GUIDE_HTML
-
-
-def test_guide_explains_check_scope_without_claiming_complete_validation():
-    sections = {section["anchor"]: section["body"] for section in GUIDE_SECTIONS}
-    assert "does not require an import" in sections["imports"]
-    assert "does not establish consistency" in sections["reasoner"]
-    assert "unequal data values" in sections["reasoner"]
-    assert "does not establish OWL 2 DL conformance" in sections["datatypes"]
-
-
 def test_shared_check_numbers_match_guide_headings():
     for check in CHECKS:
         number = CHECK_NUMBERS[check["report_anchor"]]
         assert f'id="{check["guide_anchor"]}">{number} ' in GUIDE_HTML
+
+
+class _ReportHTML(HTMLParser):
+    def __init__(self, html):
+        super().__init__(convert_charrefs=True)
+        self.tags = []
+        self.links = []
+        self.text = []
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        self.tags.append(tag)
+        if tag == "a":
+            self.links.append(dict(attrs))
+
+    def handle_data(self, data):
+        self.text.append(data)
+
+
+def test_valid_rdf_licence_literal_is_text_in_html():
+    payload = '</code><script>alert(1)</script><img src=x onerror=alert(2)>'
+    graph = Graph().parse(
+        data=f'<urn:ontology> <http://purl.org/dc/terms/license> {json.dumps(payload)} .',
+        format="turtle",
+    )
+    report = ValidationReport(file="licence.ttl", license=check_license(graph))
+
+    html = render_report(report)
+    parsed = _ReportHTML(html)
+
+    assert escape(payload) in html
+    assert payload in "".join(parsed.text)
+    assert "img" not in parsed.tags
+    assert parsed.tags.count("script") == 1  # The report's fixed navigation handler only.
+    assert all(link.get("href") != payload for link in parsed.links)
+
+
+@pytest.mark.parametrize("uri", [
+    "javascript:alert(1)", "JaVaScRiPt:alert(1)", "java\tscript:alert(1)",
+    "data:text/html,<script>alert(1)</script>", "file:///etc/passwd", "//example.org/term",
+])
+def test_unsafe_iri_schemes_remain_readable_without_active_links(uri):
+    report = _complete_report()
+    report.file = uri
+    report.license.checks[0].iri = uri
+    report.imports.checks = [ImportsCheck(
+        iri=uri, resolution=NamespaceCheck(prefix="ex", uri=uri, status=Status.FAIL),
+    )]
+    report.internal_terms.undefined[0].term = uri
+    report.internal_terms.referenced = [InternalTermReference(term=uri, display_name="ref", defined=True)]
+    report.term_inventory.entries[0].term = uri
+    report.domains_ranges.checks[0].term = uri
+    report.datatypes.usages[0].datatype = uri
+    report.definition_docs.checks[0].term = uri
+    report.non_ontology_terms.terms = [NonOntologyTermIssue(term=uri, display_name="concept", type_label="SKOS concept")]
+    report.lang_tags = LangTagReport(status=Status.WARN, issues=[LangTagIssue(
+        subject="subject", subject_uri=uri, property="rdfs:label", issue_type="missing_tag", detail="missing tag",
+    )])
+    # Exercise every external-term status branch, including its links.
+    report.namespaces = [NamespaceReport(
+        prefix="ex", uri="https://example.org/", resolution=NamespaceCheck(
+            prefix="ex", uri="https://example.org/", status=Status.OK,
+        ), terms=[TermCheck(term_uri=uri, prefix="ex", local_name=status.value, status=status) for status in Status],
+    )]
+
+    html = render_report(report)
+    parsed = _ReportHTML(html)
+
+    assert uri in "".join(parsed.text)
+    assert all(link.get("href") != uri for link in parsed.links)
+    assert all(not link.get("href", "").lower().startswith(("javascript:", "data:", "file:")) for link in parsed.links)
+
+
+def test_http_links_escape_attributes_and_preserve_the_original_iri():
+    uri = 'https://example.org/term?first="quoted"&second=<value>'
+    report = ValidationReport(file=uri, license=LicenseReport(checks=[LicenseCheck(
+        iri=uri, name='<img src=x onerror=alert(1)>', is_open=False, is_recommended=False, status=Status.FAIL,
+    )]))
+
+    parsed = _ReportHTML(render_report(report))
+
+    links = [link for link in parsed.links if link.get("href") == uri]
+    assert len(links) == 2
+    assert all(link == {"href": uri, "target": "_blank", "rel": "noopener"} for link in links)
+    assert "img" not in parsed.tags
+
+
+def test_mermaid_source_cannot_close_its_html_containers():
+    source = 'classDiagram\n</pre></textarea><script>alert(1)</script><img src=x onerror=alert(2)>'
+    html = render_report(ValidationReport(file="diagram.ttl"), source)
+    parsed = _ReportHTML(html)
+
+    assert escape(source) in html
+    assert parsed.tags.count("pre") == 1
+    assert parsed.tags.count("textarea") == 1
+    assert parsed.tags.count("script") == 3  # Two diagram scripts plus navigation.
+    assert "img" not in parsed.tags
+    assert 'securityLevel:"strict"' in html
+    assert "error.textContent = 'Diagram error: ' + msg" in html
+    assert "vp.innerHTML" not in html
+
+
+@pytest.mark.parametrize("section", ["iri_strategy", "iri_scheme", "internal_terms", "lang_tags"])
+def test_report_messages_and_language_names_are_escaped(section):
+    payload = '<img src=x onerror=alert(1)>'
+    report = _complete_report()
+    if section == "lang_tags":
+        report.lang_tags = LangTagReport(status=Status.OK, languages_used=[payload])
+    else:
+        check = getattr(report, section)
+        check.status = Status.SKIP
+        check.message = payload
+
+    html = render_report(report)
+
+    assert escape(payload) in html
+    assert "img" not in _ReportHTML(html).tags

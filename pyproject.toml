@@ -20,16 +20,17 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-    "rdflib>=7.3,<8",
+    "rdflib>=7.6,<8",
     "httpx>=0.27",
     "click>=8.0",
-    "fastapi>=0.110",
+    "fastapi>=0.115.7",
+    "starlette>=0.44.0",
     "uvicorn[standard]>=0.29",
     "pydantic>=2.0",
     "rich>=13.0",
     "python-multipart>=0.0.9",
     "pyshacl==0.40.0",
-    "owlrl>=7.6.1,<8",
+    "owlrl>=7.6.2,<8",
     "defusedxml>=0.7.1",
 ]
 
@@ -37,7 +38,7 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
-    "respx>=0.21",
+    "respx>=0.22",
 ]
 
 [project.scripts]

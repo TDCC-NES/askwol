@@ -9,6 +9,8 @@ from pathlib import Path
 from rdflib import Graph, URIRef, OWL, RDF
 from rdflib.namespace import DCTERMS
 
+from askwol.rdf_io import load_rdf_source
+
 
 @dataclass
 class ParsedOntology:
@@ -23,7 +25,7 @@ class ParsedOntology:
     declared_prefixes: dict[str, str] = field(default_factory=dict)
 
 
-def parse_ontology(source: str | Path, base_uri: str | None = None) -> ParsedOntology:
+def parse_ontology(source: str | Path, base_uri: str | None = None, *, allow_network: bool = True) -> ParsedOntology:
     """Parse an ontology file and extract its structure.
 
     Args:
@@ -45,7 +47,7 @@ def parse_ontology(source: str | Path, base_uri: str | None = None) -> ParsedOnt
     # Capture rdflib's built-in prefixes before parsing
     builtin_prefixes = {str(pfx) for pfx, _ in g.namespaces()}
 
-    g.parse(str(source), publicID=base_uri)
+    load_rdf_source(g, source, base_uri=base_uri, allow_network=allow_network)
 
     # Build a lookup of ALL registered prefixes (including rdflib built-ins)
     all_prefixes: dict[str, str] = {
@@ -126,8 +128,14 @@ def _bucket_uri(uri: str, result: ParsedOntology, all_prefixes: dict[str, str]) 
             break
 
     if prefix is None:
+        prefix = next((pfx for pfx, ns_uri in result.namespaces.items() if ns_uri == ns), None)
+    if prefix is None:
         # Unknown namespace  -  register it with an auto-generated prefix
-        prefix = f"_ns{len(result.namespaces)}"
+        index = len(result.namespaces)
+        prefix = f"_ns{index}"
+        while prefix in all_prefixes or prefix in result.namespaces:
+            index += 1
+            prefix = f"_ns{index}"
 
     # Only add namespace to result when we actually see a term from it
     if prefix not in result.namespaces:

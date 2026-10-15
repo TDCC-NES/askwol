@@ -19,6 +19,7 @@ import pytest
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from askwol import usage, web
+from askwol import validation_runner as runner
 
 MINIMAL_TTL = (
     b"@prefix owl: <http://www.w3.org/2002/07/owl#> .\n"
@@ -41,14 +42,13 @@ _SLOW_THEN_OK_CMD = [
 
 @pytest.fixture(autouse=True)
 def _fast_polling_and_clean_state(monkeypatch):
-    monkeypatch.setattr(web, "DISCONNECT_POLL_SECONDS", 0.05)
-    monkeypatch.setattr(web, "_TEST_INPROCESS_PIPELINE", None)
+    monkeypatch.setattr(runner, "DISCONNECT_POLL_SECONDS", 0.05)
     # These tests send many requests from one address; keep them out of the
     # rate-limit budget that other test modules share.
     monkeypatch.setattr(web, "_rate_limit_buckets", {})
-    web._validation_slots_in_use = 0
+    runner._validation_slots_in_use = 0
     yield
-    web._validation_slots_in_use = 0
+    runner._validation_slots_in_use = 0
 
 
 @pytest.fixture
@@ -62,7 +62,7 @@ def spawned(monkeypatch) -> list[asyncio.subprocess.Process]:
         procs.append(proc)
         return proc
 
-    monkeypatch.setattr(web.asyncio, "create_subprocess_exec", _capture)
+    monkeypatch.setattr(runner.asyncio, "create_subprocess_exec", _capture)
     return procs
 
 
@@ -144,7 +144,7 @@ async def test_work_result_is_returned_while_the_client_stays():
         await asyncio.sleep(0.2)  # several polls
         return "report"
 
-    assert await web._unless_client_disconnects(_FakeRequest(), work()) == "report"
+    assert await runner.unless_client_disconnects(_FakeRequest(), work()) == "report"
 
 
 @pytest.mark.asyncio
@@ -162,7 +162,7 @@ async def test_work_is_cancelled_and_cleaned_up_when_the_client_leaves():
             cleaned_up.append(True)
             raise
 
-    waiting = asyncio.create_task(web._unless_client_disconnects(request, work()))
+    waiting = asyncio.create_task(runner.unless_client_disconnects(request, work()))
     await started.wait()
     request.gone = True
     with pytest.raises(web.ClientDisconnectedError):
@@ -176,7 +176,7 @@ async def test_errors_from_the_work_propagate_unchanged():
         raise ValueError("boom")
 
     with pytest.raises(ValueError, match="boom"):
-        await web._unless_client_disconnects(_FakeRequest(), work())
+        await runner.unless_client_disconnects(_FakeRequest(), work())
 
 
 @pytest.mark.asyncio
@@ -188,7 +188,7 @@ async def test_a_broken_disconnect_check_does_not_cancel_valid_work():
         await asyncio.sleep(0.2)
         return "report"
 
-    assert await web._unless_client_disconnects(request, work()) == "report"
+    assert await runner.unless_client_disconnects(request, work()) == "report"
 
 
 @pytest.mark.asyncio
@@ -204,7 +204,7 @@ async def test_cancelling_the_request_cancels_the_work():
             cancelled.append(True)
             raise
 
-    waiting = asyncio.create_task(web._unless_client_disconnects(_FakeRequest(), work()))
+    waiting = asyncio.create_task(runner.unless_client_disconnects(_FakeRequest(), work()))
     await started.wait()
     waiting.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -217,20 +217,20 @@ async def test_cancelling_the_request_cancels_the_work():
 
 @pytest.mark.asyncio
 async def test_cancelled_validation_stops_its_worker_and_frees_its_slot(monkeypatch, tmp_path, spawned):
-    monkeypatch.setattr(web, "WORKER_CMD", _SLEEP_FOREVER_CMD)
+    monkeypatch.setattr(runner, "WORKER_CMD", _SLEEP_FOREVER_CMD)
     ontology = tmp_path / "x.ttl"
     ontology.write_bytes(MINIMAL_TTL)
 
     task = asyncio.create_task(web.run_isolated_validation(ontology, "x.ttl", kind="validate"))
     await _wait_until(lambda: spawned)
-    assert web._validation_slots_in_use == 1
+    assert runner._validation_slots_in_use == 1
 
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
 
     assert spawned[0].returncode is not None, "the worker must be stopped, not left running"
-    assert web._validation_slots_in_use == 0
+    assert runner._validation_slots_in_use == 0
     assert _job_outcomes() == ["cancelled"]
 
 
@@ -240,8 +240,8 @@ async def test_cancelled_validation_stops_its_worker_and_frees_its_slot(monkeypa
 @pytest.mark.asyncio
 @pytest.mark.parametrize("path", ["/validate", "/api/validate"])
 async def test_disconnect_stops_an_upload_validation_and_records_nothing(monkeypatch, spawned, path):
-    monkeypatch.setattr(web, "WORKER_CMD", _SLEEP_FOREVER_CMD)
-    monkeypatch.setattr(web, "VALIDATION_TIMEOUT", 60.0)  # a hang would trip the wait_for below instead
+    monkeypatch.setattr(runner, "WORKER_CMD", _SLEEP_FOREVER_CMD)
+    monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 60.0)  # a hang would trip the wait_for below instead
     client = _Client.upload(path)
 
     running = client.start()
@@ -251,7 +251,7 @@ async def test_disconnect_stops_an_upload_validation_and_records_nothing(monkeyp
 
     assert client.status == 499
     assert spawned[0].returncode is not None
-    assert web._validation_slots_in_use == 0
+    assert runner._validation_slots_in_use == 0
     assert usage.events_count() == 0
     assert _job_outcomes() == ["cancelled"]
 
@@ -284,7 +284,7 @@ async def test_disconnect_stops_a_url_validation_and_records_nothing(monkeypatch
 
 @pytest.mark.asyncio
 async def test_a_client_that_stays_connected_is_served_and_counted(monkeypatch):
-    monkeypatch.setattr(web, "WORKER_CMD", _SLOW_THEN_OK_CMD)
+    monkeypatch.setattr(runner, "WORKER_CMD", _SLOW_THEN_OK_CMD)
     client = _Client.upload("/validate")
 
     await asyncio.wait_for(client.start(), timeout=10)
@@ -296,8 +296,8 @@ async def test_a_client_that_stays_connected_is_served_and_counted(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_a_cancelled_validation_does_not_leave_the_next_one_waiting_for_a_slot(monkeypatch, spawned):
-    monkeypatch.setattr(web, "WORKER_CMD", _SLEEP_FOREVER_CMD)
-    monkeypatch.setattr(web, "MAX_CONCURRENT_VALIDATIONS", 1)
+    monkeypatch.setattr(runner, "WORKER_CMD", _SLEEP_FOREVER_CMD)
+    monkeypatch.setattr(runner, "MAX_CONCURRENT_VALIDATIONS", 1)
 
     first = _Client.upload("/validate")
     first_running = first.start()
@@ -319,3 +319,23 @@ def test_no_base_http_middleware_hides_disconnects_from_the_routes():
     request.is_disconnected() from ever seeing the client leave, which would
     silently turn all of the above off."""
     assert not [m for m in web.app.user_middleware if m.cls is BaseHTTPMiddleware]
+
+async def test_finished_work_reaps_watcher_even_when_probe_swallows_cancellation():
+    probing = asyncio.Event()
+
+    class Request:
+        async def is_disconnected(self):
+            if probing.is_set():
+                await asyncio.sleep(10)
+                return False
+            probing.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                return False
+
+    async def work():
+        await probing.wait()
+        return "report"
+
+    assert await asyncio.wait_for(runner.unless_client_disconnects(Request(), work()), timeout=1) == "report"

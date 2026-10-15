@@ -2,9 +2,9 @@ import pytest
 from rdflib import Graph, Literal, Namespace
 from rdflib.namespace import OWL, RDF, RDFS
 
+from askwol.definition_docs import check_definition_documentation
 from askwol.models import Status, ValidationReport
 from askwol.report import report_as_markdown
-from askwol.definition_docs import check_definition_documentation
 
 EX = Namespace("https://example.org/ont#")
 EXT = Namespace("http://xmlns.com/foaf/0.1/")

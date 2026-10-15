@@ -5,8 +5,8 @@ shapes use custom SPARQL targets and SPARQL-based constraints) and turns the
 SHACL validation report graph into a small list of `ShaclResult` objects that
 each check module folds into its own report model.
 
-Also patches `rdflib.Graph.query` to cache prepared SPARQL queries (see
-`_cached_query` below) - profiling showed pyshacl's SPARQL-based targets and
+An owned graph subclass caches prepared SPARQL queries during validation -
+profiling showed pyshacl's SPARQL-based targets and
 constraints spend ~90% of their time re-parsing the same static query text
 from the shapes files on every focus node, not evaluating it.
 """
@@ -14,7 +14,8 @@ from the shapes files on every focus node, not evaluating it.
 from __future__ import annotations
 
 import functools
-import weakref
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,54 +28,36 @@ from askwol.models import Status
 from askwol.severity import Severity
 SH = Namespace("http://www.w3.org/ns/shacl#")
 
-_orig_graph_query = Graph.query
-
-
 @functools.lru_cache(maxsize=256)
 def _prepare(query_text: str, init_ns_items: tuple | None, base: str | None):
     init_ns = dict(init_ns_items) if init_ns_items else None
     return prepareQuery(query_text, initNs=init_ns, base=base)
 
 
-def _cached_query(
-    self,
-    query_object,
-    processor="sparql",
-    result="sparql",
-    initNs=None,
-    initBindings=None,
-    use_store_provided=True,
-    **kwargs,
-):
-    """Reuse a prepared SPARQL query instead of re-parsing it on every call.
+class _CachedQueryGraph(Graph):
+    """Cache only queries on askwol's own in-memory validation copy."""
 
-    Mirrors ``rdflib.Graph.query``'s exact positional signature - pyshacl
-    (0.40+) calls it positionally via its ``DataGraph`` wrapper, not just
-    by keyword, so this must accept the same parameters in the same order
-    or callers passing them positionally break.
-
-    pyshacl calls ``graph.query(text, initBindings=...)`` once per focus
-    node, with the same small set of query templates from the static shapes
-    files each time - only the focus node changes, via initBindings. The
-    query TEXT is a fixed, bounded set (it comes from our own shape files,
-    never from ontology data), so caching prepared queries by
-    (text, initNs, base) is safe and removes the repeat parse cost entirely;
-    results are unaffected since initBindings/the data graph still flow
-    through untouched.
-    """
-    if isinstance(query_object, str):
-        base = kwargs.get("base")
-        init_ns_items = tuple(sorted(initNs.items())) if initNs else None
-        query_object = _prepare(query_object, init_ns_items, base)
-        initNs = None
-    return _orig_graph_query(
-        self, query_object, processor=processor, result=result,
-        initNs=initNs, initBindings=initBindings,
-        use_store_provided=use_store_provided, **kwargs,
-    )
+    def query(
+        self, query_object, processor="sparql", result="sparql", initNs=None,
+        initBindings=None, use_store_provided=True, **kwargs,
+    ):
+        if isinstance(query_object, str) and processor == "sparql":
+            namespaces = initNs or dict(self.namespaces())
+            query_object = _prepare(query_object, tuple(sorted(namespaces.items())), kwargs.get("base"))
+        return super().query(
+            query_object, processor, result, initNs, initBindings, use_store_provided, **kwargs,
+        )
 
 
-Graph.query = _cached_query
+def _validation_graph(data_graph: Graph) -> _CachedQueryGraph:
+    graph = _CachedQueryGraph()
+    for prefix, namespace in data_graph.namespaces():
+        graph.bind(prefix, namespace, override=True, replace=True)
+    for triple in data_graph:
+        graph.add(triple)
+    return graph
+
+
 SHAPES_DIR = Path(__file__).resolve().parent / "shapes"
 
 
@@ -123,16 +106,18 @@ class ShaclResult:
         return _SEVERITY_STATUS[self.severity]
 
 
-# Per-data-graph cache of run_shapes() results, keyed by shapes_file. Some
-# check modules validate the same shapes file twice against the same graph
-# for different shapes within it (e.g. term_inventory.ttl holds both naming
-# and domain-and-range shapes, checked by two separate public functions) -
-# without this, that reruns the full pyshacl.validate() pipeline twice.
-# WeakKeyDictionary keys on the graph's identity and auto-evicts the entry
-# once the graph is garbage collected (each validation request builds its
-# own fresh graph), so there is no cross-request leakage or manual cache
-# management needed.
-_shapes_results_cache: "weakref.WeakKeyDictionary[Graph, dict[str, list[ShaclResult]]]" = weakref.WeakKeyDictionary()
+# The pipeline's graph is immutable during its local checks. Independent
+# public checker calls may modify/reuse a graph, so they must not share results.
+_shapes_results_cache: ContextVar[dict | None] = ContextVar("shapes_results_cache", default=None)
+
+
+@contextmanager
+def shape_result_cache():
+    token = _shapes_results_cache.set({})
+    try:
+        yield
+    finally:
+        _shapes_results_cache.reset(token)
 
 
 def run_shapes(data_graph: Graph, shapes_file: str) -> list[ShaclResult]:
@@ -141,18 +126,20 @@ def run_shapes(data_graph: Graph, shapes_file: str) -> list[ShaclResult]:
     Returns every `sh:ValidationResult` (any severity); callers decide how to
     fold each one into their own report model.
     """
-    cached_for_graph = _shapes_results_cache.get(data_graph)
-    if cached_for_graph is not None and shapes_file in cached_for_graph:
-        return list(cached_for_graph[shapes_file])
+    cache = _shapes_results_cache.get()
+    cache_key = (data_graph, shapes_file)
+    if cache is not None and cache_key in cache:
+        return list(cache[cache_key])
 
     shapes_graph = _load_shapes_graph(shapes_file)
 
     _conforms, results_graph, _text = validate(
-        data_graph,
+        _validation_graph(data_graph),
         shacl_graph=shapes_graph,
         advanced=True,
         inference=None,
         allow_warnings=True,
+        inplace=True,
     )
 
     results: list[ShaclResult] = []
@@ -182,7 +169,8 @@ def run_shapes(data_graph: Graph, shapes_file: str) -> list[ShaclResult]:
                 message=str(message) if message is not None else "",
             )
         )
-    _shapes_results_cache.setdefault(data_graph, {})[shapes_file] = results
+    if cache is not None:
+        cache[cache_key] = results
     return list(results)
 
 
@@ -217,4 +205,4 @@ def run_target(data_graph: Graph, shapes_file: str) -> set[str]:
     select = shapes_graph.value(target, SH.select)
     if select is None:
         return set()
-    return {str(row[0]) for row in data_graph.query(str(select)) if row[0] is not None}
+    return {str(row[0]) for row in _validation_graph(data_graph).query(str(select)) if row[0] is not None}

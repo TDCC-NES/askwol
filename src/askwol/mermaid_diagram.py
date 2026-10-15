@@ -154,8 +154,5 @@ def build_mermaid(graph: Graph, namespaces: dict[str, str]) -> str:
             d_mid = _mermaid_id(d_label)
             lines.append(f"    {d_mid} : {_mermaid_text(prop_name)} {rng_label}")
 
-    if len(lines) <= 1:
-        return ""
-
     return "\n".join(lines)
 

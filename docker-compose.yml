@@ -14,7 +14,8 @@ services:
       # Path for the usage-tracking SQLite DB (persisted via the volume below).
       - ASKWOL_USAGE_DB=/data/usage.db
       # Set this to a long random string to enable the /stats dashboard.
-      # Example: ASKWOL_STATS_TOKEN=$(openssl rand -hex 32) in your .env file.
+      # Run `openssl rand -hex 32`, then paste the value into .env:
+      # ASKWOL_STATS_TOKEN=YOUR_GENERATED_TOKEN
       - ASKWOL_STATS_TOKEN=${ASKWOL_STATS_TOKEN:-}
       # When served behind a reverse proxy under a sub-path, set this to the
       # prefix (e.g. /askwol) so nav links and API docs resolve correctly.
@@ -35,8 +36,8 @@ services:
       # - ASKWOL_MAX_IMPORTS=200
     volumes:
       # Persist usage.db across container restarts/rebuilds.
-      # The :z suffix relabels the bind mount for SELinux (Redhat/Fedora),
-      # allowing the non-root container user to read/write the volume.
+      # The :z suffix supplies a shared SELinux label (Redhat/Fedora).
+      # The directory must also be writable by the container's UID 1000.
       - ./data:/data:z
     # Use the production-style command by default (1 worker, no reload).
     # For development, copy docker-compose.override.yml.example to

@@ -6,6 +6,7 @@ import respx
 from rdflib import Graph, Literal, URIRef
 from rdflib.namespace import OWL, RDF
 
+from askwol import network
 from askwol.cache import OntologyCache
 from askwol.imports_check import check_imports
 from askwol.models import Status
@@ -16,6 +17,11 @@ SAMPLE_TURTLE = b"""
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 <http://example.org/imported#Thing> a owl:Class .
 """
+
+
+@pytest.fixture(autouse=True)
+def public_dns(monkeypatch):
+    monkeypatch.setattr(network.socket, "getaddrinfo", lambda *_args: [(2, 1, 6, "", ("93.184.216.34", 0))])
 
 
 @pytest.mark.asyncio
@@ -61,6 +67,7 @@ async def test_imports_fail_when_declared_import_is_broken():
     assert report.status == Status.FAIL
     assert len(report.broken) == 1
     assert report.broken[0].iri == "http://example.org/missing#"
+    assert report.broken[0].resolution.http_status == 404
 
 
 @pytest.mark.asyncio

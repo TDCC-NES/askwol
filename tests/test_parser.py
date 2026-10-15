@@ -196,3 +196,15 @@ def test_rdfxml_external_entity_is_still_blocked(tmp_path):
         parse_ontology(path)
 
 
+def test_undeclared_namespace_is_registered_once(tmp_path):
+    path = _write(tmp_path, """
+<https://example.org/unknown#One> a <http://www.w3.org/2002/07/owl#Class> .
+<https://example.org/unknown#Two> a <http://www.w3.org/2002/07/owl#Class> .
+<https://example.org/unknown#Three> a <http://www.w3.org/2002/07/owl#Class> .
+""")
+    parsed = parse_ontology(path)
+    prefixes = [pfx for pfx, uri in parsed.namespaces.items() if uri == "https://example.org/unknown#"]
+    assert len(prefixes) == 1
+    assert parsed.terms_by_namespace[prefixes[0]] == {"One", "Two", "Three"}
+
+

@@ -28,6 +28,7 @@ from askwol.non_ontology_terms import check_non_ontology_terms
 from askwol.parser import parse_ontology
 from askwol.reasoner_checks import run_reasoner_checks
 from askwol.resolver import DEFAULT_TIMEOUT, resolve_all_namespaces
+from askwol.shacl_runner import shape_result_cache
 from askwol.term_inventory import check_datatypes, check_domains_ranges, check_term_inventory
 from askwol.term_validator import validate_terms
 
@@ -104,7 +105,7 @@ async def run_full_validation(
 
     phase("parsing")
     try:
-        parsed = parse_ontology(source, base_uri=base_uri)
+        parsed = parse_ontology(source, base_uri=base_uri, allow_network=not skip_resolution)
     except Exception as exc:
         report.parse_errors.append(str(exc))
         return report, ""
@@ -123,17 +124,18 @@ async def run_full_validation(
             report.unused_prefixes.append(UnusedPrefix(prefix=pfx, uri=uri))
 
     phase("checks")
-    report.lang_tags = check_lang_tags(parsed.graph, parsed.namespaces)
-    report.ontology_metadata = validate_ontology_metadata(parsed.graph)
-    report.license = check_license(parsed.graph)
-    report.definition_docs = check_definition_documentation(parsed.graph)
-    report.internal_terms = check_internal_terms(parsed.graph)
-    report.term_inventory = check_term_inventory(parsed.graph)
-    report.domains_ranges = check_domains_ranges(parsed.graph)
-    report.datatypes = check_datatypes(parsed.graph)
-    report.iri_strategy = check_iri_strategy(parsed.graph)
-    report.iri_scheme = check_iri_scheme(parsed.graph, parsed.namespaces)
-    report.non_ontology_terms = check_non_ontology_terms(parsed.graph)
+    with shape_result_cache():
+        report.lang_tags = check_lang_tags(parsed.graph, parsed.namespaces)
+        report.ontology_metadata = validate_ontology_metadata(parsed.graph)
+        report.license = check_license(parsed.graph)
+        report.definition_docs = check_definition_documentation(parsed.graph)
+        report.internal_terms = check_internal_terms(parsed.graph)
+        report.term_inventory = check_term_inventory(parsed.graph)
+        report.domains_ranges = check_domains_ranges(parsed.graph)
+        report.datatypes = check_datatypes(parsed.graph)
+        report.iri_strategy = check_iri_strategy(parsed.graph)
+        report.iri_scheme = check_iri_scheme(parsed.graph, parsed.namespaces)
+        report.non_ontology_terms = check_non_ontology_terms(parsed.graph)
 
     phase("reasoner")
     report.reasoner = run_reasoner_checks(parsed.graph)

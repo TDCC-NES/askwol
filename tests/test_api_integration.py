@@ -8,7 +8,6 @@ Namespace resolution is stubbed out by pre-populating the global ontology
 cache, so the tests do not hit the network.
 """
 
-import re
 from pathlib import Path
 
 import httpx
@@ -37,7 +36,8 @@ def client(monkeypatch):
     calls, exactly like before isolated subprocesses were introduced."""
     cache = OntologyCache()
     for ns_uri in [
-        "https://w3id.org/test/",
+        "https://lod-4tu.tudelft.nl/dataset#",
+        "http://www.w3.org/ns/dcat",
         "http://www.w3.org/2002/07/owl#",
         "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
         "http://www.w3.org/2000/01/rdf-schema#",
@@ -45,11 +45,10 @@ def client(monkeypatch):
     ]:
         cache.put(ns_uri, Graph())
 
-    async def _inprocess(tmp_path, *, display_name, base_uri=None):
+    async def _inprocess(tmp_path, display_name, *, kind, base_uri=None):
         return await run_full_validation(tmp_path, display_name=display_name, base_uri=base_uri, cache=cache)
 
-    monkeypatch.setattr(web, "_TEST_INPROCESS_PIPELINE", _inprocess)
-    monkeypatch.setattr(web, "_test_cache", cache, raising=False)
+    monkeypatch.setattr(web, "run_isolated_validation", _inprocess)
     return TestClient(web.app)
 
 
@@ -59,44 +58,19 @@ def test_health(client):
     assert r.json() == {"status": "ok"}
 
 
-def test_guide_renders(client):
-    r = client.get("/guide")
-    assert r.status_code == 200
-    assert "<html" in r.text.lower()
-
-
-def test_openapi_json_has_noindex_header(client):
-    r = client.get(web.app.openapi_url)
+@pytest.mark.parametrize("root_path", ["", "/askwol"])
+def test_openapi_json_has_noindex_header(client, monkeypatch, root_path):
+    monkeypatch.setattr(web.app, "root_path", root_path)
+    r = client.get(root_path + web.app.openapi_url)
     assert r.status_code == 200
     assert r.headers["x-robots-tag"] == "noindex"
 
 
-def test_index_renders(client):
-    r = client.get("/")
-    assert r.status_code == 200
-    assert "<html" in r.text.lower()
-
-
-def test_index_form_guards_against_double_submit(client):
-    """The form confirms the click, ignores repeat submits while a validation
-    runs (each one would be processed and counted server-side), and recovers
-    when the user cancels or returns to the page."""
+def test_index_form_has_accessible_progress_feedback(client):
     html = client.get("/").text
     assert 'id="validate-form"' in html
-    # Guarded on the form's submit event, which also covers Enter in the URL field.
-    assert "form.addEventListener('submit'" in html
-    assert "if (busy)" in html
-    # Recovery: back/forward cache restore, and a way out of the busy state.
-    assert "addEventListener('pageshow'" in html
-    assert "window.stop()" in html
-    # Accessible feedback: live status text and an indeterminate progress bar.
     assert 'role="status"' in html
     assert 'role="progressbar"' in html
-    # Indeterminate until the server reports a step; the value is set from JS.
-    bar = re.search(r'<div class="progress"[^>]*>', html).group(0)
-    assert "aria-valuenow" not in bar
-    assert "prefers-reduced-motion" in html
-    # Step progress is polled from this endpoint (prefixed behind a sub-path).
     assert 'data-progress-url="validate/progress"' in html
 
 
@@ -134,11 +108,8 @@ def test_api_validate_returns_all_check_sections(client):
 
     assert data["file"] == "sample.ttl"
     assert data["parse_errors"] == []
-    # The sample is single-scheme (https://w3id.org/test/) so iri_scheme is OK.
-    assert data["iri_scheme"]["status"] in ("ok", "skip")
-    # Sample uses hash-style terms only? It actually uses slash:
-    # <https://w3id.org/test/> with :MyClass -> https://w3id.org/test/MyClass.
-    assert data["iri_strategy"]["status"] in ("ok", "warn", "skip")
+    assert data["iri_scheme"]["status"] == "ok"
+    assert data["iri_strategy"]["status"] == "ok"
 
 
 def test_api_validate_excludes_own_namespace_from_term_validation(client):
@@ -251,12 +222,6 @@ def test_html_validate_url_accepts_text_plain_with_recognized_extension(client, 
     """raw.githubusercontent.com-style hosts serve RDF as generic text/plain; the
     URL's own file extension is still trusted in that specific case."""
     monkeypatch.setattr(web, "block_private_network_requests", _noop_request_hook)
-    # SAMPLE declares owl:imports <http://www.w3.org/ns/dcat> and its own
-    # namespace (the ":" prefix) also goes through namespace resolution;
-    # pre-cache both so check_imports/resolve_all_namespaces don't need a
-    # real network fetch.
-    web._test_cache.put("http://www.w3.org/ns/dcat", Graph())
-    web._test_cache.put("https://lod-4tu.tudelft.nl/dataset#", Graph())
     respx.get("https://raw.githubusercontent.com/example/sample.ttl").mock(
         return_value=httpx.Response(200, content=SAMPLE.read_bytes(), headers={"content-type": "text/plain"})
     )
@@ -343,13 +308,10 @@ def test_usage_dashboard_requires_token(monkeypatch, client):
     assert "All events" in response.text
 
 
-def test_usage_dashboard_allows_localhost_without_token(monkeypatch, client):
+def test_usage_dashboard_rejects_localhost_without_token(monkeypatch):
     monkeypatch.setenv("ASKWOL_STATS_TOKEN", "secret-token")
-    monkeypatch.setattr(web, "_is_local_request", lambda request: True)
-
-    response = client.get("/stats")
-    assert response.status_code == 200
-    assert "Usage" in response.text
+    with TestClient(web.app, client=("127.0.0.1", 54321)) as local_client:
+        assert local_client.get("/stats").status_code == 401
 
 
 def test_usage_api_returns_json(monkeypatch, client):

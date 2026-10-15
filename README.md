@@ -1,4 +1,4 @@
-# askwol 🦉
+# askwol
 
 Check OWL ontologies during modelling and before publication. Get a report on namespaces, terms, metadata, documentation, and selected logical issues, plus an interactive class diagram in the web app.
 
@@ -161,7 +161,7 @@ A client disconnect cancels its job when the reverse proxy forwards the disconne
 
 A local SQLite database records timestamps, source URLs or filenames, HTTP statuses, durations, and IP hashes salted with a per-database secret. No cookies or third-party tracking services are used.
 
-Set `ASKWOL_STATS_TOKEN` to a long random value (generate one with `openssl rand -hex 32`) and apply it as described above. `/stats` is the HTML dashboard; `/api/stats` returns JSON. Pass `?token=YOUR_TOKEN` to authenticate; local requests can omit it once a token is configured. Totals and daily counts cover all recorded activity; average duration uses the last 30 days.
+Set `ASKWOL_STATS_TOKEN` to a long random value (generate one with `openssl rand -hex 32`) and apply it as described above. `/stats` is the HTML dashboard; `/api/stats` returns JSON. Authenticate with `?token=YOUR_TOKEN`, including on localhost. Totals and daily counts cover all recorded activity; average duration uses the last 30 days.
 
 ## Tests
 

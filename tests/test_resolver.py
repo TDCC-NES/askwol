@@ -7,7 +7,8 @@ from rdflib import Graph
 
 from askwol.cache import OntologyCache
 from askwol.models import Status
-from askwol.resolver import resolve_namespace, resolve_all_namespaces
+from askwol import network
+from askwol.resolver import resolve_all_namespaces, resolve_namespace
 
 SAMPLE_TURTLE = b"""
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -70,7 +71,8 @@ async def test_resolve_namespace_http_error():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_resolve_all_namespaces():
+async def test_resolve_all_namespaces(monkeypatch):
+    monkeypatch.setattr(network.socket, "getaddrinfo", lambda *_args: [(2, 1, 6, "", ("93.184.216.34", 0))])
     respx.get("http://example.org/a#").mock(
         return_value=httpx.Response(200, content=SAMPLE_TURTLE, headers={"content-type": "text/turtle"})
     )
@@ -98,3 +100,42 @@ async def test_resolve_uses_cache():
         result = await resolve_namespace("c", "http://example.org/cached#", client, cache)
 
     assert result.status == Status.OK
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_cached_non_rdf_response_stays_non_rdf():
+    route = respx.get("https://example.org/plain").mock(
+        return_value=httpx.Response(200, text="This is not RDF.", headers={"content-type": "text/plain"})
+    )
+    cache = OntologyCache()
+    async with httpx.AsyncClient() as client:
+        first = await resolve_namespace("ex", "https://example.org/plain", client, cache)
+        second = await resolve_namespace("ex", "https://example.org/plain", client, cache)
+    assert first.is_valid_rdf is False
+    assert second.is_valid_rdf is False
+    assert cache.get("https://example.org/plain") is None
+    assert route.call_count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_redirected_rdf_and_discovered_links_use_final_document_base():
+    original = "https://example.org/vocabulary"
+    respx.get(original).mock(return_value=httpx.Response(302, headers={"location": "/docs/index.html"}))
+    respx.get("https://example.org/docs/index.html").mock(return_value=httpx.Response(
+        200, text='<html><link rel="alternate" type="text/turtle" href="vocab.ttl"></html>',
+        headers={"content-type": "text/html"},
+    ))
+    respx.get("https://example.org/docs/vocab.ttl").mock(return_value=httpx.Response(
+        302, headers={"location": "/rdf/vocab.ttl"},
+    ))
+    respx.get("https://example.org/rdf/vocab.ttl").mock(return_value=httpx.Response(
+        200, content=b'<#Term> a <http://www.w3.org/2002/07/owl#Class> .',
+        headers={"content-type": "text/turtle"},
+    ))
+    cache = OntologyCache()
+    async with httpx.AsyncClient() as client:
+        result = await resolve_namespace("ex", original, client, cache)
+    assert result.is_valid_rdf
+    assert str(next(cache.get(original).subjects())) == "https://example.org/rdf/vocab.ttl#Term"

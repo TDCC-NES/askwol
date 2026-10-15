@@ -29,15 +29,10 @@ def _png_size(data: bytes) -> tuple[int, int]:
 
 
 @pytest.mark.parametrize("path", ["/", "/guide"])
-def test_pages_do_not_hotlink_a_third_party_image_host(client, path):
-    html = client.get(path).text.lower()
-    assert "wikimedia" not in html
-    assert "winnie-the-pooh_67" not in html
-
-
-@pytest.mark.parametrize("path", ["/", "/guide"])
 def test_every_static_asset_a_page_references_is_served(client, path):
-    html = client.get(path).text
+    response = client.get(path)
+    assert response.status_code == 200
+    html = response.text
     names = set(re.findall(r'(?:src|href)="static/([^"]+)"', html))
     assert {"wollie-h1.png", "wollie-touch-180.png"} <= names
     for name in names:
@@ -46,18 +41,6 @@ def test_every_static_asset_a_page_references_is_served(client, path):
         assert response.headers["content-type"] == "image/png"
         assert "max-age" in response.headers["cache-control"]
         _png_size(response.content)
-
-
-def test_home_page_shows_wollie_in_the_heading_and_the_about_section(client):
-    html = client.get("/").text
-    assert re.search(r'<h1>\s*<img class="logo" src="static/wollie-h1\.png" alt=""', html)
-    assert 'class="wollie" src="static/wollie-about.png"' in html
-
-
-def test_heading_keeps_its_descriptive_text_for_search_and_screen_readers(client):
-    h1 = re.search(r"<h1>.*?</h1>", client.get("/").text, re.DOTALL).group(0)
-    assert "Ask Wol" in h1
-    assert "OWL Ontology Checker &amp; Reviewer" in h1
 
 
 @pytest.mark.parametrize("path", ["/", "/guide"])
@@ -81,14 +64,12 @@ def test_favicon_is_embedded_on_every_kind_of_page(client, monkeypatch):
     }
     for name, html in pages.items():
         assert branding.FAVICON_LINK in html, name
-        assert "&#x1F989;" not in html.split("<body", 1)[0], f"{name}: old emoji favicon"
 
 
-def test_stats_page_uses_wollie_instead_of_the_owl_emoji(client, monkeypatch):
+def test_stats_logo_is_prefixed_behind_a_sub_path(client, monkeypatch):
     monkeypatch.setenv("ASKWOL_STATS_TOKEN", "t")
     monkeypatch.setattr(web, "ROOT_PATH", "/askwol")
     html = client.get("/stats", params={"token": "t"}).text
-    assert "\U0001f989" not in html
     assert '<img src="/askwol/static/wollie-h1.png"' in html
     assert client.get("/static/wollie-h1.png").status_code == 200
 

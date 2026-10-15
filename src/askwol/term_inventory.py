@@ -58,9 +58,6 @@ CATEGORY_ORDER = [
     UNTYPED,
 ]
 
-# Categories the capitalisation convention applies to.
-_PROPERTY_CATEGORIES = {OBJECT_PROPERTY, DATATYPE_PROPERTY, ANNOTATION_PROPERTY, PROPERTY}
-
 _CLASS_TYPES = {OWL.Class, RDFS.Class}
 _GENERIC_PROPERTY_TYPES = {
     RDF.Property,
@@ -103,8 +100,6 @@ def _primary_category(types: set[URIRef]) -> str:
         return DATATYPE
     if types & _GENERIC_PROPERTY_TYPES:
         return PROPERTY
-    if OWL.NamedIndividual in types:
-        return NAMED_INDIVIDUAL
     if types:
         # Typed as an instance of some (non-meta) class.
         return NAMED_INDIVIDUAL

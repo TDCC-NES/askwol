@@ -1,9 +1,4 @@
-"""Pin the broken example: every check should fire on html/ontologies/broken.ttl.
-
-This is a smoke test on top of the per-module unit tests. If any single check
-ever silently stops detecting issues, this file will fail loudly because the
-example is hand-crafted to trip *every* check at once.
-"""
+"""The broken example must exercise every check through the shared pipeline."""
 
 from pathlib import Path
 
@@ -11,235 +6,78 @@ import pytest
 from rdflib import Graph
 
 from askwol.cache import OntologyCache
-from askwol.imports_check import check_imports
-from askwol.internal_terms import check_internal_terms
-from askwol.iri_scheme import check_iri_scheme
-from askwol.iri_strategy import check_iri_strategy
-from askwol.metadata_validator import validate_ontology_metadata
 from askwol.models import Status
-from askwol.parser import parse_ontology
-from askwol.reasoner_checks import run_reasoner_checks
-from askwol.non_ontology_terms import check_non_ontology_terms
-from askwol.term_inventory import (
-    check_datatypes,
-    check_domains_ranges,
-    check_term_inventory,
-)
-from askwol.term_validator import validate_terms
+from askwol.pipeline import run_full_validation
 
 BROKEN = Path(__file__).resolve().parent.parent / "html" / "ontologies" / "broken.ttl"
 
 
-@pytest.fixture(scope="module")
-def parsed():
-    return parse_ontology(BROKEN)
-
-
 @pytest.fixture
-def foaf_stub():
-    """A small stand-in FOAF graph (real terms, no MadeUpConcept).
-
-    Lets tests validate against a namespace with the same shape as the real
-    FOAF vocabulary without depending on it being reachable over the network.
-    """
-    g = Graph()
-    g.parse(
-        data="""
+def cache():
+    """Resolve the fixture's vocabularies without network access."""
+    foaf = Graph().parse(data="""
         @prefix owl: <http://www.w3.org/2002/07/owl#> .
         <http://xmlns.com/foaf/0.1/Agent> a owl:Class .
         <http://xmlns.com/foaf/0.1/Person> a owl:Class .
-        """,
-        format="turtle",
-    )
-    return g
-
-
-def test_unused_prefix_detected(parsed):
-    unused = set(parsed.declared_prefixes) - set(parsed.namespaces)
-    assert "neverused" in unused
-
-
-def test_metadata_has_core_and_additional_gaps(parsed):
-    meta = validate_ontology_metadata(parsed.graph)
-    assert any(c.tier == "core" for c in meta.missing)
-    assert any(c.tier == "additional" for c in meta.missing)
-
-
-@pytest.mark.asyncio
-async def test_imports_check_fails_on_broken_import(parsed):
-    # The declared owl:imports target is on the reserved nonexistent.invalid
-    # host (RFC 2606), so it can never resolve.
-    imp = await check_imports(parsed.graph, OntologyCache())
-    assert imp.status == Status.FAIL
-    assert len(imp.broken) == 1
-    assert imp.broken[0].iri == "http://nonexistent.invalid/broken-import/"
-
-
-def test_internal_terms_flags_undefined_predicate(parsed):
-    it = check_internal_terms(parsed.graph)
-    assert it.status == Status.FAIL
-    undefined = {i.display_name for i in it.undefined}
-    assert "hasNickname" in undefined
-
-
-def test_external_terms_flags_hijacked_foaf_term(parsed, foaf_stub):
-    # foaf:MadeUpConcept is asserted as a class in broken.ttl but is not a
-    # real FOAF term. Seed the cache with a stand-in FOAF graph so this stays
-    # network-free and deterministic.
-    assert "foaf" in parsed.terms_by_namespace
-    assert "MadeUpConcept" in parsed.terms_by_namespace["foaf"]
-
+    """, format="turtle")
     cache = OntologyCache()
-    cache.put("http://xmlns.com/foaf/0.1/", foaf_stub)
-
-    results = validate_terms(
-        "foaf", "http://xmlns.com/foaf/0.1/", parsed.terms_by_namespace["foaf"], cache,
-    )
-    by_name = {r.local_name: r for r in results}
-    assert by_name["MadeUpConcept"].status == Status.FAIL
-
-
-def test_iri_strategy_warns_on_mixed(parsed):
-    iri = check_iri_strategy(parsed.graph)
-    assert iri.status == Status.WARN
-    assert any(ns.strategy == "mixed" for ns in iri.namespaces)
+    cache.put("http://xmlns.com/foaf/0.1/", foaf)
+    for uri in (
+        "http://w3id.org/askwol/broken/",
+        "http://w3id.org/askwol/broken#",
+        "http://nonexistent.invalid/broken-import/",
+    ):
+        cache.put(uri, None, error="404 - not found")
+    return cache
 
 
-def test_iri_scheme_warns_on_mixed_host(parsed):
-    sch = check_iri_scheme(parsed.graph, parsed.namespaces)
-    assert sch.status == Status.WARN
-    hosts = {c.host for c in sch.conflicts}
-    assert "w3id.org/askwol/broken/" in hosts
-
-
-def test_reasoner_detects_inconsistency(parsed):
-    r = run_reasoner_checks(parsed.graph)
-    assert r.consistent is False
-    assert r.inconsistent_individuals, "expected Alice to be flagged"
-    assert any(cls.endswith("ImpossiblePerson") for cls in r.unsatisfiable_classes), (
-        "expected ImpossiblePerson to be flagged as unsatisfiable"
+@pytest.mark.parametrize("skip_resolution", [False, True])
+async def test_broken_example_populates_every_check(cache, skip_resolution):
+    report, _ = await run_full_validation(
+        BROKEN, include_mermaid=False, skip_resolution=skip_resolution, cache=cache,
     )
 
-
-def test_non_ontology_terms_warns(parsed):
-    report = check_non_ontology_terms(parsed.graph)
-    assert report.status == Status.WARN
-    flagged = {t.display_name for t in report.terms}
-    # A SKOS concept defined in the ontology's own namespace is flagged.
-    assert "Biology" in flagged
-    # Named individuals are not flagged: a small, fixed set of individuals
-    # alongside the schema is a common, legitimate modelling pattern.
-    assert "alice" not in flagged
-    assert "bob" not in flagged
-
-
-def test_term_inventory_flags_naming(parsed):
-    inv = check_term_inventory(parsed.graph)
-    assert inv.status == Status.WARN
-    flagged = {e.display_name for e in inv.naming_issues}
-    assert "badFormat" in flagged
-    assert "HasOwner" in flagged
-
-
-def test_domains_ranges_has_problems(parsed):
-    dr = check_domains_ranges(parsed.graph)
-    assert dr.status == Status.FAIL
-    flagged = {c.display_name for c in dr.issues}
-    assert "worksFor" in flagged
-    assert "hasLabelText" in flagged
-    assert "relatedTo" in flagged
-
-
-def test_datatypes_flags_unrecognized(parsed):
-    dt = check_datatypes(parsed.graph)
-    assert dt.status == Status.FAIL
-    flagged = {u.display_name for u in dt.unrecognised}
-    assert "flaot" in flagged
-    assert "stirng" in flagged
-
-
-@pytest.mark.asyncio
-async def test_cli_pipeline_populates_every_check(foaf_stub):
-    """Regression guard: the shared pipeline must actually run all 16 checks.
-
-    The shared pipeline used to never call check_iri_strategy,
-    check_iri_scheme, or check_non_ontology_terms, so those three checks
-    silently never ran from the CLI even though web.py wired them up
-    correctly and the report renderer had a row ready for them. This pins
-    the full pipeline, not just the individual modules.
-
-    The ontology's own w3id.org namespaces and the real foaf: vocabulary are
-    pre-seeded into the cache so this stays network-free, matching the
-    fixture's other tests. The nonexistent.invalid host (RFC 2606) is left
-    to resolve for real, since it fails via DNS instantly and needs no
-    external service to be up.
-    """
-    cache = OntologyCache()
-    cache.put("http://xmlns.com/foaf/0.1/", foaf_stub)
-    cache.put("http://w3id.org/askwol/broken/", None, error="404 - not found")
-    cache.put("http://w3id.org/askwol/broken#", None, error="404 - not found")
-
-    from askwol.pipeline import run_full_validation
-
-    report, _mermaid = await run_full_validation(
-        BROKEN, include_mermaid=False, timeout=10.0, skip_resolution=False, cache=cache,
-    )
-
-    assert report.ontology_metadata is not None and report.ontology_metadata.missing
-    assert report.imports is not None and report.imports.status == Status.FAIL
-    assert report.iri_strategy is not None and report.iri_strategy.status == Status.WARN
-    assert report.iri_scheme is not None and report.iri_scheme.status == Status.WARN
-    assert report.unused_prefixes
-    assert report.non_ontology_terms is not None and report.non_ontology_terms.status == Status.WARN
-    assert report.internal_terms is not None and report.internal_terms.status == Status.FAIL
-    assert report.term_inventory is not None and report.term_inventory.status == Status.WARN
-    assert report.domains_ranges is not None and report.domains_ranges.status == Status.FAIL
-    assert report.datatypes is not None and report.datatypes.status == Status.FAIL
-    assert report.definition_docs is not None and report.definition_docs.issues
-    assert report.lang_tags is not None and report.lang_tags.issues
-    assert report.reasoner is not None and report.reasoner.consistent is False
-    assert report.reasoner.unsatisfiable_classes, "expected ImpossiblePerson to be flagged as unsatisfiable"
-    assert report.namespaces
-    foaf_ns = next(n for n in report.namespaces if n.prefix == "foaf")
-    assert foaf_ns.resolution.status == Status.OK
-    madeup = next(t for t in foaf_ns.terms if t.local_name == "MadeUpConcept")
-    assert madeup.status == Status.FAIL
-
-
-@pytest.mark.asyncio
-async def test_cli_pipeline_skip_resolution_still_runs_local_checks():
-    """Regression guard: --skip-resolution must only skip network-bound work
-    (namespace resolution, imports, external term validation), not every
-    other check.
-
-    The shared pipeline used to return immediately after building
-    placeholder SKIP namespace entries, silently skipping every local,
-    network-free check too (metadata, license, term structure, docs,
-    reasoner, IRI strategy/scheme, non-ontology terms).
-    """
-    from askwol.pipeline import run_full_validation
-
-    report, _mermaid = await run_full_validation(
-        BROKEN, include_mermaid=False, timeout=10.0, skip_resolution=True,
-    )
-
-    assert report.ontology_metadata is not None and report.ontology_metadata.missing
+    assert report.ontology_metadata is not None
+    assert {c.tier for c in report.ontology_metadata.missing} == {"core", "additional"}
     assert report.license is not None and report.license.status == Status.FAIL
+    assert "neverused" in {p.prefix for p in report.unused_prefixes}
+
     assert report.iri_strategy is not None and report.iri_strategy.status == Status.WARN
+    assert any(ns.strategy == "mixed" for ns in report.iri_strategy.namespaces)
     assert report.iri_scheme is not None and report.iri_scheme.status == Status.WARN
-    assert report.unused_prefixes
-    assert report.non_ontology_terms is not None and report.non_ontology_terms.status == Status.WARN
+    assert "w3id.org/askwol/broken/" in {c.host for c in report.iri_scheme.conflicts}
+
     assert report.internal_terms is not None and report.internal_terms.status == Status.FAIL
+    assert "hasNickname" in {i.display_name for i in report.internal_terms.undefined}
     assert report.term_inventory is not None and report.term_inventory.status == Status.WARN
+    assert {"badFormat", "HasOwner"} <= {i.display_name for i in report.term_inventory.naming_issues}
     assert report.domains_ranges is not None and report.domains_ranges.status == Status.FAIL
+    assert {"worksFor", "hasLabelText", "relatedTo"} <= {i.display_name for i in report.domains_ranges.issues}
     assert report.datatypes is not None and report.datatypes.status == Status.FAIL
+    assert {"flaot", "stirng"} <= {i.display_name for i in report.datatypes.unrecognised}
     assert report.definition_docs is not None and report.definition_docs.issues
     assert report.lang_tags is not None and report.lang_tags.issues
-    assert report.reasoner is not None and report.reasoner.consistent is False
 
-    # Network-bound work should be skipped outright, not silently wrong.
-    assert report.imports is not None and report.imports.skipped
-    assert report.imports.broken == []
+    assert report.non_ontology_terms is not None and report.non_ontology_terms.status == Status.WARN
+    flagged = {t.display_name for t in report.non_ontology_terms.terms}
+    assert "Biology" in flagged
+    assert not {"alice", "bob"} & flagged
+
+    assert report.reasoner is not None and report.reasoner.consistent is False
+    assert report.reasoner.inconsistent_individuals
+    assert any(cls.endswith("ImpossiblePerson") for cls in report.reasoner.unsatisfiable_classes)
+
+    assert report.imports is not None
     assert report.namespaces
-    assert all(ns.resolution.status == Status.SKIP for ns in report.namespaces)
-    assert all(ns.terms == [] for ns in report.namespaces)
+    if skip_resolution:
+        assert report.imports.skipped
+        assert report.imports.broken == []
+        assert all(ns.resolution.status == Status.SKIP for ns in report.namespaces)
+        assert all(ns.terms == [] for ns in report.namespaces)
+    else:
+        assert report.imports.status == Status.FAIL
+        assert [c.iri for c in report.imports.broken] == ["http://nonexistent.invalid/broken-import/"]
+        foaf = next(ns for ns in report.namespaces if ns.prefix == "foaf")
+        assert foaf.resolution.status == Status.OK
+        madeup = next(t for t in foaf.terms if t.local_name == "MadeUpConcept")
+        assert madeup.status == Status.FAIL

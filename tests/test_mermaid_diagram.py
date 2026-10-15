@@ -9,7 +9,7 @@ rdflib happened to order the namespaces that way.
 
 import re
 
-from rdflib import Graph, Namespace, RDFS
+from rdflib import RDFS, Graph, Namespace
 
 from askwol.mermaid_diagram import _mermaid_id, _shorten, build_mermaid
 

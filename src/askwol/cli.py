@@ -8,6 +8,7 @@ from pathlib import Path
 
 import click
 from rich.console import Console
+from rich.markup import escape
 
 from askwol.pipeline import run_full_validation
 from askwol.report import print_report, report_as_json, report_as_markdown
@@ -43,7 +44,7 @@ def main() -> None:
 def check(file: Path, output_format: str, output: Path | None, timeout: float, skip_resolution: bool) -> None:
     """Check an ontology file for namespace resolution and term validity."""
     console = Console(stderr=True)
-    console.print(f"Checking [bold]{file}[/bold] …")
+    console.print(f"Checking [bold]{escape(str(file))}[/bold] …")
 
     report, _mermaid = asyncio.run(
         run_full_validation(
@@ -58,12 +59,15 @@ def check(file: Path, output_format: str, output: Path | None, timeout: float, s
     else:
         result = None
 
-    if result is not None:
-        if output:
-            output.write_text(result, encoding="utf-8")
-            console.print(f"Report written to [bold]{output}[/bold]")
+    if output:
+        if result is None:
+            with output.open("w", encoding="utf-8") as stream:
+                print_report(report, Console(file=stream, color_system=None))
         else:
-            click.echo(result)
+            output.write_text(result, encoding="utf-8")
+        console.print(f"Report written to [bold]{escape(str(output))}[/bold]")
+    elif result is not None:
+        click.echo(result)
     else:
         print_report(report)
 

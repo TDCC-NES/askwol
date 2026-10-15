@@ -16,6 +16,7 @@ import httpx
 import pytest
 from httpx import ASGITransport
 
+from askwol import validation_runner as runner
 from askwol import web
 
 # A minimal, valid, and fully offline ontology: no declared prefixes with
@@ -36,10 +37,10 @@ _SLEEP_FOREVER_CMD = [sys.executable, "-c", "import time; time.sleep(9999)"]
 def _clean_isolation_state(monkeypatch):
     """Every test here manipulates module-level isolation state directly;
     reset it before and after so tests can't leak into each other."""
-    web._validation_slots_in_use = 0
-    monkeypatch.setattr(web, "_TEST_INPROCESS_PIPELINE", None)
+    runner._validation_slots_in_use = 0
+    monkeypatch.setattr(web, "_rate_limit_buckets", {})
     yield
-    web._validation_slots_in_use = 0
+    runner._validation_slots_in_use = 0
 
 
 async def _post_file(client: httpx.AsyncClient, path: str, content: bytes = MINIMAL_TTL):
@@ -48,8 +49,8 @@ async def _post_file(client: httpx.AsyncClient, path: str, content: bytes = MINI
 
 @pytest.mark.asyncio
 async def test_hanging_validation_returns_504(monkeypatch):
-    monkeypatch.setattr(web, "WORKER_CMD", _SLEEP_FOREVER_CMD)
-    monkeypatch.setattr(web, "VALIDATION_TIMEOUT", 1.0)
+    monkeypatch.setattr(runner, "WORKER_CMD", _SLEEP_FOREVER_CMD)
+    monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 1.0)
 
     async with httpx.AsyncClient(transport=ASGITransport(app=web.app), base_url="http://test") as client:
         r = await _post_file(client, "/validate")
@@ -60,8 +61,8 @@ async def test_hanging_validation_returns_504(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_api_hanging_validation_returns_504(monkeypatch):
-    monkeypatch.setattr(web, "WORKER_CMD", _SLEEP_FOREVER_CMD)
-    monkeypatch.setattr(web, "VALIDATION_TIMEOUT", 1.0)
+    monkeypatch.setattr(runner, "WORKER_CMD", _SLEEP_FOREVER_CMD)
+    monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 1.0)
 
     async with httpx.AsyncClient(transport=ASGITransport(app=web.app), base_url="http://test") as client:
         r = await _post_file(client, "/api/validate")
@@ -72,8 +73,8 @@ async def test_api_hanging_validation_returns_504(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_health_and_normal_pages_stay_responsive_during_a_hang(monkeypatch):
-    monkeypatch.setattr(web, "WORKER_CMD", _SLEEP_FOREVER_CMD)
-    monkeypatch.setattr(web, "VALIDATION_TIMEOUT", 2.0)
+    monkeypatch.setattr(runner, "WORKER_CMD", _SLEEP_FOREVER_CMD)
+    monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 2.0)
 
     async with httpx.AsyncClient(transport=ASGITransport(app=web.app), base_url="http://test") as client:
         hang_task = asyncio.create_task(_post_file(client, "/validate"))
@@ -94,9 +95,9 @@ async def test_health_and_normal_pages_stay_responsive_during_a_hang(monkeypatch
 
 @pytest.mark.asyncio
 async def test_excess_concurrent_validations_return_503_immediately(monkeypatch):
-    monkeypatch.setattr(web, "WORKER_CMD", _SLEEP_FOREVER_CMD)
-    monkeypatch.setattr(web, "VALIDATION_TIMEOUT", 2.0)
-    monkeypatch.setattr(web, "MAX_CONCURRENT_VALIDATIONS", 1)
+    monkeypatch.setattr(runner, "WORKER_CMD", _SLEEP_FOREVER_CMD)
+    monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 2.0)
+    monkeypatch.setattr(runner, "MAX_CONCURRENT_VALIDATIONS", 1)
 
     async with httpx.AsyncClient(transport=ASGITransport(app=web.app), base_url="http://test") as client:
         first_task = asyncio.create_task(_post_file(client, "/validate"))
@@ -116,8 +117,8 @@ async def test_excess_concurrent_validations_return_503_immediately(monkeypatch)
 
 @pytest.mark.asyncio
 async def test_child_process_is_terminated_after_timeout(monkeypatch):
-    monkeypatch.setattr(web, "WORKER_CMD", _SLEEP_FOREVER_CMD)
-    monkeypatch.setattr(web, "VALIDATION_TIMEOUT", 1.0)
+    monkeypatch.setattr(runner, "WORKER_CMD", _SLEEP_FOREVER_CMD)
+    monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 1.0)
 
     real_create_subprocess_exec = asyncio.create_subprocess_exec
     spawned: list[asyncio.subprocess.Process] = []
@@ -127,7 +128,7 @@ async def test_child_process_is_terminated_after_timeout(monkeypatch):
         spawned.append(proc)
         return proc
 
-    monkeypatch.setattr(web.asyncio, "create_subprocess_exec", _capture)
+    monkeypatch.setattr(runner.asyncio, "create_subprocess_exec", _capture)
 
     async with httpx.AsyncClient(transport=ASGITransport(app=web.app), base_url="http://test") as client:
         r = await _post_file(client, "/validate")
@@ -139,8 +140,8 @@ async def test_child_process_is_terminated_after_timeout(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_temp_file_removed_after_timeout(monkeypatch, tmp_path):
-    monkeypatch.setattr(web, "WORKER_CMD", _SLEEP_FOREVER_CMD)
-    monkeypatch.setattr(web, "VALIDATION_TIMEOUT", 1.0)
+    monkeypatch.setattr(runner, "WORKER_CMD", _SLEEP_FOREVER_CMD)
+    monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 1.0)
 
     created: list = []
     import tempfile as tempfile_module
@@ -165,8 +166,8 @@ async def test_temp_file_removed_after_timeout(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_next_validation_still_works_after_a_timeout(monkeypatch):
-    monkeypatch.setattr(web, "WORKER_CMD", _SLEEP_FOREVER_CMD)
-    monkeypatch.setattr(web, "VALIDATION_TIMEOUT", 1.0)
+    monkeypatch.setattr(runner, "WORKER_CMD", _SLEEP_FOREVER_CMD)
+    monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 1.0)
 
     async with httpx.AsyncClient(transport=ASGITransport(app=web.app), base_url="http://test") as client:
         timed_out = await _post_file(client, "/validate")
@@ -174,8 +175,8 @@ async def test_next_validation_still_works_after_a_timeout(monkeypatch):
 
         # Restore the real worker; the isolation machinery (concurrency
         # slot, subprocess spawning) must not be left in a broken state.
-        monkeypatch.setattr(web, "WORKER_CMD", [sys.executable, "-m", "askwol.validate_worker"])
-        monkeypatch.setattr(web, "VALIDATION_TIMEOUT", 300.0)
+        monkeypatch.setattr(runner, "WORKER_CMD", [sys.executable, "-m", "askwol.validate_worker"])
+        monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 300.0)
 
         ok = await _post_file(client, "/validate")
         assert ok.status_code == 200
@@ -199,3 +200,39 @@ async def test_html_and_api_validation_use_the_same_runner(monkeypatch):
     assert html_response.status_code == 200
     assert api_response.status_code == 200
     assert calls == ["validate", "validate_api"]
+
+
+@pytest.mark.parametrize("path", ["/validate", "/api/validate"])
+@pytest.mark.parametrize("program", [
+    "import sys; sys.stderr.write('worker diagnostic probe\\n'); sys.exit(1)",
+    "print('invalid worker output')",
+    "print('{\"report\": {\"file\": null}}')",
+    "print('{\"report\": {\"file\": \"x.ttl\"}, \"mermaid\": 42}')",
+])
+async def test_worker_failure_returns_500_and_releases_slot(monkeypatch, caplog, path, program):
+    monkeypatch.setattr(runner, "WORKER_CMD", [sys.executable, "-c", program])
+    outcomes = []
+    monkeypatch.setattr(runner.usage, "job_finished", lambda request_id, **values: outcomes.append(values))
+    async with httpx.AsyncClient(transport=ASGITransport(app=web.app), base_url="http://test") as client:
+        response = await _post_file(client, path)
+    assert response.status_code == 500
+    assert "Something went wrong while validating" in response.text
+    assert "Parse error" not in response.text
+    assert runner._validation_slots_in_use == 0
+    assert len(outcomes) == 1 and outcomes[0]["status"] == "500"
+    if "worker diagnostic probe" in program:
+        assert "worker diagnostic probe" in caplog.text
+        assert "worker diagnostic probe" not in response.text
+
+
+@pytest.mark.parametrize("path", ["/validate", "/api/validate"])
+async def test_worker_spawn_failure_returns_500(monkeypatch, path):
+    async def cannot_spawn(*args, **kwargs):
+        raise OSError("worker unavailable")
+
+    monkeypatch.setattr(runner.asyncio, "create_subprocess_exec", cannot_spawn)
+    async with httpx.AsyncClient(transport=ASGITransport(app=web.app), base_url="http://test") as client:
+        response = await _post_file(client, path)
+    assert response.status_code == 500
+    assert "worker unavailable" not in response.text
+    assert runner._validation_slots_in_use == 0
