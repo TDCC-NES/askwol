@@ -152,7 +152,7 @@ app = FastAPI(
         "selected OWL RL/RDF checks for contradictory class memberships of named individuals "
         "and unsatisfiable internal classes. Imports are excluded from reasoning."
     ),
-    version="0.1.2",
+    version="0.2.0",
     root_path=ROOT_PATH,
 )
 
