@@ -416,7 +416,7 @@ class _HtmlReport:
                 return []
             if sch.status == Status.SKIP:
                 return [self._row('iri-scheme', 'IRI scheme', escape(sch.message) if sch.message else 'skipped', na=True)]
-            return [self._row('iri-scheme', 'IRI scheme', f'{sch.total_hosts} host(s) checked')]
+            return [self._row('iri-scheme', 'IRI scheme', f'{sch.total_hosts} namespace(s) checked')]
         if report_anchor == 'reasoner':
             if not reasoner:
                 return []
@@ -689,7 +689,7 @@ class _HtmlReport:
             self.parts.append('<section class="section">')
             self.parts.append(self._section_heading('iri-scheme', 'IRI scheme (http vs https)', sc_label, na=sch.status == Status.SKIP))
             self.parts.append(_guide_link('iri-scheme'))
-            self.parts.append('<p class="subtitle">In RDF, <code>http://example.org/X</code> and <code>https://example.org/X</code> are <strong>different IRIs</strong>. Within one ontology, each namespace should appear under exactly one scheme. Mixing schemes breaks SPARQL joins, <code>owl:sameAs</code>, and any tool that compares URIs as strings.</p>')
+            self.parts.append('<p class="subtitle">In RDF, <code>http://example.org/X</code> and <code>https://example.org/X</code> are <strong>different IRIs</strong>. Within one ontology, each namespace should appear under exactly one scheme. Mixing schemes can prevent tools from matching references to the same intended term.</p>')
 
             if sch.status == Status.SKIP:
                 self.parts.append(self._subtitle(escape(sch.message) if sch.message else 'no http(s) IRIs found'))
@@ -827,7 +827,7 @@ class _HtmlReport:
         self.parts.append('<section class="section">')
         self.parts.append(self._section_heading('namespaces', 'Namespaces', ns_label, na=all_ns_skipped))
         self.parts.append(_guide_link('namespaces'))
-        self.parts.append('<p class="subtitle">Each namespace URI declared in the ontology (the target of a <code>@prefix</code>) is fetched over HTTP and parsed as RDF where possible. A namespace that does not resolve makes its terms uncheckable downstream.</p>')
+        self.parts.append('<p class="subtitle">Namespaces of terms used as subjects are fetched over HTTP and parsed as RDF where possible. If a namespace cannot be resolved, its external terms cannot be checked.</p>')
         self.parts.append(f'<p class="subtitle"><strong>{self.ok_ns}/{self.total_ns}</strong> namespaces resolved.</p>')
 
         if prominent:
@@ -900,8 +900,8 @@ class _HtmlReport:
         else:
             self.parts.append(self._section_heading('unused-prefixes', 'Unused prefixes', 'all good'))
             self.parts.append(_guide_link('unused-prefixes'))
-            self.parts.append('<p class="subtitle">Prefixes that are declared in the file but never appear in any triple. Removing them keeps the ontology clean and avoids suggesting dependencies that do not exist.</p>')
-            self.parts.append(self._subtitle('Every declared prefix is used in at least one triple.'))
+            self.parts.append('<p class="subtitle">Detected prefix bindings whose namespace has no matching IRI use, including header and literal datatype IRIs. Built-in declarations and source-level aliases cannot be fully distinguished after parsing.</p>')
+            self.parts.append(self._subtitle('No unused prefix bindings detected.'))
         self.parts.append('</section>')
 
     def _external_terms(self) -> None:
@@ -1132,14 +1132,14 @@ class _HtmlReport:
         sk = self.report.non_ontology_terms
         if sk and sk.status != Status.SKIP:
             self._open_cluster('non-ontology-terms')
-            sk_label = f'{len(sk.terms)} to move out' if sk.terms else 'schema only'
+            sk_label = f'{len(sk.terms)} to review' if sk.terms else 'none found'
             self.parts.append('<section class="section">')
             self.parts.append(self._section_heading('non-ontology-terms', 'Non-ontology terms', sk_label))
             self.parts.append(_guide_link('non-ontology-terms'))
             self.parts.append('<p class="subtitle">TDCC recommends considering separate management of independently maintained SKOS concept schemes. Internal <code>skos:Concept</code> instances are listed for review; mixing OWL and SKOS is valid. Other named individuals are not flagged.</p>')
             if sk.terms:
                 self.parts.append(self._subtitle(f'{len(sk.terms)} skos:Concept instance{"s" if len(sk.terms) != 1 else ""} defined in the ontology&rsquo;s own namespace'))
-                self.parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Terms to move into a separate concept scheme ({len(sk.terms)})</summary>')
+                self.parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">SKOS concepts to review ({len(sk.terms)})</summary>')
                 self.parts.append('<table><tr><th>Term</th><th>What it is</th></tr>')
                 for issue in sk.terms:
 
@@ -1173,8 +1173,9 @@ class _HtmlReport:
                 self.parts.append('<section class="section">')
                 self.parts.append(self._section_heading(anchor, title, label))
                 self.parts.append(_guide_link(anchor))
-                self.parts.append(f'<p class="subtitle">Every internally defined class and property should carry an <code>{prop}</code>. Reused external vocabulary terms, and terms you have marked deprecated, are ignored. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes for term documentation</a>.</p>')
-                coverage = 'have an <code>rdfs:label</code>' if anchor == 'labels' else 'meet the comment recommendation (including inverse properties)'
+                inverse_note = ' A comment on an inverse property also counts.' if anchor == 'comments' else ''
+                self.parts.append(f'<p class="subtitle">Every internally defined class and property should have a value for <code>{prop}</code>.{inverse_note} Reused external vocabulary terms, and terms you have marked deprecated, are ignored. Checked against <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/definition_documentation.ttl" target="_blank" rel="noopener">SHACL shapes for term documentation</a>.</p>')
+                coverage = 'have labels' if anchor == 'labels' else 'meet the comment recommendation'
                 exempt = f' &middot; {docs.deprecated_count} deprecated term(s) exempt' if docs.deprecated_count else ''
                 self.parts.append(self._subtitle(f'{present_count}/{docs.total_definitions} {coverage} &middot; {len(missing)} missing{exempt}'))
                 self.parts.append(f'<details><summary style="cursor:pointer;font-weight:600;">Show {title.lower()} ({docs.total_definitions})</summary>')

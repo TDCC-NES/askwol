@@ -19,7 +19,7 @@ Findings count individual issues, not checks:
 
 | Severity | Meaning |
 | --- | --- |
-| **Error** | A detected logical issue or violation of selected OWL restrictions. |
+| **Error** | A parsing failure or a detected logical or structural problem. |
 | **Warning** | A likely mistake or interoperability problem. |
 | **Recommendation** | A publishing convention, such as metadata, licensing, or documentation. |
 

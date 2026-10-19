@@ -63,7 +63,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
   "@type": "WebApplication",
   "name": "Ask Wol",
   "alternateName": "askwol",
-  "description": "A free, open-source OWL ontology checker and reviewer: class diagram, namespace and term checks, metadata and documentation review, and a clean-up report.",
+  "description": "A free, open-source OWL ontology checker with a class diagram and a report on namespaces, terms, metadata, documentation, and selected logical issues.",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "Any",
   "url": "https://lod-4tu.tudelft.nl/askwol/",
@@ -189,8 +189,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
   <p>Your friendly owl (Wollie, to friends) for free online
   <a href="https://www.w3.org/OWL/">OWL</a> ontology checks
   during modelling and before publication.
-  Enter a URL or upload a file to get a class diagram and a review report
-  covering namespaces, terms, metadata, documentation, and selected logical issues.</p>
+  Enter a URL or upload a file to get a class diagram and a review report.</p>
   <p>Preparing to publish? Follow the <a href="guide">OWL ontology publishing guide</a>.</p>
 
   <form class="card" id="validate-form" action="validate" method="post" enctype="multipart/form-data" data-progress-url="validate/progress">
@@ -440,11 +439,10 @@ UPLOAD_HTML = """<!DOCTYPE html>
     })();
   </script>
 
-  <h2 id="what-do-you-get">What does Ask Wol check?</h2>
-  <p>An interactive <strong>class diagram</strong> of your ontology, plus one
-  HTML report (or JSON via the API) with a section per check. The checks are
-  grouped into five areas, and each links to the matching entry in the
-  <a href="guide">publishing guide</a>:</p>
+  <h2 id="what-do-you-get">What do you get?</h2>
+  <p>An interactive <strong>class diagram</strong> and an HTML report
+  (or JSON via the API). The checks below link to the relevant sections of the
+  <a href="guide">publishing guide</a>.</p>
 
   <!--CHECKS_OVERVIEW-->
 
@@ -452,10 +450,8 @@ UPLOAD_HTML = """<!DOCTYPE html>
   its intended domain.</p>
 
   <h2 id="other-resources">Other resources</h2>
-  <p><i>askwol</i> is a checker, not a full ontology engineering toolkit.
-  A few other resources worth a look:</p>
   <ul>
-    <li><a href="https://protege.stanford.edu/" target="_blank" rel="noopener">Prot&eacute;g&eacute;</a>: the standard free, open-source ontology editor.</li>
+    <li><a href="https://protege.stanford.edu/" target="_blank" rel="noopener">Prot&eacute;g&eacute;</a>: a free, open-source ontology editor.</li>
     <li><a href="https://www.michaeldebellis.com/post/new-protege-pizza-tutorial" target="_blank" rel="noopener">The Pizza Tutorial</a>: a revised Prot&eacute;g&eacute; 5 version of the classic hands-on OWL tutorial.</li>
     <li><a href="https://lov.linkeddata.es/dataset" target="_blank" rel="noopener">Linked Open Vocabularies (LOV)</a>: a catalogue of reusable RDF vocabularies.</li>
     <li><a href="https://ontochoice.github.io/choosing-terms-and-ontologies/" target="_blank" rel="noopener">OntoChoice</a>: an initiative on choosing ontologies and terms.</li>
@@ -468,15 +464,15 @@ UPLOAD_HTML = """<!DOCTYPE html>
     <img class="wollie" src="static/wollie-about.png" alt="Wollie, a hand-drawn owl" width="140" height="183">
     <h2 style="margin-top:0; border:none; padding:0;">Why &ldquo;askwol&rdquo;?</h2>
     <p>
-      The W3C originally called their language <strong>WOL</strong>. Tim Finin
+      The W3C working group used the name <strong>WOL</strong> during
+      OWL&rsquo;s development. Tim Finin
       <a href="http://lists.w3.org/Archives/Public/www-webont-wg/2001Dec/0169.html">proposed
       rearranging it to <strong>OWL</strong></a> because <em>&ldquo;owls are
-      associated with wisdom.&rdquo;</em> Scrambling three letters is of course
-      what <a href="https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)">Owl</a>
-      from Milne&rsquo;s <em>Winnie-the-Pooh</em> is famous for. He spells
-      his own name <strong>WOL</strong>, as Dave de Roure
-      <a href="https://lists.w3.org/Archives/Public/www-webont-wg/2002Sep/0301.html">first
-      pointed out</a> to the working group.
+      associated with wisdom.&rdquo;</em> In Milne&rsquo;s <em>Winnie-the-Pooh</em>,
+      <a href="https://en.wikipedia.org/wiki/Owl_(Winnie-the-Pooh)">Owl</a>
+      spells his own name <strong>WOL</strong>, as Dave de Roure
+      <a href="https://lists.w3.org/Archives/Public/www-webont-wg/2002Sep/0301.html">pointed
+      out</a> to the working group.
     </p>
     <h2 style="border:none; padding:0; margin-top:1.2em;">About</h2>
     <p>
@@ -569,7 +565,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p>Version information is part of good ontology metadata.
   <span class="tag spec">Spec</span> OWL 2 defines
   <a href="https://www.w3.org/TR/owl2-syntax/#def_version_iri" target="_blank" rel="noopener"><code>owl:versionIRI</code></a>
-  to give each release its own dereferenceable URL, and
+  to identify a particular release, and
   <a href="https://www.w3.org/TR/owl2-syntax/#a_versionInfo" target="_blank" rel="noopener"><code>owl:versionInfo</code></a>
   to hold &ldquo;a string that describes the IRI&rsquo;s version,&rdquo; with no
   format required.</p>
@@ -657,11 +653,10 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   in how the identifier behaves over HTTP and how the vocabulary scales.</p>
   <ul>
     <li><strong>Hash</strong> &middot; <code>ont<strong>#</strong>Person</code>.
-    The fragment is stripped before the HTTP request, so the server always
-    returns the whole file in one request: zero server configuration, but a
-    client asking about one term gets
-    <em>every</em> term in the vocabulary. Fine for 50&nbsp;terms, painful
-    for 50&thinsp;000. Used by OWL and RDF Schema.</li>
+    The fragment is stripped before the HTTP request, so terms sharing the
+    same base IRI are retrieved through one document. This is simple to host,
+    but clients may need to download the whole vocabulary to look up one
+    term. Used by OWL and RDF Schema.</li>
     <li><strong>Slash</strong> &middot; <code>ont<strong>/</strong>Person</code>.
     Each term is its own HTTP resource, typically served via a
     <code>303&nbsp;See&nbsp;Other</code> redirect per the W3C TAG&rsquo;s
@@ -709,11 +704,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
 
   <p><span class="tag spec">Spec</span> <code>http://example.org/ont/Person</code>
   and <code>https://example.org/ont/Person</code> are
-  <strong>different IRIs</strong>: RDF identifies resources by their exact
-  IRI string, per
-  <a href="https://www.rfc-editor.org/rfc/rfc3987" target="_blank" rel="noopener">RFC 3987</a>,
-  and OWL never treats two IRIs as the same resource unless you assert
-  <code>owl:sameAs</code> yourself. Mixing schemes breaks joins that rely on
+  <strong>different IRIs</strong>: RDF compares IRIs by their exact strings,
+  per <a href="https://www.w3.org/TR/rdf11-concepts/#section-IRIs" target="_blank" rel="noopener">RDF 1.1 Concepts</a>.
+  Mixing schemes can break joins that rely on
   exact IRI matches, including SPARQL and any tool that does string
   comparison on URIs.</p>
 
@@ -766,7 +759,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
       <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">Creative Commons Attribution ShareAlike (CC BY-SA)</a> (requires attribution, share-alike); IRI: <code>https://creativecommons.org/licenses/by-sa/4.0/</code>; too restrictive due to the share-alike.
     </li>
     <li>
-      <a href="http://opendatacommons.org/licenses/pddl/1.0/" target="_blank" rel="noopener">Open Data Commons Public Domain Dedication and License (PDDL)</a> (public domain); IRI: <code>http://opendatacommons.org/licenses/pddl/1.0/</code>; only covers data and not content.
+      <a href="http://opendatacommons.org/licenses/pddl/1.0/" target="_blank" rel="noopener">Open Data Commons Public Domain Dedication and License (PDDL)</a> (public domain); IRI: <code>http://opendatacommons.org/licenses/pddl/1.0/</code>; designed for databases and their contents.
     </li>
     <li>
       <a href="http://opendatacommons.org/licenses/by/1.0/" target="_blank" rel="noopener">Open Data Commons Attribution License (ODC-By)</a> (requires attribution); IRI: <code>http://opendatacommons.org/licenses/by/1.0/</code>; only covers data and not content.
@@ -775,7 +768,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
       <a href="http://opendatacommons.org/licenses/odbl/1.0/" target="_blank" rel="noopener">Open Data Commons Open Database License (ODbL)</a> (requires attribution, share-alike); IRI: <code>http://opendatacommons.org/licenses/odbl/1.0/</code>; too restrictive due to the share-alike.
     </li>
     <li>
-      <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">Other licences conformant with the Open Definition</a>; most of these are little used and incompatible with more widely adopted open licences.
+      <a href="https://opendefinition.org/licenses" target="_blank" rel="noopener">Other licences conformant with the Open Definition</a>; check their suitability and compatibility before use.
     </li>
     <li>
       <a href="https://opensource.org/licenses" target="_blank" rel="noopener">Any licence approved by the Open Source Initiative</a>; these are primarily meant for open source software rather than ontologies.
@@ -951,10 +944,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   <p><span class="tag practice">TDCC guideline</span> Capitalisation is a
   community convention, not an OWL or RDFS rule; nothing stops you from
   naming a class <code>person</code> or a property <code>HasName</code>.
-  askwol checks it anyway, because consistent casing is one of the fastest
-  ways to tell a class from a property at a glance. A mismatch is reported
-  as a recommendation, not an error: it&rsquo;s worth fixing, but it won&rsquo;t
-  block publication.</p>
+  Consistent casing helps distinguish classes from properties. askwol
+  reports a mismatch as a recommendation.</p>
   <ul>
     <li><strong>Classes start with an uppercase letter</strong> and are usually
     nouns: <code>Person</code>, <code>Dataset</code>, <code>Organisation</code>.</li>
@@ -967,9 +958,8 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   Wikidata&rsquo;s are fully opaque, like <code>P19</code>, deliberately avoiding
   any one language&rsquo;s naming bias. askwol recognises this pattern, an
   uppercase letter directly followed by a digit, and does not flag it.</p>
-  <div class="tip">Object properties read best as verb phrases. A
-  <code>has</code> or <code>is</code> prefix, or an <code>of</code>/<code>by</code>
-  form, gives a single unambiguous reading: <code>hasWife</code>,
+  <div class="tip">Object property names can make the relationship&rsquo;s
+  direction clear: <code>hasWife</code>,
   <code>wifeOf</code>, <code>lovedBy</code>. This is a readability convention,
   not something askwol enforces; askwol only checks the case of the first
   letter, via <a href="https://raw.githubusercontent.com/TDCC-NES/askwol/refs/heads/main/src/askwol/shapes/term_inventory.ttl" target="_blank" rel="noopener">SHACL shapes</a>.</div>
@@ -1535,7 +1525,7 @@ def _render_guide_body() -> str:
 
 
 # Update only after reviewing the guide's technical content.
-GUIDE_LAST_REVIEWED = date(2026, 10, 15)
+GUIDE_LAST_REVIEWED = date(2026, 10, 19)
 
 
 GUIDE_HTML = f"""<!DOCTYPE html>
@@ -1620,9 +1610,8 @@ GUIDE_HTML = f"""<!DOCTYPE html>
     <a href="docs">API docs</a>
   </p>
   <h1><img class="logo" src="static/wollie-h1.png" alt="" width="43" height="56"><span>How to Publish an OWL Ontology</span></h1>
-  <p>A practical checklist for building OWL ontologies that are
-  interoperable, resolvable, and maintainable. These are the things
-  <a href="./">askwol</a> checks, and why they matter.</p>
+  <p>A checklist for publishing OWL ontologies. It explains
+  <a href="./">askwol</a>&rsquo;s checks and additional publishing practices.</p>
   <p class="byline">By the <a href="https://tdcc.nl/nes/ontology-engineers/">TDCC-NES Ontology Engineers</a>
   (Kathrin F&uuml;llenbach and Dani Metilli). Last reviewed:
   <time datetime="{GUIDE_LAST_REVIEWED.isoformat()}">{GUIDE_LAST_REVIEWED.day} {GUIDE_LAST_REVIEWED:%B %Y}</time>.</p>
@@ -1634,13 +1623,13 @@ GUIDE_HTML = f"""<!DOCTYPE html>
 
   <div class="tip">Want a worked example? The
   <a href="https://lod-4tu.tudelft.nl/ontologies/sample.ttl" target="_blank" rel="noopener">askwol sample ontology</a>
-  applies every convention below and passes all checks. Load it from the
-  <a href="./">home page</a> (the <strong>sample ontology</strong> button) to see a clean report.</div>
+  illustrates the publishing conventions below. Load it from the
+  <a href="./">home page</a> (the <strong>sample ontology</strong> button) to view its report.</div>
 
   <div class="legend">
   <p>Two tags mark where a rule comes from, and two colored boxes flag extra context:</p>
   <p><span class="tag spec">Spec</span> what an OWL, RDF, RDFS, or other
-  W3C/IETF specification actually defines or requires.</p>
+  W3C/IETF specification defines or requires.</p>
   <p><span class="tag practice">TDCC guideline</span> a recommendation from
   the TDCC ontology engineers that askwol checks for, but that goes beyond
   what any specification mandates. A W3C Note (such as Cool URIs, cited
@@ -1649,9 +1638,8 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   <div class="tip">A green box like this one is a tip or extra detail.</div>
   <div class="warn">An amber box like this one is a warning or common
   pitfall to watch out for.</div>
-  <p>Every finding in an askwol report also carries one of three
-  <strong>severity levels</strong>, so you can tell a logically broken
-  ontology from an ontology that could be published better. The report
+  <p>Every finding in an askwol report carries one of three
+  <strong>severity levels</strong>. The report
   counts individual findings, not checks: ten classes without a label are
   ten recommendations.</p>
   <p><strong>&#x2717; Error</strong> a parsing failure or a logical or structural problem (for

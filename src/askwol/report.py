@@ -838,7 +838,7 @@ def _overview_line(report: ValidationReport, anchor: str, view: ReportView) -> t
             return None
         if sch.status == S.SKIP:
             return False, "skipped"
-        return True, f"{sch.total_hosts} host(s) checked"
+        return True, f"{sch.total_hosts} namespace(s) checked"
     if anchor == "license":
         lcns = report.license
         if not lcns:
@@ -1179,13 +1179,13 @@ class _ConsoleReport:
         if sch is not None and sch.status != Status.SKIP:
             self.console.print()
             if sch.status == Status.WARN:
-                self.console.print(_flag(RULE_SEVERITY[Rule.IRI_SCHEME_MIXED], f"IRI scheme  -  {len(sch.conflicts)} host(s) on both http and https"))
+                self.console.print(_flag(RULE_SEVERITY[Rule.IRI_SCHEME_MIXED], f"IRI scheme  -  {len(sch.conflicts)} namespace(s) on both http and https"))
                 for c in sch.conflicts:
                     self.console.print(f"  [dim]{escape_markup(c.host)}:[/dim] {c.http_count} http, {c.https_count} https")
             else:
-                self.console.print(f"[green]\u2713 IRI scheme  -  {sch.total_hosts} host(s), single scheme each[/green]")
+                self.console.print(f"[green]\u2713 IRI scheme  -  {sch.total_hosts} namespace(s), single scheme each[/green]")
                 if sch.hosts:
-                    self.console.print("  [dim]hosts:[/dim] " + ", ".join(f"{escape_markup(h.host)} ({escape_markup(h.scheme)})" for h in sch.hosts))
+                    self.console.print("  [dim]namespaces:[/dim] " + ", ".join(f"{escape_markup(h.host)} ({escape_markup(h.scheme)})" for h in sch.hosts))
 
     def _namespaces(self) -> None:
         # Namespace resolution table
