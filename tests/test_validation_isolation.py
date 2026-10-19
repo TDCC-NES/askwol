@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import tempfile
+from pathlib import Path
 
 import httpx
 import pytest
@@ -61,15 +63,44 @@ async def test_real_worker_preserves_structured_html_input_error():
 
 
 @pytest.mark.asyncio
-async def test_hanging_validation_returns_504(monkeypatch):
+async def test_timeout_cleans_up_and_allows_next_validation(monkeypatch):
     monkeypatch.setattr(runner, "WORKER_CMD", _SLEEP_FOREVER_CMD)
     monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 1.0)
+
+    real_create_subprocess_exec = asyncio.create_subprocess_exec
+    spawned: list[asyncio.subprocess.Process] = []
+
+    async def capture_process(*args, **kwargs):
+        proc = await real_create_subprocess_exec(*args, **kwargs)
+        spawned.append(proc)
+        return proc
+
+    real_named_temp_file = tempfile.NamedTemporaryFile
+    created: list[str] = []
+
+    def capture_file(*args, **kwargs):
+        tmp = real_named_temp_file(*args, **kwargs)
+        created.append(tmp.name)
+        return tmp
+
+    monkeypatch.setattr(runner.asyncio, "create_subprocess_exec", capture_process)
+    monkeypatch.setattr(web.tempfile, "NamedTemporaryFile", capture_file)
 
     async with httpx.AsyncClient(transport=ASGITransport(app=web.app), base_url="http://test") as client:
         r = await _post_file(client, "/validate")
 
-    assert r.status_code == 504
-    assert "too long" in r.text
+        assert r.status_code == 504
+        assert "too long" in r.text
+        assert len(spawned) == 1
+        assert spawned[0].returncode is not None, "the hung child should have been killed and reaped"
+        assert len(created) == 1
+        assert not Path(created[0]).exists()
+
+        # Cleanup must leave the next validation able to run normally.
+        monkeypatch.setattr(runner, "WORKER_CMD", [sys.executable, "-m", "askwol.validate_worker"])
+        monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 300.0)
+        ok = await _post_file(client, "/validate")
+        assert ok.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -126,73 +157,6 @@ async def test_excess_concurrent_validations_return_503_immediately(monkeypatch)
 
         first_response = await first_task
         assert first_response.status_code == 504
-
-
-@pytest.mark.asyncio
-async def test_child_process_is_terminated_after_timeout(monkeypatch):
-    monkeypatch.setattr(runner, "WORKER_CMD", _SLEEP_FOREVER_CMD)
-    monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 1.0)
-
-    real_create_subprocess_exec = asyncio.create_subprocess_exec
-    spawned: list[asyncio.subprocess.Process] = []
-
-    async def _capture(*args, **kwargs):
-        proc = await real_create_subprocess_exec(*args, **kwargs)
-        spawned.append(proc)
-        return proc
-
-    monkeypatch.setattr(runner.asyncio, "create_subprocess_exec", _capture)
-
-    async with httpx.AsyncClient(transport=ASGITransport(app=web.app), base_url="http://test") as client:
-        r = await _post_file(client, "/validate")
-
-    assert r.status_code == 504
-    assert len(spawned) == 1
-    assert spawned[0].returncode is not None, "the hung child process should have been killed and reaped"
-
-
-@pytest.mark.asyncio
-async def test_temp_file_removed_after_timeout(monkeypatch, tmp_path):
-    monkeypatch.setattr(runner, "WORKER_CMD", _SLEEP_FOREVER_CMD)
-    monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 1.0)
-
-    created: list = []
-    import tempfile as tempfile_module
-
-    real_named_temp_file = tempfile_module.NamedTemporaryFile
-
-    def _capture(*args, **kwargs):
-        tmp = real_named_temp_file(*args, **kwargs)
-        created.append(tmp.name)
-        return tmp
-
-    monkeypatch.setattr(web.tempfile, "NamedTemporaryFile", _capture)
-
-    async with httpx.AsyncClient(transport=ASGITransport(app=web.app), base_url="http://test") as client:
-        r = await _post_file(client, "/validate")
-
-    assert r.status_code == 504
-    assert len(created) == 1
-    from pathlib import Path
-    assert not Path(created[0]).exists()
-
-
-@pytest.mark.asyncio
-async def test_next_validation_still_works_after_a_timeout(monkeypatch):
-    monkeypatch.setattr(runner, "WORKER_CMD", _SLEEP_FOREVER_CMD)
-    monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 1.0)
-
-    async with httpx.AsyncClient(transport=ASGITransport(app=web.app), base_url="http://test") as client:
-        timed_out = await _post_file(client, "/validate")
-        assert timed_out.status_code == 504
-
-        # Restore the real worker; the isolation machinery (concurrency
-        # slot, subprocess spawning) must not be left in a broken state.
-        monkeypatch.setattr(runner, "WORKER_CMD", [sys.executable, "-m", "askwol.validate_worker"])
-        monkeypatch.setattr(runner, "VALIDATION_TIMEOUT", 300.0)
-
-        ok = await _post_file(client, "/validate")
-        assert ok.status_code == 200
 
 
 @pytest.mark.asyncio

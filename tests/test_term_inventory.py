@@ -36,6 +36,7 @@ def test_inventory_categorizes_terms():
     report = check_term_inventory(g)
 
     assert report.status == Status.OK
+    assert report.naming_issues == []
     assert report.total_terms == 5
     cats = {e.display_name: e.category for e in report.entries}
     assert cats["Person"] == "Class"
@@ -75,17 +76,6 @@ def test_inventory_exempts_coded_identifier_properties():
     g.add((EX["P2_has_type"], RDF.type, OWL.ObjectProperty))
     g.add((EX["P19"], RDF.type, OWL.ObjectProperty))
     g.add((EX["P1i_identifies"], RDF.type, OWL.ObjectProperty))
-
-    report = check_term_inventory(g)
-
-    assert report.status == Status.OK
-    assert report.naming_issues == []
-
-
-def test_inventory_naming_ok_for_well_named_terms():
-    g = _base_graph()
-    g.add((EX["Person"], RDF.type, OWL.Class))
-    g.add((EX["hasName"], RDF.type, OWL.DatatypeProperty))
 
     report = check_term_inventory(g)
 

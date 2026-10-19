@@ -22,23 +22,6 @@ def _graph(ttl: str) -> Graph:
     return g
 
 
-def test_internal_skos_concept_is_flagged():
-    g = _graph(BASE + "ex:biology a skos:Concept .\n")
-    report = check_non_ontology_terms(g)
-    assert report.status == Status.WARN
-    assert report.total_flagged == 1
-    issue = report.terms[0]
-    assert issue.display_name == "biology"
-    assert issue.type_label == "SKOS concept"
-
-
-def test_named_individual_is_not_flagged():
-    g = _graph(BASE + "ex:Person a owl:Class .\nex:alice a ex:Person .\n")
-    report = check_non_ontology_terms(g)
-    assert report.status == Status.OK
-    assert report.terms == []
-
-
 def test_controlled_vocabulary_individuals_are_not_flagged():
     """Regression test: OWL-Time-style enumerations (days of week, time
     units) defined as named individuals alongside their schema should not be
@@ -97,7 +80,9 @@ def test_multiple_non_ontology_terms_are_all_flagged():
     g = _graph(BASE + "ex:biology a skos:Concept .\nex:chemistry a skos:Concept .\n")
     report = check_non_ontology_terms(g)
     assert report.status == Status.WARN
+    assert report.total_flagged == 2
     assert {t.display_name for t in report.terms} == {"biology", "chemistry"}
+    assert all(t.type_label == "SKOS concept" for t in report.terms)
 
 
 def test_no_ontology_declaration_skips():

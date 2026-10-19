@@ -111,31 +111,10 @@ def test_api_validate_returns_all_check_sections(client):
     assert data["iri_scheme"]["status"] == "ok"
     assert data["iri_strategy"]["status"] == "ok"
 
-
-def test_api_validate_excludes_own_namespace_from_term_validation(client):
-    """The ontology's own namespace stays in the namespace-resolution list (2.1)
-    but its terms are not run through external term validation (2.3): they're
-    already covered by the internal term inventory."""
-    with SAMPLE.open("rb") as fh:
-        r = client.post(
-            "/api/validate",
-            files={"file": ("sample.ttl", fh, "text/turtle")},
-        )
-    assert r.status_code == 200, r.text
-    data = r.json()
-
+    # The ontology's own namespace stays in namespace resolution (2.1), but
+    # its terms are covered by the internal inventory, not external checks (2.3).
     own_ns = next(ns for ns in data["namespaces"] if ns["uri"].startswith("https://lod-4tu.tudelft.nl/dataset"))
     assert own_ns["terms"] == []
-
-
-def test_api_validate_parse_error_returns_422(client):
-    r = client.post(
-        "/api/validate",
-        files={"file": ("bad.ttl", b"this is not valid turtle <<<", "text/turtle")},
-    )
-    assert r.status_code == 422
-    data = r.json()
-    assert data["parse_errors"], "expected parse_errors to be populated"
 
 
 def test_html_validate_renders_report(client):

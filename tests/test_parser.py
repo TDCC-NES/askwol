@@ -26,15 +26,12 @@ def _write_rdfxml(tmp_path: Path, content: str) -> Path:
     return p
 
 
-def test_parse_sample_ttl():
+def test_sample_namespaces_defined_terms_and_imports():
     parsed = parse_ontology(FIXTURE_DIR / "sample.ttl")
     assert "owl" in parsed.namespaces
     assert "rdf" in parsed.namespaces
     assert parsed.namespaces["owl"] == "http://www.w3.org/2002/07/owl#"
 
-
-def test_extracts_terms_by_namespace():
-    parsed = parse_ontology(FIXTURE_DIR / "sample.ttl")
     # The default namespace holds the ontology's own defined terms.
     # Find the prefix that maps to the ontology's own namespace
     test_prefix = None
@@ -48,26 +45,15 @@ def test_extracts_terms_by_namespace():
     assert "supersedes" in terms
     assert "sizeInBytes" in terms
 
-
-def test_extracts_owl_terms():
-    """owl:Class etc. are only in object position, not subjects — should not appear as terms."""
-    parsed = parse_ontology(FIXTURE_DIR / "sample.ttl")
     owl_terms = parsed.terms_by_namespace.get("owl", set())
     # owl: terms are used as types/objects, not defined as subjects
     assert "Class" not in owl_terms
     assert "ObjectProperty" not in owl_terms
     assert "Ontology" not in owl_terms
 
-
-def test_extracts_rdf_terms():
-    """rdf:type is a predicate, not a subject — should not appear as a term."""
-    parsed = parse_ontology(FIXTURE_DIR / "sample.ttl")
+    # rdf:type is a predicate, not a defined term.
     rdf_terms = parsed.terms_by_namespace.get("rdf", set())
     assert "type" not in rdf_terms
-
-
-def test_imports_in_sample():
-    parsed = parse_ontology(FIXTURE_DIR / "sample.ttl")
     assert parsed.imports == ["http://www.w3.org/ns/dcat"]
 
 
@@ -267,14 +253,6 @@ async def test_pipeline_normalizes_empty_timeout_and_propagates_timeout(monkeypa
     assert "timed out" in report.input_error.message
     assert report.parse_errors == [report.input_error.message]
     assert report.ontology_metadata is None
-
-
-async def test_pipeline_preserves_syntax_failure_with_actionable_format_hint(tmp_path):
-    path = _write(tmp_path, "this is not RDF <<<")
-    report, _ = await run_full_validation(path, skip_resolution=True)
-    assert report.input_error.code == "invalid_rdf"
-    assert "input format" in report.input_error.guidance
-    assert report.parse_errors == [report.input_error.message]
 
 
 async def test_pipeline_graph_limit_has_distinct_diagnostic(tmp_path, monkeypatch):

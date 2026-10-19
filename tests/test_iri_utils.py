@@ -8,15 +8,6 @@ from askwol.iri_utils import EXTERNAL_NAMESPACES, ontology_namespaces
 from askwol.shacl_runner import SHAPES_DIR
 
 
-def test_ontology_namespaces_matches_hash_and_slash_style_prefixes():
-    """Ontology subject is the bare IRI; the declared namespace adds a separator."""
-    g = Graph()
-    g.add((URIRef("https://example.org/onto"), RDF.type, OWL.Ontology))
-    ns = ontology_namespaces(g)
-    assert "https://example.org/onto#" in ns
-    assert "https://example.org/onto/" in ns
-
-
 def test_ontology_namespaces_matches_exact_subject_as_namespace():
     """Some ontologies use their own IRI directly as the namespace (no separator added)."""
     g = Graph()

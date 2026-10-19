@@ -53,6 +53,8 @@ def test_html_disguised_as_rdf_is_actionable_in_both_api_reports(client, route, 
     assert report["input_error"]["code"] == "html_instead_of_rdf"
     assert "Raw" in report["input_error"]["message"]
     assert report["input_error"]["guide_url"].endswith("#server-config")
+    assert report["input_error"]["line"] is None
+    assert report["input_error"]["column"] is None
     assert report["severity_summary"]["has_errors"] is True
     if compact:
         assert all(check["status"] == "skipped" for check in report["checks"])

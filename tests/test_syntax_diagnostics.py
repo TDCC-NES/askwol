@@ -156,6 +156,7 @@ async def test_upload_api_preserves_diagnostics_through_real_worker(monkeypatch)
     full, compact = [response.json() for response in responses]
     assert compact["input_error"] == full["input_error"]
     error = full["input_error"]
+    assert full["parse_errors"] == [error["message"]]
     assert (error["line"], error["column"]) == (3, 10)
     assert error["format"] == "turtle" and error["source"] is None
     assert error["detail"] and error["guidance"]
@@ -177,15 +178,6 @@ async def test_retrieval_failures_do_not_acquire_syntax_locations(monkeypatch, e
     assert report.input_error.code == code
     assert report.input_error.line is None and report.input_error.column is None
     assert report.input_error.guide_url is None
-
-
-async def test_html_keeps_its_existing_diagnostic_and_help_link(tmp_path):
-    path = tmp_path / "ontology.owl"
-    path.write_text("<html><body>File viewer</body></html>")
-    report, _diagram = await pipeline.run_full_validation(path, skip_resolution=True)
-    assert report.input_error.code == "html_instead_of_rdf"
-    assert report.input_error.guide_url.endswith("#server-config")
-    assert report.input_error.line is None and report.input_error.column is None
 
 
 @pytest.mark.parametrize("newline", ["\n", "\r", "\r\n"], ids=["LF", "CR", "CRLF"])

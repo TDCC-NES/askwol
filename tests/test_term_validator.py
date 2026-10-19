@@ -17,38 +17,20 @@ REMOTE_TURTLE = """
 """
 
 
-def test_term_exists():
-    cache = OntologyCache()
-    g = Graph()
-    g.parse(data=REMOTE_TURTLE, format="turtle")
-    cache.put("http://example.org/vocab#", g)
-
-    results = validate_terms("v", "http://example.org/vocab#", {"RealClass", "realProp"}, cache)
-    assert all(r.status == Status.OK for r in results)
-
-
-def test_term_not_found():
-    cache = OntologyCache()
-    g = Graph()
-    g.parse(data=REMOTE_TURTLE, format="turtle")
-    cache.put("http://example.org/vocab#", g)
-
-    results = validate_terms("v", "http://example.org/vocab#", {"MadeUpClass"}, cache)
-    assert len(results) == 1
-    assert results[0].status == Status.FAIL
-    assert "not found" in results[0].error.lower()
-
-
 def test_mixed_terms():
     cache = OntologyCache()
     g = Graph()
     g.parse(data=REMOTE_TURTLE, format="turtle")
     cache.put("http://example.org/vocab#", g)
 
-    results = validate_terms("v", "http://example.org/vocab#", {"RealClass", "FakeClass"}, cache)
+    results = validate_terms("v", "http://example.org/vocab#", {"RealClass", "realProp", "FakeClass"}, cache)
+    assert len(results) == 3
     by_name = {r.local_name: r for r in results}
+    assert set(by_name) == {"RealClass", "realProp", "FakeClass"}
     assert by_name["RealClass"].status == Status.OK
+    assert by_name["realProp"].status == Status.OK
     assert by_name["FakeClass"].status == Status.FAIL
+    assert "not found" in by_name["FakeClass"].error.lower()
 
 
 def test_deprecated_upstream_term_is_warned():
@@ -89,28 +71,18 @@ def test_namespace_cached_with_error():
 XSD_NS = "http://www.w3.org/2001/XMLSchema#"
 
 
-def test_xsd_valid_types():
-    cache = OntologyCache()
-    results = validate_terms("xsd", XSD_NS, {"string", "integer", "dateTime", "boolean"}, cache)
-    assert all(r.status == Status.OK for r in results), [r.error for r in results]
-
-
 def test_xsd_non_datatype_names_remain_recognised_vocabulary_terms():
     results = validate_terms("xsd", XSD_NS, {"minInclusive", "pattern", "length", "anyType"}, OntologyCache())
     assert all(result.status == Status.OK for result in results)
 
 
-def test_xsd_invalid_type():
-    cache = OntologyCache()
-    results = validate_terms("xsd", XSD_NS, {"madeUpType"}, cache)
-    assert len(results) == 1
-    assert results[0].status == Status.FAIL
-    assert "XSD" in results[0].error
-
-
 def test_xsd_mixed():
     cache = OntologyCache()
-    results = validate_terms("xsd", XSD_NS, {"string", "madeUpType"}, cache)
+    valid_types = {"string", "integer", "dateTime", "boolean"}
+    results = validate_terms("xsd", XSD_NS, valid_types | {"madeUpType"}, cache)
+    assert len(results) == 5
     by_name = {r.local_name: r for r in results}
-    assert by_name["string"].status == Status.OK
+    assert set(by_name) == valid_types | {"madeUpType"}
+    assert all(by_name[name].status == Status.OK for name in valid_types)
     assert by_name["madeUpType"].status == Status.FAIL
+    assert "XSD" in by_name["madeUpType"].error

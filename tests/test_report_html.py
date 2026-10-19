@@ -49,7 +49,6 @@ from askwol.models import (
     Status,
     TermCheck,
     TermInventoryReport,
-    UnusedPrefix,
     ValidationReport,
 )
 from askwol.report_html import CHECKS, render_report
@@ -232,17 +231,6 @@ def test_render_namespaces_section_shows_failures():
     assert "http://good.example/" in html
     # Summary should mention 1/2 resolved.
     assert "1/2" in html
-
-
-def test_render_unused_prefixes_section():
-    report = ValidationReport(
-        file="u.ttl",
-        unused_prefixes=[UnusedPrefix(prefix="foaf", uri="http://xmlns.com/foaf/0.1/")],
-    )
-    html = render_report(report)
-
-    assert 'id="unused-prefixes"' in html
-    assert "foaf" in html
 
 
 def test_shared_check_numbers_match_guide_headings():

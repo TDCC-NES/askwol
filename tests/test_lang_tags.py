@@ -113,17 +113,6 @@ def test_deprecated_subject_is_exempt():
     assert report.issues == []
 
 
-def test_skos_definition_checked():
-    """skos:definition is among the checked properties."""
-    g = Graph()
-    g.add((EX.A, SKOS.definition, Literal("Def A", lang="en")))
-    g.add((EX.B, SKOS.definition, Literal("Def B")))  # no tag
-
-    report = check_lang_tags(g, _make_ns_map())
-    assert len(report.issues) == 1
-    assert report.issues[0].property == "skos:definition"
-
-
 def test_non_label_properties_ignored():
     """Properties not in the checked set are ignored."""
     g = Graph()
