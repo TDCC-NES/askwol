@@ -670,6 +670,26 @@ class InputDiagnostic(BaseModel):
     message: str
     suggested_url: str | None = None
     guide_url: str | None = None
+    format: str | None = None
+    detail: str | None = None
+    line: int | None = Field(default=None, ge=1, description="One-based line where parsing stopped, when known.")
+    column: int | None = Field(default=None, ge=1, description="One-based character column, when known.")
+    source: str | None = Field(default=None, description="Remote JSON-LD context URL when the error is known to be in a context.")
+    guidance: str | None = None
+
+    def parser_message(self) -> str | None:
+        """Describe the parser's stopping point without inventing coordinates."""
+        if self.detail is None and self.line is None and self.column is None:
+            return None
+        position = []
+        if self.line is not None:
+            position.append(f"line {self.line}")
+        if self.column is not None:
+            position.append(f"column {self.column}")
+        if not position:
+            return self.detail
+        message = "Parser stopped at " + ", ".join(position)
+        return f"{message}: {self.detail}" if self.detail else message + "."
 
 
 class ValidationReport(BaseModel):

@@ -284,6 +284,24 @@ def test_input_diagnostic_does_not_turn_untrusted_metadata_into_html_or_active_l
     assert "Ontology checks were not run" in html
 
 
+def test_parser_detail_context_and_guidance_are_literal_html():
+    payload = '<img src=x onerror=alert(1)>'
+    source = 'javascript:alert("<script>")'
+    report = ValidationReport(file="ontology.jsonld", input_error=InputDiagnostic(
+        code="invalid_rdf", message="Could not parse the input as JSON-LD.",
+        detail=payload, line=2, column=4, source=source, guidance=payload,
+    ))
+
+    html = render_report(report)
+    parsed = _ReportHTML(html)
+
+    assert "Parser stopped at line 2, column 4:" in "".join(parsed.text)
+    assert "".join(parsed.text).count(payload) == 2
+    assert source in "".join(parsed.text)
+    assert "img" not in parsed.tags and "script" not in parsed.tags
+    assert not any(link.get("href", "").startswith("javascript:") for link in parsed.links)
+
+
 def test_valid_rdf_licence_literal_is_text_in_html():
     payload = '</code><script>alert(1)</script><img src=x onerror=alert(2)>'
     graph = Graph().parse(

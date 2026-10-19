@@ -273,7 +273,7 @@ async def test_pipeline_preserves_syntax_failure_with_actionable_format_hint(tmp
     path = _write(tmp_path, "this is not RDF <<<")
     report, _ = await run_full_validation(path, skip_resolution=True)
     assert report.input_error.code == "invalid_rdf"
-    assert "input format" in report.input_error.message
+    assert "input format" in report.input_error.guidance
     assert report.parse_errors == [report.input_error.message]
 
 

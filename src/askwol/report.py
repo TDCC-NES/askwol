@@ -140,16 +140,26 @@ class _MarkdownReport:
             self.w("")
         diagnostic = self.report.input_error
         if diagnostic:
-            label = "Parse Errors" if diagnostic.code == "invalid_rdf" else "Input error"
+            label = "Parse error" if diagnostic.code == "invalid_rdf" else "Input error"
             self.w(f"## {label}")
             self.w("")
             self.w(_md_text(diagnostic.message))
+            if diagnostic.source:
+                self.w("")
+                self.w(f"Context: {_md_link(diagnostic.source)}")
+            if parser_message := diagnostic.parser_message():
+                self.w("")
+                self.w(_md_text(parser_message))
+            if diagnostic.guidance:
+                self.w("")
+                self.w(_md_text(diagnostic.guidance))
             if diagnostic.suggested_url:
                 self.w("")
                 self.w(f"Suggested URL: {_md_link(diagnostic.suggested_url)}")
             if diagnostic.guide_url:
                 self.w("")
-                self.w(f"Learn more: {_md_link(diagnostic.guide_url)}")
+                title = "Help with RDF syntax" if diagnostic.code == "invalid_rdf" else "Learn more"
+                self.w(f"{title}: {_md_link(diagnostic.guide_url)}")
             self.w("")
         remaining_errors = [err for err in self.report.parse_errors
                             if diagnostic is None or err != diagnostic.message]
@@ -1039,13 +1049,20 @@ class _ConsoleReport:
             self.console.print()
         diagnostic = self.report.input_error
         if diagnostic:
-            label = "Parse errors" if diagnostic.code == "invalid_rdf" else "Input error"
+            label = "Parse error" if diagnostic.code == "invalid_rdf" else "Input error"
             self.console.print(f"[bold red]{label}:[/bold red]")
             self.console.print(Text("  " + diagnostic.message))
+            if diagnostic.source:
+                self.console.print(Text("Context: " + diagnostic.source))
+            if parser_message := diagnostic.parser_message():
+                self.console.print(Text("  " + parser_message))
+            if diagnostic.guidance:
+                self.console.print(Text(diagnostic.guidance))
             if diagnostic.suggested_url:
                 self.console.print(Text("Suggested URL: " + diagnostic.suggested_url))
             if diagnostic.guide_url:
-                self.console.print(Text("Learn more: " + diagnostic.guide_url))
+                title = "Help with RDF syntax" if diagnostic.code == "invalid_rdf" else "Learn more"
+                self.console.print(Text(title + ": " + diagnostic.guide_url))
             self.console.print()
         remaining_errors = [err for err in self.report.parse_errors
                             if diagnostic is None or err != diagnostic.message]

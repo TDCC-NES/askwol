@@ -8,6 +8,8 @@ from urllib.parse import unquote, urlsplit
 
 import httpx
 
+from askwol.parse_diagnostics import FORMAT_LABELS, SYNTAX_GUIDANCE, SYNTAX_GUIDE_URL, parse_diagnostic
+
 GUIDE_URL = "https://lod-4tu.tudelft.nl/askwol/guide#server-config"
 RDF_FORMAT_SUFFIXES = {
     "turtle": ".ttl", "xml": ".rdf", "json-ld": ".jsonld", "nt": ".nt", "n3": ".n3",
@@ -201,7 +203,7 @@ def reject_html_content(content: bytes, *, format: str | None = None) -> None:
         raise html_input_error()
 
 
-def input_diagnostic(exc: Exception, source: str | Path) -> dict[str, str | None]:
+def input_diagnostic(exc: Exception, source: str | Path) -> dict:
     """Normalize failures at the pipeline boundary; public parsers keep types."""
     from askwol.network import SSRFBlockedError
 
@@ -221,11 +223,17 @@ def input_diagnostic(exc: Exception, source: str | Path) -> dict[str, str | None
     elif isinstance(exc, OSError):
         error = InputError("io_error", f"Could not read the ontology file: {detail}")
     else:
+        parsed = parse_diagnostic(exc)
+        format_label = FORMAT_LABELS.get(parsed.get("format"), "RDF")
         error = InputError(
-            "invalid_rdf", "Could not parse the input as RDF. Check that it contains raw RDF and that the input format matches its contents. " + detail,
-            guide_url=GUIDE_URL,
+            "invalid_rdf", f"Could not parse the input as {format_label}.",
+            guide_url=SYNTAX_GUIDE_URL,
         )
-    return {
+    result = {
         "code": error.code, "message": error.message,
         "suggested_url": error.suggested_url or github_raw_url(str(source)), "guide_url": error.guide_url,
     }
+    if error.code == "invalid_rdf":
+        result.update(parse_diagnostic(exc))
+        result["guidance"] = SYNTAX_GUIDANCE
+    return result

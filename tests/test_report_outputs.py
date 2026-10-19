@@ -5,7 +5,7 @@ from io import StringIO
 from pathlib import Path
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from rich.console import Console
 
 from askwol.checks import CHECKS, DATATYPE_SCOPE, REASONER_SCOPE
@@ -59,6 +59,72 @@ def test_input_diagnostic_is_actionable_without_duplicate_parse_message():
         assert diagnostic.suggested_url in output
         assert diagnostic.guide_url in output
         assert "Ontology checks were not run" in output
+
+
+@pytest.mark.parametrize(("line", "column", "detail", "expected"), [
+    (3, 8, "Expected a full stop.", "Parser stopped at line 3, column 8: Expected a full stop."),
+    (3, None, "Invalid line.", "Parser stopped at line 3: Invalid line."),
+    (None, None, "Unexpected end of input.", "Unexpected end of input."),
+    (3, 8, None, "Parser stopped at line 3, column 8."),
+    (None, None, None, None),
+])
+def test_syntax_diagnostic_shows_only_available_parser_information(line, column, detail, expected):
+    diagnostic = InputDiagnostic(
+        code="invalid_rdf", message="Could not parse the input as Turtle.", format="turtle",
+        detail=detail, line=line, column=column,
+        guidance="Fix the reported error and try again. Further syntax errors may appear.",
+        guide_url="https://lod-4tu.tudelft.nl/askwol/guide#rdf-syntax",
+    )
+    report = ValidationReport(file="ontology.ttl", input_error=diagnostic, parse_errors=[diagnostic.message])
+
+    for output in _human_outputs(report):
+        assert output.count(diagnostic.message) == 1
+        assert output.count(diagnostic.guidance) == 1
+        assert "Help with RDF syntax" in output
+        if expected:
+            assert output.count(expected) == 1
+        else:
+            assert "Parser stopped" not in output
+
+
+def test_syntax_diagnostic_is_preserved_in_full_and_compact_json():
+    diagnostic = InputDiagnostic(
+        code="invalid_rdf", message="Could not parse the input as JSON-LD.", format="json-ld",
+        detail="Expected a property name.", line=2, column=4,
+        source="https://example.org/context.jsonld", guidance="Fix the context and try again.",
+        guide_url="https://lod-4tu.tudelft.nl/askwol/guide#rdf-syntax",
+    )
+    report = ValidationReport(file="ontology.jsonld", input_error=diagnostic, parse_errors=[diagnostic.message])
+
+    restored = ValidationReport.model_validate_json(report_as_json(report))
+    assert restored.input_error == diagnostic
+    assert compact_report(report).model_dump(mode="json")["input_error"] == diagnostic.model_dump(mode="json")
+    for output in _human_outputs(report):
+        assert "Context:" in output
+        assert diagnostic.source in output
+        assert output.index("Context:") < output.index("Parser stopped")
+
+
+def test_parser_metadata_is_literal_markdown_and_terminal_text():
+    payload = '<img src=x onerror=alert(1)> [bold]parser[/bold]'
+    source = "javascript:alert(1)"
+    report = ValidationReport(file="ontology.ttl", input_error=InputDiagnostic(
+        code="invalid_rdf", message="Could not parse the input as Turtle.",
+        detail=payload, source=source, guidance=payload,
+    ))
+
+    _, markdown, terminal = _human_outputs(report)
+
+    assert markdown.count('&lt;img src=x onerror=alert(1)&gt; \\[bold\\]parser\\[/bold\\]') == 2
+    assert f"Context: {source}" in markdown
+    assert f"](<{source}>)" not in markdown
+    assert terminal.count(payload) == 2
+
+
+@pytest.mark.parametrize("coordinate", ["line", "column"])
+def test_parser_coordinates_are_one_based(coordinate):
+    with pytest.raises(ValidationError):
+        InputDiagnostic(code="invalid_rdf", message="Invalid RDF.", **{coordinate: 0})
 
 
 def test_source_guidance_is_literal_and_does_not_add_findings():
