@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import textwrap
+from contextlib import closing
 
 import httpx
 import pytest
@@ -206,7 +207,7 @@ def test_the_shared_store_holds_neither_the_ip_nor_the_source_name():
     with progress.track(IP, "my-secret-ontology.ttl", steps=progress.UPLOAD_FLOW):
         usage._init()
         raw = usage._DB_PATH.read_bytes()
-        with usage._connect() as conn:
+        with closing(usage._connect()) as conn:
             rows = [tuple(r) for r in conn.execute("SELECT * FROM progress_jobs")]
     assert len(rows) == 1
     assert IP.encode() not in raw

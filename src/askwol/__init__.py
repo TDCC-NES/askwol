@@ -1,5 +1,6 @@
 """askwol  -  OWL ontology checker for namespace resolution and term existence."""
 
+import warnings
 import xml.sax
 
 import defusedxml
@@ -10,7 +11,16 @@ import defusedxml.expatreader
 # hardening it against XML entity-expansion ("billion laughs") denial of
 # service. Defuse the stdlib XML parsers globally, once, before any RDF
 # parsing can happen.
-defusedxml.defuse_stdlib()
+# defusedxml 0.7.1 imports its deprecated cElementTree alias internally.
+# Keep all parser hardening while applying the warning fix from upstream.
+with warnings.catch_warnings():
+    warnings.filterwarnings(
+        "ignore",
+        message=r"^defusedxml\.cElementTree is deprecated, import from defusedxml\.ElementTree instead\.$",
+        category=DeprecationWarning,
+        module=r"^defusedxml$",
+    )
+    defusedxml.defuse_stdlib()
 
 # defuse_stdlib()'s default also forbids *any* <!ENTITY> declaration, even
 # harmless internal ones used purely as string macros for long namespace

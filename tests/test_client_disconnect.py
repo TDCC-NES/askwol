@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from contextlib import closing
 
 import httpx
 import pytest
@@ -75,7 +76,7 @@ async def _wait_until(predicate, timeout: float = 5.0) -> None:
 
 def _job_outcomes() -> list[str]:
     usage._init()
-    with usage._connect() as conn:
+    with closing(usage._connect()) as conn:
         return [row["outcome"] for row in conn.execute("SELECT outcome FROM validation_jobs ORDER BY started_at")]
 
 

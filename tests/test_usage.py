@@ -4,6 +4,11 @@ The autouse fixture in conftest.py already points usage._DB_PATH at a fresh
 temp file per test, so these can call usage.record() freely.
 """
 
+import sqlite3
+from contextlib import closing
+
+import pytest
+
 from askwol import usage
 
 
@@ -77,3 +82,61 @@ def test_distinct_sources_and_statuses():
     assert statuses["200"] == 4
     assert statuses["422"] == 1
     assert statuses[usage.STATUS_NONE] == 1
+
+
+@pytest.fixture
+def tracked_connections(monkeypatch):
+    connections = []
+    connect = usage._connect
+
+    def tracked_connect():
+        conn = connect()
+        connections.append(conn)
+        return conn
+
+    monkeypatch.setattr(usage, "_connect", tracked_connect)
+    yield connections
+    for conn in connections:
+        conn.close()
+
+
+def test_usage_closes_connections_after_events_jobs_and_progress(tracked_connections):
+    usage.record("validate", source="test.ttl", status="200")
+    assert usage.events_count() == 1
+    assert len(usage.all_events()) == 1
+    assert usage.stats()["total_events"] == 1
+    assert usage.distinct_sources() == [{"source": "test.ttl", "n": 1}]
+    assert usage.distinct_statuses() == [{"status": "200", "n": 1}]
+
+    usage.job_started("request", kind="validate", source="test.ttl")
+    usage.job_phase("request", "checks")
+    usage.stuck_jobs()
+    usage.job_finished("request", outcome="ok", status="200", duration_ms=1)
+
+    usage.progress_put("key", "owner", "[]", "parsing", 1.0)
+    usage.progress_set_phase("key", "owner", "checks", 2.0)
+    assert usage.progress_get("key")["phase"] == "checks"
+    usage.progress_finish("key", "owner", 3.0)
+    usage.progress_prune(finished_before=2.0, updated_before=1.0)
+    usage.progress_drop("key", "owner")
+
+    assert tracked_connections
+    for conn in tracked_connections:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+            conn.execute("SELECT 1")
+
+
+def test_record_rolls_back_and_closes_connection_after_failed_write(tracked_connections):
+    usage._init()
+    with closing(usage._connect()) as conn, conn:
+        conn.execute(
+            "CREATE TRIGGER reject_event AFTER INSERT ON events "
+            "BEGIN SELECT RAISE(FAIL, 'reject event'); END"
+        )
+
+    usage.record("validate", source="rejected.ttl")
+
+    assert usage.events_count() == 0
+    for conn in tracked_connections:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+            conn.execute("SELECT 1")

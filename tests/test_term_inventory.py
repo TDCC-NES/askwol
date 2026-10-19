@@ -270,7 +270,7 @@ def test_datatypes_recognized():
 def test_datatypes_flags_misspelled_range():
     g = _base_graph()
     g.add((EX["age"], RDF.type, OWL.DatatypeProperty))
-    g.add((EX["age"], RDFS.range, XSD["stirng"]))
+    g.add((EX["age"], RDFS.range, URIRef(str(XSD) + "stirng")))
 
     report = check_datatypes(g)
 
@@ -281,7 +281,7 @@ def test_datatypes_flags_misspelled_range():
 def test_datatypes_flags_misspelled_literal_datatype():
     g = _base_graph()
     g.add((EX["born"], RDF.type, OWL.DatatypeProperty))
-    g.add((EX["alice"], EX["born"], Literal("2000", datatype=XSD["dat"])))
+    g.add((EX["alice"], EX["born"], Literal("2000", datatype=URIRef(str(XSD) + "dat"))))
 
     report = check_datatypes(g)
 

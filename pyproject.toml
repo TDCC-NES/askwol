@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "askwol"
-version = "0.2.0"
+version = "0.3.0"
 description = "OWL ontology review and validation: class diagram, namespace and term checks, metadata and documentation review"
 requires-python = ">=3.10"
 license = "MIT"
@@ -36,6 +36,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "httpx2>=2.13,<3",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "respx>=0.22",
@@ -55,3 +56,10 @@ packages = ["src/askwol"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 pythonpath = ["src"]
+filterwarnings = [
+    "error",
+    # RDFLib 7.6.0 still uses a positional re.sub count and the deprecated
+    # Dataset alias internally. Keep these exceptions limited to its callers.
+    "ignore:^'count' is passed as positional argument$:DeprecationWarning:rdflib\\.plugins\\.sparql\\.operators$",
+    "ignore:^Dataset\\.default_context is deprecated, use Dataset\\.default_graph instead\\.$:DeprecationWarning:rdflib\\.(graph|plugins\\.parsers\\.notation3)$",
+]

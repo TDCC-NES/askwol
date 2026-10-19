@@ -17,6 +17,7 @@ import os
 import secrets
 import sqlite3
 import threading
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -43,7 +44,7 @@ def _init() -> None:
         if _initialised:
             return
         _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with _connect() as conn:
+        with closing(_connect()) as conn, conn:
             conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS events (
@@ -124,7 +125,7 @@ def record(
         return
     try:
         _init()
-        with _connect() as conn:
+        with closing(_connect()) as conn, conn:
             conn.execute(
                 "INSERT INTO events(ts, kind, source, status, duration_ms, ip_hash) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
@@ -167,7 +168,7 @@ def stats(
     _init()
     url_source_page = max(1, url_source_page)
     upload_source_page = max(1, upload_source_page)
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         cutoff = f"-{int(days)} days"
         totals = conn.execute(
             "SELECT COUNT(*) AS n, COUNT(DISTINCT ip_hash) AS uniq FROM events"
@@ -267,7 +268,7 @@ def events_count(*, source: str | None = None, status: str | None = None) -> int
         return 0
     _init()
     where, params = _event_filter_clause(source, status)
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         row = conn.execute(f"SELECT COUNT(*) AS n FROM events{where}", params).fetchone()
     return int(row["n"]) if row else 0
 
@@ -281,7 +282,7 @@ def all_events(
         return []
     _init()
     where, params = _event_filter_clause(source, status)
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         rows = conn.execute(
             f"SELECT ts, kind, source, status, duration_ms, ip_hash FROM events{where} "
             "ORDER BY ts DESC LIMIT ? OFFSET ?",
@@ -296,7 +297,7 @@ def distinct_sources(limit: int = 500) -> list[dict[str, Any]]:
     if _DISABLED:
         return []
     _init()
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         rows = conn.execute(
             "SELECT source, COUNT(*) AS n FROM events "
             "WHERE source IS NOT NULL GROUP BY source ORDER BY n DESC LIMIT ?",
@@ -311,7 +312,7 @@ def distinct_statuses() -> list[dict[str, Any]]:
     if _DISABLED:
         return []
     _init()
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         rows = conn.execute(
             "SELECT COALESCE(status, '(none)') AS status, COUNT(*) AS n "
             "FROM events GROUP BY status ORDER BY n DESC"
@@ -330,7 +331,7 @@ def job_started(request_id: str, *, kind: str, source: str | None) -> None:
         return
     try:
         _init()
-        with _connect() as conn:
+        with closing(_connect()) as conn, conn:
             conn.execute(
                 "INSERT OR REPLACE INTO validation_jobs(request_id, kind, source, started_at, outcome) "
                 "VALUES (?, ?, ?, ?, 'running')",
@@ -346,7 +347,7 @@ def job_phase(request_id: str, phase: str) -> None:
         return
     try:
         _init()
-        with _connect() as conn:
+        with closing(_connect()) as conn, conn:
             conn.execute(
                 "UPDATE validation_jobs SET phase = ?, phase_at = ? WHERE request_id = ?",
                 (phase, datetime.now(timezone.utc).isoformat(timespec="seconds"), request_id),
@@ -362,7 +363,7 @@ def job_finished(request_id: str, *, outcome: str, status: str | None, duration_
         return
     try:
         _init()
-        with _connect() as conn:
+        with closing(_connect()) as conn, conn:
             conn.execute(
                 "UPDATE validation_jobs SET finished_at = ?, outcome = ?, status = ?, duration_ms = ? "
                 "WHERE request_id = ?",
@@ -382,7 +383,7 @@ def stuck_jobs(older_than_seconds: int = 600) -> list[dict[str, Any]]:
     if _DISABLED:
         return []
     _init()
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         rows = conn.execute(
             "SELECT request_id, kind, source, started_at, phase, phase_at FROM validation_jobs "
             "WHERE outcome = 'running' AND started_at < datetime('now', ?) "
@@ -413,7 +414,7 @@ def progress_key(client_ip: str, source: str) -> str | None:
 
 def progress_put(key: str, owner: str, steps: str, phase: str, now: float) -> None:
     try:
-        with _connect() as conn:
+        with closing(_connect()) as conn, conn:
             conn.execute(
                 "INSERT OR REPLACE INTO progress_jobs(key, owner, steps, phase, updated_at, finished_at) "
                 "VALUES (?, ?, ?, ?, ?, NULL)",
@@ -425,7 +426,7 @@ def progress_put(key: str, owner: str, steps: str, phase: str, now: float) -> No
 
 def progress_set_phase(key: str, owner: str, phase: str, now: float) -> None:
     try:
-        with _connect() as conn:
+        with closing(_connect()) as conn, conn:
             conn.execute(
                 "UPDATE progress_jobs SET phase = ?, updated_at = ? WHERE key = ? AND owner = ?",
                 (phase, now, key, owner),
@@ -436,7 +437,7 @@ def progress_set_phase(key: str, owner: str, phase: str, now: float) -> None:
 
 def progress_finish(key: str, owner: str, now: float) -> None:
     try:
-        with _connect() as conn:
+        with closing(_connect()) as conn, conn:
             conn.execute(
                 "UPDATE progress_jobs SET finished_at = ? WHERE key = ? AND owner = ?",
                 (now, key, owner),
@@ -449,7 +450,7 @@ def progress_drop(key: str, owner: str) -> None:
     """Remove a job, but only if it is still the one `owner` registered (a newer
     request for the same source may have replaced it)."""
     try:
-        with _connect() as conn:
+        with closing(_connect()) as conn, conn:
             conn.execute("DELETE FROM progress_jobs WHERE key = ? AND owner = ?", (key, owner))
     except Exception:  # noqa: BLE001
         pass
@@ -457,7 +458,7 @@ def progress_drop(key: str, owner: str) -> None:
 
 def progress_get(key: str) -> dict[str, Any] | None:
     try:
-        with _connect() as conn:
+        with closing(_connect()) as conn, conn:
             row = conn.execute(
                 "SELECT steps, phase, finished_at FROM progress_jobs WHERE key = ?", (key,)
             ).fetchone()
@@ -470,7 +471,7 @@ def progress_prune(finished_before: float, updated_before: float) -> None:
     """Drop jobs that finished long ago, and ones nobody has touched for ages
     (left behind by a process that died mid-validation)."""
     try:
-        with _connect() as conn:
+        with closing(_connect()) as conn, conn:
             conn.execute(
                 "DELETE FROM progress_jobs WHERE (finished_at IS NOT NULL AND finished_at < ?) "
                 "OR updated_at < ?",
