@@ -119,4 +119,4 @@ def test_empty_parser_exception_still_has_an_actionable_diagnostic():
     result = input_diagnostic(ValueError(), "ontology.ttl")
     assert result["code"] == "invalid_rdf"
     assert result["message"]
-    assert "input format" in result["message"]
+    assert "input format" in result["guidance"]

@@ -1268,6 +1268,35 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     },
     {
         "group": "practice",
+        "anchor": "rdf-syntax",
+        "title": "",
+        "toc_label": "Fix RDF syntax errors",
+        "body": """\
+  <p>askwol stops at the first blocking parse error; ontology checks are not
+  run. Check that the selected format matches the file contents. A reported
+  location marks where the parser stopped; the cause may be earlier.
+  Correct the error and try again. Further errors may then appear.</p>
+  <p>For syntax feedback while editing:</p>
+  <table class="syntax-tools">
+    <thead><tr><th scope="col">Format</th><th scope="col">Tools</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Turtle</th><td><a href="https://marketplace.visualstudio.com/items?itemName=stardog-union.vscode-langserver-turtle" target="_blank" rel="noopener">Turtle Language Server</a>
+      for VS Code.</td></tr>
+      <tr><th scope="row">RDF/XML</th><td><a href="https://github.com/redhat-developer/vscode-xml" target="_blank" rel="noopener">XML Language Support by Red Hat</a>
+      for VS Code checks XML syntax, not all RDF/XML rules.</td></tr>
+      <tr><th scope="row">JSON-LD</th><td>A strict JSON editor, then the
+      <a href="https://json-ld.org/playground/" target="_blank" rel="noopener">JSON-LD Playground</a>.
+      Valid JSON is not necessarily valid JSON-LD.</td></tr>
+      <tr><th scope="row">N-Triples / N3</th><td><a href="https://github.com/faubulous/mentor-vscode" target="_blank" rel="noopener">Mentor</a>
+      for VS Code checks syntax as you edit.</td></tr>
+    </tbody>
+  </table>
+  <p>These tools may also stop at a blocking error. askwol does not repair
+  the file or collect all syntax errors.</p>
+""",
+    },
+    {
+        "group": "practice",
         "anchor": "server-config",
         "title": "",
         "toc_label": "Serving ontology files with content negotiation",
@@ -1580,6 +1609,8 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   .heading-anchor:focus-visible {{ outline: 2px solid currentColor; outline-offset: 2px; }}
   @media (hover: none) {{ .heading-anchor {{ opacity: 1; }} }}
   .section-lead {{ color: #555; font-size: 1.05em; font-style: italic; margin: 0.4em 0 1.1em; }}
+  .syntax-tools {{ width: 100%; border-collapse: collapse; margin: 1em 0; }}
+  .syntax-tools th, .syntax-tools td {{ text-align: left; vertical-align: top; padding: 0.45em 0.65em; border-bottom: 1px solid #e5e7eb; }}
   .byline {{ color: #555; font-size: 0.9em; }}
   a {{ color: #4a7c59; }}
   code {{ background: #f0f0f0; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; }}

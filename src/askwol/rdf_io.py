@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 import json
 from copy import deepcopy
 from io import BytesIO
@@ -11,6 +12,7 @@ from urllib.request import url2pathname
 
 from rdflib import Dataset, Graph
 from rdflib.plugins.parsers.jsonld import Parser as JsonLDParser
+from rdflib.plugins.parsers.ntriples import NTGraphSink, W3CNTriplesParser
 from rdflib.plugins.shared.jsonld.context import Context
 
 from askwol.input_utils import (
@@ -22,6 +24,7 @@ from askwol.input_utils import (
     validate_base_uri,
 )
 from askwol.network import DEFAULT_TIMEOUT, MAX_CONTEXT_BYTES, fetch_document
+from askwol.parse_diagnostics import annotate_parse_error
 
 MAX_CONTEXTS = 32
 
@@ -49,9 +52,12 @@ class _ContextLoader:
         )
         select_rdf_format(final_url, content_type=content_type, format="json-ld")
         reject_html_content(content)
-        document = json.loads(content)
-        if not isinstance(document, dict) or "@context" not in document:
-            raise ValueError("Remote JSON-LD document has no @context")
+        try:
+            document = json.loads(content)
+            if not isinstance(document, dict) or "@context" not in document:
+                raise ValueError("Remote JSON-LD document has no @context")
+        except (ValueError, UnicodeError) as exc:
+            raise annotate_parse_error(exc, "json-ld", source=final_url)
         self.documents[url] = document
         self.final_urls[url] = final_url
         return document
@@ -65,7 +71,8 @@ class _SafeContext(Context):
     def _fetch_context(self, source, base, referenced_contexts):
         url = urljoin(base or self.doc_base or "", source)
         if url in referenced_contexts:
-            raise ValueError("Recursive JSON-LD context inclusion")
+            error = ValueError("Recursive JSON-LD context inclusion")
+            raise annotate_parse_error(error, "json-ld", source=self._loader.final_urls.get(url, url))
         referenced_contexts.add(url)
         return deepcopy(self._loader.load(url))
 
@@ -80,9 +87,15 @@ class _SafeContext(Context):
                 super()._prep_sources(base, [source], sources, referenced_contexts, in_source_url)
 
     def _read_source(self, source, source_url=None, referenced_contexts=None):
-        if isinstance(source.get("@import"), str):
-            source = {**source, "@import": urljoin(source_url or self.base or "", source["@import"])}
-        return super()._read_source(source, source_url, referenced_contexts)
+        try:
+            if isinstance(source.get("@import"), str):
+                source = {**source, "@import": urljoin(source_url or self.base or "", source["@import"])}
+            return super()._read_source(source, source_url, referenced_contexts)
+        except Exception as exc:
+            # RDFLib merges imported and local definitions before processing
+            # them. Without a known origin, do not blame the parent context.
+            origin = None if isinstance(source, dict) and isinstance(source.get("@import"), str) else source_url
+            raise annotate_parse_error(exc, "json-ld", source=origin)
 
     def _subcontext(self, source, propagate):
         # RDFLib constructs Context directly here; keep the scoped loader in
@@ -125,6 +138,18 @@ class _JsonLDDataset(Dataset):
         self.default_graph = graph
 
 
+class _LocatedNTriplesParser(W3CNTriplesParser):
+    """Track logical line numbers while RDFLib parses N-Triples."""
+
+    line_number = 0
+
+    def readline(self):
+        line = super().readline()
+        if line is not None:
+            self.line_number += 1
+        return line
+
+
 def parse_rdf_bytes(
     graph: Graph, content: bytes, *, format: str, base_uri: str | None = None,
     allow_network: bool = True, timeout: float | None = DEFAULT_TIMEOUT,
@@ -133,19 +158,25 @@ def parse_rdf_bytes(
     reject_html_content(content, format=format)
     if base_uri is not None:
         validate_base_uri(base_uri)
-    if format == "json-ld":
-        context = _SafeContext(_ContextLoader(allow_network, timeout), base=base_uri or graph.absolutize(""))
-        dataset = _JsonLDDataset(store=graph.store)
-        dataset.default_graph = graph
-        _SafeJsonLDParser().parse(json.loads(content), context, dataset)
-    else:
-        try:
+    nt_parser = None
+    try:
+        if format == "json-ld":
+            context = _SafeContext(_ContextLoader(allow_network, timeout), base=base_uri or graph.absolutize(""))
+            dataset = _JsonLDDataset(store=graph.store)
+            dataset.default_graph = graph
+            _SafeJsonLDParser().parse(json.loads(content), context, dataset)
+        elif format == "nt":
+            nt_parser = _LocatedNTriplesParser(NTGraphSink(graph))
+            with codecs.getreader("utf-8")(BytesIO(content)) as stream:
+                nt_parser.parse(stream)
+        else:
             graph.parse(BytesIO(content), format=format, publicID=base_uri)
-        except Exception:
-            # A bare <html> can also start valid Turtle. Only classify this
-            # ambiguous case as HTML once RDF parsing has failed.
+    except Exception as exc:
+        # A bare <html> can also start valid Turtle. Classify it only after
+        # parsing fails. JSON-LD context errors must retain their own source.
+        if format != "json-ld":
             reject_html_content(content)
-            raise
+        raise annotate_parse_error(exc, format, line=nt_parser.line_number if nt_parser else None)
     return graph
 
 

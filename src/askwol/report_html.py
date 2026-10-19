@@ -179,11 +179,19 @@ class _HtmlReport:
         if diagnostic:
             label = "Parse error" if diagnostic.code == "invalid_rdf" else "Input error"
             self.parts.append(f'<div class="error"><strong>{label}:</strong> {escape(diagnostic.message)}')
+            if diagnostic.source:
+                url = diagnostic.source
+                self.parts.append(f'<p>Context: {_external_link(url, "<code>" + escape(url) + "</code>")}</p>')
+            if parser_message := diagnostic.parser_message():
+                self.parts.append(f'<p>{escape(parser_message)}</p>')
+            if diagnostic.guidance:
+                self.parts.append(f'<p>{escape(diagnostic.guidance)}</p>')
             if diagnostic.suggested_url:
                 url = diagnostic.suggested_url
                 self.parts.append(f'<p>Suggested URL: {_external_link(url, "<code>" + escape(url) + "</code>")}</p>')
             if diagnostic.guide_url:
-                self.parts.append(f'<p>{_external_link(diagnostic.guide_url, "Learn more about ontology URLs")}</p>')
+                title = "Help with RDF syntax" if diagnostic.code == "invalid_rdf" else "Learn more about ontology URLs"
+                self.parts.append(f'<p>{_external_link(diagnostic.guide_url, title)}</p>')
             self.parts.append('</div>')
         for err in self.report.parse_errors:
             if diagnostic is None or err != diagnostic.message:
