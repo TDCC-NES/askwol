@@ -199,10 +199,8 @@ UPLOAD_HTML = """<!DOCTYPE html>
     </div>
 
     <div id="panel-url" class="tab-panel active">
-      <!-- github-url-guidance -->
       <label for="url-input">Ontology URL</label>
-      <input type="url" id="url-input" name="url" placeholder="https://example.org/ontology.ttl" aria-describedby="url-help" required>
-      <p id="url-help" class="input-help">Use a URL that serves ontology data. On GitHub, select <strong>Raw</strong> and copy its URL.</p>
+      <input type="url" id="url-input" name="url" placeholder="https://example.org/ontology.ttl" required>
       <div class="examples-label">Or try a well-known ontology</div>
       <div class="chips">
         <button type="button" class="chip" data-url="http://xmlns.com/foaf/spec/index.rdf">FOAF</button>
