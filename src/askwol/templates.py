@@ -130,7 +130,11 @@ UPLOAD_HTML = """<!DOCTYPE html>
 
   /* Examples */
   .examples-label { font-size: 0.8em; color: var(--muted); margin: 1em 0 0.4em; }
-  .chips { display: flex; flex-wrap: wrap; gap: 0.4em; }
+  .examples { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.2em 0.9em; margin-top: 0.6em; font-size: 0.85em; }
+  .examples > span { color: var(--muted); }
+  .example { padding: 0.25em 0; border: 0; background: none; color: var(--accent-dark); font: inherit; line-height: inherit; cursor: pointer; text-decoration: underline; text-decoration-color: #cfdcd2; text-underline-offset: 0.2em; }
+  .example:hover { color: var(--accent); text-decoration-color: currentColor; }
+  .example:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
   .chip { padding: 0.3em 0.85em; font-size: 0.85em; background: #f3f4f6; color: #374151; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; transition: all 0.15s; font-family: inherit; }
   .chip:hover { background: #eef3ef; color: var(--accent-dark); border-color: #cfdcd2; }
 
@@ -199,17 +203,19 @@ UPLOAD_HTML = """<!DOCTYPE html>
     </div>
 
     <div id="panel-url" class="tab-panel active">
+      <!-- Keep the following marker: web._github_url_guidance inserts its notice here. -->
+      <!-- github-url-guidance -->
       <label for="url-input">Ontology URL</label>
       <input type="url" id="url-input" name="url" placeholder="https://example.org/ontology.ttl" required>
-      <div class="examples-label">Or try a well-known ontology</div>
-      <div class="chips">
-        <button type="button" class="chip" data-url="http://xmlns.com/foaf/spec/index.rdf">FOAF</button>
-        <button type="button" class="chip" data-url="https://www.w3.org/ns/prov.ttl">PROV-O</button>
-        <button type="button" class="chip" data-url="https://www.w3.org/2006/time">Time</button>
-        <button type="button" class="chip" data-url="https://raw.githubusercontent.com/opengeospatial/geosemantics-semantic-resources/refs/heads/main/resources/geosparql-swg/geosparql-1.1/ontologies/geo.ttl">GeoSPARQL</button>
-        <button type="button" class="chip" data-url="https://www.w3.org/TR/owl-guide/wine.rdf">Wine</button>
-        <button type="button" class="chip" data-url="https://cidoc-crm.org/rdfs/7.1.3/CIDOC_CRM_v7.1.3.rdfs">CIDOC CRM</button>
-        <button type="button" class="chip" data-url="https://lod-4tu.tudelft.nl/ontologies/sample.ttl">sample ontology</button>
+      <div class="examples" role="group" aria-labelledby="examples-label">
+        <span id="examples-label">Examples</span>
+        <button type="button" class="example" data-url="http://xmlns.com/foaf/spec/index.rdf">FOAF</button>
+        <button type="button" class="example" data-url="https://www.w3.org/ns/prov.ttl">PROV-O</button>
+        <button type="button" class="example" data-url="https://www.w3.org/2006/time">Time</button>
+        <button type="button" class="example" data-url="https://raw.githubusercontent.com/opengeospatial/geosemantics-semantic-resources/refs/heads/main/resources/geosparql-swg/geosparql-1.1/ontologies/geo.ttl">GeoSPARQL</button>
+        <button type="button" class="example" data-url="https://www.w3.org/TR/owl-guide/wine.rdf">Wine</button>
+        <button type="button" class="example" data-url="https://cidoc-crm.org/rdfs/7.1.3/CIDOC_CRM_v7.1.3.rdfs">CIDOC CRM</button>
+        <button type="button" class="example" data-url="https://lod-4tu.tudelft.nl/ontologies/sample.ttl">sample ontology</button>
       </div>
     </div>
 
@@ -218,7 +224,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
       <input type="file" id="file-input" name="file" accept=".ttl,.rdf,.owl,.rdfs,.xml,.jsonld,.json,.nt,.n3" required disabled>
       <div class="examples-label" style="margin-top:0.8em">Accepts Turtle, RDF/XML, JSON-LD, N-Triples, or N3.</div>
       <details class="input-settings">
-        <summary>Optional input settings</summary>
+        <summary>Advanced options</summary>
         <label for="input-format">RDF format</label>
         <select id="input-format" name="format" disabled>
           <option value="">Automatic</option>
@@ -265,7 +271,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
         });
       });
     });
-    document.querySelectorAll('.chip[data-url]').forEach(function(btn) {
+    document.querySelectorAll('.example[data-url]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         urlInput.value = btn.dataset.url;
         urlInput.focus();
