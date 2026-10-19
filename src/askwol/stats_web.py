@@ -42,7 +42,7 @@ def _stats_bar(value: int, maximum: int) -> str:
 
 
 _STATUS_NOTES = {
-    "200": "OK, validation succeeded",
+    "200": "OK, validation completed",
     "400": "bad request, missing or unusable input",
     "401": "unauthorised stats access",
     "413": "upload or fetched content exceeded the size limit",
@@ -493,7 +493,7 @@ def _render_stats_page(data: dict[str, object]) -> str:
             <section class="card summary" aria-label="Usage summary">
                 <div class="metric"><div class="label">Events</div><div class="value">{_format_int(total_events)}</div></div>
                 <div class="metric"><div class="label">Unique visitors</div><div class="value">{_format_int(unique_visitors)}</div></div>
-                <div class="metric"><div class="label">Average duration</div><div class="value">{escape(_format_duration(int(avg_duration) if avg_duration is not None else None))}</div></div>
+                <div class="metric"><div class="label">Average duration (30 days)</div><div class="value">{escape(_format_duration(int(avg_duration) if avg_duration is not None else None))}</div></div>
             </section>
 
             <section class="card panel" style="grid-column: span 12;">

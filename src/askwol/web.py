@@ -251,7 +251,7 @@ async def _read_upload_capped(file: UploadFile) -> bytes:
         total += len(chunk)
         if total > MAX_UPLOAD_SIZE:
             raise UploadTooLargeError(
-                f"File exceeds the {MAX_UPLOAD_SIZE // (1024 * 1024)} MB upload limit"
+                f"File exceeds the {MAX_UPLOAD_SIZE // (1024 * 1024)} MiB upload limit"
             )
         chunks.append(chunk)
     return b"".join(chunks)
@@ -465,7 +465,7 @@ async def _validate_url(url: str) -> HTMLResponse:
                 if total > MAX_UPLOAD_SIZE:
                     return HTMLResponse(
                         f"<p>The URL response exceeds the "
-                        f"{MAX_UPLOAD_SIZE // (1024 * 1024)} MB limit.</p>",
+                        f"{MAX_UPLOAD_SIZE // (1024 * 1024)} MiB limit.</p>",
                         status_code=413,
                     )
                 chunks.append(chunk)
@@ -529,7 +529,7 @@ _API_RESPONSES = {
         "model": _API_REPORT | ApiValidationError,
         "description": "Input or RDF parse-error report, or invalid request with a detail list",
     },
-    413: {"model": ApiError, "description": "Ontology file or JSON request exceeds the 20 MB size limit"},
+    413: {"model": ApiError, "description": "Ontology file or JSON request exceeds the 20 MiB size limit"},
     429: {"model": ApiError, "description": "Too many requests from this client"},
     503: {"model": ApiError, "description": "Too many concurrent validations; retry later"},
     504: {"model": ApiError, "description": "Validation exceeded its time limit"},
@@ -630,7 +630,7 @@ async def _read_content_capped(request: Request) -> bytes:
     async for chunk in request.stream():
         total += len(chunk)
         if total > MAX_UPLOAD_SIZE:
-            raise UploadTooLargeError(f"Request exceeds the {MAX_UPLOAD_SIZE // (1024 * 1024)} MB size limit")
+            raise UploadTooLargeError(f"Request exceeds the {MAX_UPLOAD_SIZE // (1024 * 1024)} MiB size limit")
         chunks.append(chunk)
     return b"".join(chunks)
 
@@ -640,9 +640,9 @@ async def _read_content_capped(request: Request) -> bytes:
     response_model=_API_REPORT,
     summary="Validate ontology content in a JSON request",
     description=(
-        "Send JSON-LD directly as the `content` object or array, or send RDF source text "
-        "with an explicit `format`. Optional `base_uri` resolves relative IRIs. "
-        "The complete JSON request is limited to 20 MB.\n\n" + render_checks_api_description()
+        "Set `format` and provide `content` as RDF source text or, for JSON-LD, an object or array. "
+        "Optional `base_uri` resolves relative IRIs. "
+        "The complete JSON request is limited to 20 MiB.\n\n" + render_checks_api_description()
     ),
     tags=["validation"],
     responses={**_API_RESPONSES, 415: {"model": ApiError, "description": "Content-Type must be application/json"}},

@@ -91,8 +91,9 @@ def _guide_link(report_anchor: str) -> str:
     if not check:
         return ""
     href = f"guide#{check['guide_anchor']}"
+    number = _CHECK_NUMBERS[report_anchor]
     return (f'<p style="font-size:0.85em;color:#666;margin:0.4em 0 0;">'
-            f'&rarr; Learn more in the <a href="{href}">publishing guide</a>.</p>')
+            f'&rarr; Learn more in the <a href="{href}">publishing guide, section {number}</a>.</p>')
 
 
 def _external_link(uri: str, body_html: str, *, title: bool = False) -> str:
@@ -1220,15 +1221,11 @@ class _HtmlReport:
             n_missing_lang = sum(1 for i in lt.issues if i.issue_type == "missing_language")
 
             # Build a human-readable headline that explains what's wrong, not just a count.
-            all_expected: set[str] = set()
-            for i in lt.issues:
-                all_expected.update(i.languages_expected)
-            expected_str = ", ".join(f"<code>{escape(l)}</code>" for l in sorted(all_expected)) or "a language tag"
             headline_bits = []
             if n_missing_tag:
-                headline_bits.append(f"{n_missing_tag} value{'s' if n_missing_tag != 1 else ''} missing a language tag (expected {expected_str})")
+                headline_bits.append(f"{n_missing_tag} issue{'s' if n_missing_tag != 1 else ''} with untagged values")
             if n_missing_lang:
-                headline_bits.append(f"{n_missing_lang} value{'s' if n_missing_lang != 1 else ''} missing a translation")
+                headline_bits.append(f"{n_missing_lang} issue{'s' if n_missing_lang != 1 else ''} with missing languages")
             headline = " &middot; ".join(headline_bits)
 
             self.parts.append(self._section_heading('language-tags', 'Language tag consistency',
@@ -1255,17 +1252,17 @@ class _HtmlReport:
             self.parts.append(self._section_heading('language-tags', 'Language tag consistency', 'consistent'))
             self.parts.append(_guide_link('language-tags'))
             self.parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) on internally defined terms should use language tags consistently.</p>')
-            self.parts.append(self._subtitle(f'Labels and definitions use {lang_str} consistently across subjects.'))
+            self.parts.append(self._subtitle(f'Languages found: {lang_str}. No inconsistencies detected.'))
         elif lt and lt.status == Status.WARN:
             self.parts.append(self._section_heading('language-tags', 'Language tag consistency', 'no language tags used'))
             self.parts.append(_guide_link('language-tags'))
             self.parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) on internally defined terms should use language tags consistently.</p>')
-            self.parts.append(self._subtitle('None of the labels or definitions in this ontology carry a language tag (e.g. <code>"Person"@en</code>). Plain strings are valid RDF, but language tags make labels easier to localise and to filter by language.'))
+            self.parts.append(self._subtitle('None of the checked labels or definitions carry a language tag (e.g. <code>"Person"@en</code>). Plain strings are valid RDF, but language tags make labels easier to localise and to filter by language.'))
         else:
             self.parts.append(self._section_heading('language-tags', 'Language tag consistency', 'not applicable', na=True))
             self.parts.append(_guide_link('language-tags'))
             self.parts.append('<p class="subtitle">Labels and definitions (<code>rdfs:label</code>, <code>rdfs:comment</code>, <code>skos:prefLabel</code>, <code>skos:definition</code>, &hellip;) on internally defined terms should use language tags consistently.</p>')
-            self.parts.append(self._subtitle('This ontology has no labels or definitions to check for language tags.'))
+            self.parts.append(self._subtitle("No labels or definitions fall within this check's scope."))
         self.parts.append('</section>')
 
     def _reasoner(self) -> None:

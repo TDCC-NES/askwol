@@ -18,7 +18,7 @@ POST https://lod-4tu.tudelft.nl/askwol/api/validate/content with a JSON object:
 - `content`: RDF text; JSON-LD also accepts an object or array directly.
 - `base_uri`: optional absolute IRI for resolving relative IRIs.
 
-Both endpoints return a full JSON report by default. Add `?compact=true` for findings, counts, check coverage, and reasoning scope without term inventories. The size limit is 20 MB; for the content endpoint it applies to the complete JSON request.
+Both endpoints return a full JSON report by default. Add `?compact=true` for findings, counts, check coverage, and reasoning scope without term inventories. The size limit is 20 MiB; for the content endpoint it applies to the complete JSON request.
 
 ```bash
 curl --request POST \
@@ -27,7 +27,7 @@ curl --request POST \
   --data '{"format":"json-ld","content":{"@context":{"owl":"http://www.w3.org/2002/07/owl#"},"@id":"https://example.org/ontology","@type":"owl:Ontology"}}'
 ```
 
-HTTP 200 means processing completed; inspect `severity_summary.has_errors` to determine whether errors were found. HTTP 422 returns either a report with RDF parse errors or a `detail` list for an invalid request. Other errors return a `detail` string: 400 malformed multipart, 413 size limit, 415 unsupported content type, 429 rate limit, 500 worker failure, 503 busy service, or 504 timeout.
+HTTP 200 means processing completed; inspect `severity_summary.has_errors` to determine whether errors were found. HTTP 422 returns either a report with `input_error` or a `detail` list for an invalid request. Other errors return a `detail` string: 400 malformed multipart, 413 size limit, 415 unsupported content type, 429 rate limit, 500 worker failure, 503 busy service, or 504 timeout.
 
 ## Reading results
 

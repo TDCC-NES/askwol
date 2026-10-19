@@ -40,7 +40,7 @@ def _base_uri_option(ctx, param, value):
 
 @click.group()
 def main() -> None:
-    """OWL Ontology Checker  -  validate namespace resolution and term existence."""
+    """Check OWL ontologies."""
 
 
 @main.command()
@@ -71,7 +71,7 @@ def check(
     file: Path, output_format: str, output: Path | None, timeout: float,
     skip_resolution: bool, input_format: str | None, base_uri: str | None,
 ) -> None:
-    """Check an ontology file for namespace resolution and term validity."""
+    """Check a local ontology file."""
     console = Console(stderr=True)
     console.print(f"Checking [bold]{escape(str(file))}[/bold] …")
 

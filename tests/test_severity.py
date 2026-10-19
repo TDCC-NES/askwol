@@ -509,7 +509,7 @@ def test_language_tag_wording_uses_its_rule(monkeypatch, severity):
     monkeypatch.setitem(RULE_SEVERITY, Rule.LANG_TAG_MISSING, severity)
     report = ValidationReport(file="language.ttl", lang_tags=LangTagReport(status=Status.WARN))
     assert report.severity_summary.count(severity) == 1
-    assert f"> **{severity.value.title()}:** labels" in report_as_markdown(report)
+    assert f"> **{severity.value.title()}:** none of the checked labels" in report_as_markdown(report)
     assert f'title="{severity.value.title()}"' in _html_section(report, "language-tags")
     assert severity.value.upper() in _terminal(report)
 

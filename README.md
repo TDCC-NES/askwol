@@ -170,7 +170,7 @@ Native Python runs read environment variables, not `.env` files. Docker Compose 
 | `ASKWOL_USAGE_DISABLED` | unset | Set to `1` to disable usage tracking. |
 | `ASKWOL_STATS_TOKEN` | unset | Enables access to usage statistics. |
 
-Web uploads and URL responses are capped at **20 MB**; Python source-URL retrieval is capped at **10 MiB**. Local CLI/Python files have no byte cap and share the ontology size caps above. Requests to private/internal network addresses are blocked. Web jobs run in isolated subprocesses: timeouts return `504`, and excess concurrent requests return `503`. Set the proxy timeout above the job timeout and enforce a proxy upload limit. The CLI runs without the web job timeout or concurrency limit.
+Web uploads and URL responses are capped at **20 MiB**; Python source-URL retrieval is capped at **10 MiB**. Local CLI/Python files have no byte cap and share the ontology size caps above. Requests to private/internal network addresses are blocked. Web jobs run in isolated subprocesses: timeouts return `504`, and excess concurrent requests return `503`. Set the proxy timeout above the job timeout and enforce a proxy upload limit. The CLI runs without the web job timeout or concurrency limit.
 
 A client disconnect cancels its job when the reverse proxy forwards the disconnect. Cancelled requests do not count as usage.
 

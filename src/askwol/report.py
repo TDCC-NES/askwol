@@ -199,9 +199,9 @@ class _MarkdownReport:
         self.w(f"| Namespaces checked | {sum(ns.resolution.status != Status.SKIP for ns in self.report.namespaces)} |")
         self.w(f"| Namespaces with RDF | {len(self.ok_ns)} |")
         if self.html_ns:
-            self.w(f"| Namespaces returning HTML (no RDF) | {len(self.html_ns)} |")
+            self.w(f"| Namespaces without retrieved RDF | {len(self.html_ns)} |")
         if self.fail_ns:
-            self.w(f"| Namespaces unreachable | {len(self.fail_ns)} |")
+            self.w(f"| Namespace retrieval failures | {len(self.fail_ns)} |")
         self.w(f"| External terms to check | {len(self.external_terms)} |")
         self.w(f"| Terms confirmed in vocabulary | {self.ok_terms} |")
         meta = self.report.ontology_metadata
@@ -435,11 +435,10 @@ class _MarkdownReport:
             self.w("")
 
         if self.html_ns:
-            self.w("## Namespaces returning HTML")
+            self.w("## Namespaces without retrieved RDF")
             self.w("")
-            self.w("These namespaces resolved (HTTP 200) but returned an HTML page instead of RDF data. "
-              "The server may not support content negotiation, or the RDF is hosted at a different URL. "
-              "Terms from these namespaces could **not** be verified.")
+            self.w("No parseable RDF was retrieved for these namespaces. "
+              "Terms can still be checked against a built-in term list where available.")
             self.w("")
             self.w("| Prefix | URI | Terms | Content-Type |")
             self.w("|--------|-----|-------|-------------|")
@@ -449,10 +448,9 @@ class _MarkdownReport:
             self.w("")
 
         if self.fail_ns:
-            self.w("## Unreachable namespaces")
+            self.w("## Namespace retrieval failures")
             self.w("")
-            self.w("These namespace URIs could not be reached. This might mean the URL is wrong, "
-              "the server is down, or the ontology is not published yet.")
+            self.w("Retrieval failed for these namespace URLs. See the reported errors.")
             self.w("")
             self.w("| Prefix | URI | Error |")
             self.w("|--------|-----|-------|")
@@ -759,9 +757,9 @@ class _MarkdownReport:
             n_missing_lang = sum(1 for i in lt.issues if i.issue_type == "missing_language")
             parts = []
             if n_missing_tag:
-                parts.append(f"{n_missing_tag} untagged value{'s' if n_missing_tag != 1 else ''}")
+                parts.append(f"{n_missing_tag} issue{'s' if n_missing_tag != 1 else ''} with untagged values")
             if n_missing_lang:
-                parts.append(f"{n_missing_lang} missing translation{'s' if n_missing_lang != 1 else ''}")
+                parts.append(f"{n_missing_lang} issue{'s' if n_missing_lang != 1 else ''} with missing languages")
             if parts:
                 self.w(f"> **{len(lt.issues)} issue{'s' if len(lt.issues) != 1 else ''}:** {' · '.join(parts)}")
                 self.w("")
@@ -776,7 +774,7 @@ class _MarkdownReport:
             self.w("## Language tag consistency")
             self.w("")
             self.w(f"> **{SEVERITY_STYLES[RULE_SEVERITY[Rule.LANG_TAG_MISSING]].label}:** "
-              "labels or definitions are present, but none carry a language tag (e.g. `\"Person\"@en`).")
+              "none of the checked labels or definitions carry a language tag (e.g. `\"Person\"@en`).")
             self.w("")
 
     def _non_ontology_terms(self) -> None:
@@ -1317,7 +1315,7 @@ class _ConsoleReport:
         if meta and meta.checks:
             self.console.print()
             if not meta.missing:
-                self.console.print(f"[green]✓ Ontology metadata complete[/green] ({meta.passed_checks}/{meta.total_checks} checks)")
+                self.console.print(f"[green]✓ All metadata checks passed[/green] ({meta.passed_checks}/{meta.total_checks} checks)")
             else:
                 self.console.print(_flag(RULE_SEVERITY[Rule.METADATA_MISSING], "Ontology metadata") + f" - {meta.passed_checks}/{meta.total_checks} present")
                 meta_table = Table(title="Ontology metadata checks", show_lines=True)
@@ -1395,7 +1393,7 @@ class _ConsoleReport:
             self.console.print(lang_table)
         elif lt and lt.status == Status.WARN:
             self.console.print()
-            self.console.print(_flag(RULE_SEVERITY[Rule.LANG_TAG_MISSING], "Language tags  -  labels or definitions present but none carry a language tag"))
+            self.console.print(_flag(RULE_SEVERITY[Rule.LANG_TAG_MISSING], "Language tags  -  none of the checked labels or definitions carry a language tag"))
 
     def _reasoner(self) -> None:
         # Reasoner checks

@@ -6,10 +6,13 @@ from pathlib import Path
 
 import pytest
 from pydantic import BaseModel, ValidationError
+from rdflib import Graph, Literal, Namespace
+from rdflib.namespace import RDFS, SKOS
 from rich.console import Console
 
 from askwol.checks import CHECKS, DATATYPE_SCOPE, REASONER_SCOPE
 from askwol.agent_api import compact_report
+from askwol.lang_tags import check_lang_tags
 from askwol.models import (
     ImportsCheck,
     ImportsReport,
@@ -17,6 +20,7 @@ from askwol.models import (
     NamespaceCheck,
     NamespaceReport,
     Status,
+    TermCheck,
     ValidationReport,
 )
 from askwol.pipeline import run_full_validation
@@ -183,6 +187,90 @@ def test_discovered_import_retains_warning_and_both_sources_in_every_report():
     assert finding.subject == original and retrieved in finding.message
     assert compact.severity_summary == report.severity_summary
     assert compact.severity_summary.warnings == 1
+
+
+@pytest.mark.parametrize(("values", "issue_type", "wording"), [
+    ((Literal("First"), Literal("Second")), "missing_tag", "1 issue with untagged values"),
+    ((Literal("B", lang="en"),), "missing_language", "1 issue with missing languages"),
+])
+def test_language_report_counts_subject_property_issues(values, issue_type, wording):
+    ex = Namespace("https://example.org/ontology#")
+    graph = Graph()
+    for language in ("de", "en", "nl"):
+        graph.add((ex.A, RDFS.label, Literal(f"A-{language}", lang=language)))
+    for value in values:
+        graph.add((ex.B, RDFS.label, value))
+    report = ValidationReport(file="ontology.ttl", lang_tags=check_lang_tags(
+        graph, {"ex": str(ex), "rdfs": str(RDFS)},
+    ))
+    original = report_as_json(report)
+
+    html, markdown, terminal = _human_outputs(report)
+    restored = ValidationReport.model_validate_json(original)
+
+    assert len(restored.lang_tags.issues) == 1
+    issue = restored.lang_tags.issues[0]
+    assert issue.subject_uri == str(ex.B) and issue.property == "rdfs:label"
+    assert issue.issue_type == issue_type
+    assert issue.languages_expected == ["de", "en", "nl"]
+    assert len(restored.severity_summary.for_check("language-tags")) == 1
+    assert wording in html and wording in markdown
+    assert "1 consistency issue" in terminal
+    assert report_as_json(report) == original
+
+
+def test_language_expectations_remain_specific_to_each_property():
+    ex = Namespace("https://example.org/ontology#")
+    graph = Graph()
+    for prop, languages in ((RDFS.label, ("en", "nl")), (SKOS.definition, ("de", "fr"))):
+        for language in languages:
+            graph.add((ex.A, prop, Literal(f"A-{language}", lang=language)))
+    graph.add((ex.B, RDFS.label, Literal("B")))
+    graph.add((ex.B, SKOS.definition, Literal("B-de", lang="de")))
+    report = ValidationReport(file="ontology.ttl", lang_tags=check_lang_tags(
+        graph, {"ex": str(ex), "rdfs": str(RDFS), "skos": str(SKOS)},
+    ))
+
+    html, markdown, _ = _human_outputs(report)
+    section = html.split('id="language-tags"', 1)[1].split("</section>", 1)[0]
+    headline, table = section.split("<table>", 1)
+
+    assert "expected " not in headline.lower()
+    for prop, expected, other in (("rdfs:label", ("en", "nl"), ("de", "fr")),
+                                  ("skos:definition", ("de", "fr"), ("en", "nl"))):
+        html_row = next(row for row in table.split("</tr>") if f"<code>{prop}</code>" in row)
+        markdown_row = next(row for row in markdown.splitlines() if f"`{prop}`" in row)
+        assert all(f"<code>{language}</code>" in html_row for language in expected)
+        assert all(f"<code>{language}</code>" not in html_row for language in other)
+        assert markdown_row.endswith(f"| {', '.join(expected)} |")
+    assert len(report.lang_tags.issues) == 2
+
+
+@pytest.mark.parametrize(("status", "http_status", "content_type", "heading"), [
+    (Status.OK, 200, "application/pdf", "Namespaces without retrieved RDF"),
+    (Status.OK, None, None, "Namespaces without retrieved RDF"),
+    (Status.FAIL, 403, "text/html", "Namespace retrieval failures"),
+])
+def test_namespace_wording_does_not_assume_html_or_network_failure(status, http_status, content_type, heading):
+    uri = "https://example.org/vocab#"
+    report = ValidationReport(file="ontology.ttl", namespaces=[NamespaceReport(
+        prefix="ex", uri=uri,
+        resolution=NamespaceCheck(
+            prefix="ex", uri=uri, status=status, http_status=http_status,
+            content_type=content_type, is_valid_rdf=False,
+            error="HTTP 403" if status == Status.FAIL else None,
+        ),
+        terms=[TermCheck(term_uri=uri + "A", prefix="ex", local_name="A", status=Status.OK)],
+    )])
+
+    markdown = report_as_markdown(report)
+
+    assert f"## {heading}" in markdown
+    for claim in ("returning HTML", "HTTP 200", "could **not** be verified", "could not be reached", "unreachable"):
+        assert claim not in markdown
+    assert report.namespaces[0].valid_terms == 1
+    assert len(report.severity_summary.for_check("namespaces")) == int(status == Status.FAIL)
+    assert ValidationReport.model_validate_json(report_as_json(report)).namespaces == report.namespaces
 
 
 async def test_pipeline_findings_survive_each_output_format(monkeypatch):

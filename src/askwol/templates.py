@@ -440,7 +440,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
   </script>
 
   <h2 id="what-do-you-get">What do you get?</h2>
-  <p>An interactive <strong>class diagram</strong> and an HTML report
+  <p>An interactive class diagram and an HTML report
   (or JSON via the API). The checks below link to the relevant sections of the
   <a href="guide">publishing guide</a>.</p>
 
@@ -762,7 +762,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
       <a href="http://opendatacommons.org/licenses/pddl/1.0/" target="_blank" rel="noopener">Open Data Commons Public Domain Dedication and License (PDDL)</a> (public domain); IRI: <code>http://opendatacommons.org/licenses/pddl/1.0/</code>; designed for databases and their contents.
     </li>
     <li>
-      <a href="http://opendatacommons.org/licenses/by/1.0/" target="_blank" rel="noopener">Open Data Commons Attribution License (ODC-By)</a> (requires attribution); IRI: <code>http://opendatacommons.org/licenses/by/1.0/</code>; only covers data and not content.
+      <a href="http://opendatacommons.org/licenses/by/1.0/" target="_blank" rel="noopener">Open Data Commons Attribution License (ODC-By)</a> (requires attribution); IRI: <code>http://opendatacommons.org/licenses/by/1.0/</code>; covers rights in the database; individual contents may need separate licences.
     </li>
     <li>
       <a href="http://opendatacommons.org/licenses/odbl/1.0/" target="_blank" rel="noopener">Open Data Commons Open Database License (ODbL)</a> (requires attribution, share-alike); IRI: <code>http://opendatacommons.org/licenses/odbl/1.0/</code>; too restrictive due to the share-alike.
@@ -876,10 +876,10 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
   (used by e.g. <a href="https://vivoweb.org/ontology/core" target="_blank" rel="noopener">VIVO</a>).
   <span class="tag practice">TDCC guideline</span> A
   <code>vs:term_status</code> of &ldquo;deprecated&rdquo;/&ldquo;archaic&rdquo;
-  is a community convention from a non-normative
-  (<a href="https://www.w3.org/2003/06/sw-vocab-status/note" target="_blank" rel="noopener">W3C Note</a>,
-  used by e.g. <a href="http://xmlns.com/foaf/spec/index.rdf" target="_blank" rel="noopener">FOAF</a>),
-  not a REC. askwol checks for all three and flags a deprecated reused term
+  is a community convention documented in an
+  <a href="https://www.w3.org/2003/06/sw-vocab-status/note" target="_blank" rel="noopener">editor&rsquo;s draft</a>
+  and used by e.g. <a href="http://xmlns.com/foaf/spec/index.rdf" target="_blank" rel="noopener">FOAF</a>.
+  askwol checks for all three and flags a deprecated reused term
   as a warning, so you don&rsquo;t quietly build on a term the source
   vocabulary is phasing out.</div>
 """,
@@ -930,11 +930,11 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Categorise your terms and name them consistently",
         "toc_label": "Term inventory &amp; naming",
         "body": """\
-  <p><span class="tag spec">Spec</span> Every term you define falls into a
-  category OWL 2 itself defines: a <strong>class</strong>, an
-  <strong>object property</strong>, a <strong>datatype property</strong>, an
-  <strong>annotation property</strong>, a <strong>datatype</strong>, or a
-  <strong>named individual</strong>. askwol lists each internal term with the
+  <p><span class="tag spec">Spec</span> OWL 2 defines six entity types:
+  <strong>classes</strong>, <strong>datatypes</strong>,
+  <strong>object properties</strong>, <strong>data properties</strong>,
+  <strong>annotation properties</strong>, and <strong>named individuals</strong>.
+  askwol lists each internal term with the
   category it detected, so you can spot a term that was never typed
   (<code>rdf:type</code> missing) or typed as the wrong kind of thing.</p>
   <pre>&lt;#Person&gt;   a owl:Class .
@@ -1066,11 +1066,9 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
         "title": "Keep concept schemes separate from the schema",
         "toc_label": "Non-ontology terms",
         "body": """\
-  <p><span class="tag practice">TDCC guideline</span> An OWL ontology is the
-  <em>schema</em>: it defines classes, properties, and datatypes (the
-  terminology). Named individuals are a different kind of thing, actual
-  instances rather than schema, and most are fine to keep in the same
-  file. <strong>SKOS concepts</strong>, the members of a controlled
+  <p><span class="tag practice">TDCC guideline</span> An OWL ontology can contain
+  both schema definitions and named individuals. Most named individuals are
+  fine to keep in the same file. <strong>SKOS concepts</strong>, the members of a controlled
   vocabulary or thesaurus, are the one case worth pulling out. A concept
   scheme is typically much larger than the schema and grows on its own
   schedule: new terms get added without ever touching a class or property
@@ -1257,7 +1255,7 @@ GUIDE_SECTIONS: list[dict[str, str]] = [
     {
         "group": "practice",
         "anchor": "validate",
-        "title": "Run askwol during development, not just before release",
+        "title": "",
         "toc_label": "Validate early and often",
         "body": """\
   <p>Run <a href="./">askwol</a> on your ontology during development, not just
@@ -1457,8 +1455,8 @@ def _render_checks_overview() -> str:
         title = escape(check["title"], quote=False)
         desc = _md_to_html(check["description"])
         parts.append(
-            f'    <li><span class="num">{num}</span> '
-            f'<strong><a href="guide#{check["guide_anchor"]}">{title}</a></strong>: {desc}</li>'
+            f'    <li><a href="guide#{check["guide_anchor"]}"><span class="num">{num}</span> '
+            f'<strong>{title}</strong></a>: {desc}</li>'
         )
     parts.append("  </ul>")
     return "\n".join(parts)
@@ -1662,7 +1660,7 @@ GUIDE_HTML = f"""<!DOCTYPE html>
   <p><span class="tag spec">Spec</span> what an OWL, RDF, RDFS, or other
   W3C/IETF specification defines or requires.</p>
   <p><span class="tag practice">TDCC guideline</span> a recommendation from
-  the TDCC ontology engineers that askwol checks for, but that goes beyond
+  the TDCC ontology engineers that goes beyond
   what any specification mandates. A W3C Note (such as Cool URIs, cited
   below) is informative, not normative, so guidance drawn from one counts as
   a TDCC guideline here too.</p>

@@ -124,7 +124,7 @@ class LangTagReport(BaseModel):
         if not found and self.status == Status.WARN:
             found.append(Finding.of(
                 Rule.LANG_TAG_MISSING,
-                message="Labels or definitions are present but none carry a language tag.",
+                message="None of the checked labels or definitions carry a language tag.",
             ))
         return found
 

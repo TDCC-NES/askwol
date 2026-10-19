@@ -256,7 +256,7 @@
         a sh:SPARQLConstraint ;
         sh:name "ObjectPropertyRangeIsDatatype" ;
         sh:severity sh:Violation ;
-        sh:message "Range is a datatype; an object property should range over a class (use a datatype property instead)." ;
+        sh:message "Range is a datatype; an object property should range over a class. Check the property type or range." ;
         sh:select """
             PREFIX owl: <http://www.w3.org/2002/07/owl#>
             PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -280,7 +280,7 @@
         a sh:SPARQLConstraint ;
         sh:name "DatatypePropertyRangeIsClass" ;
         sh:severity sh:Violation ;
-        sh:message "Range is a class; a datatype property should range over a datatype (use an object property instead)." ;
+        sh:message "Range is a class; a datatype property should range over a datatype. Check the property type or range." ;
         sh:select """
             PREFIX owl: <http://www.w3.org/2002/07/owl#>
             PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>

@@ -59,7 +59,7 @@ CHECKS: list[CheckDefinition] = [
     {"report_anchor": "internal-terms", "title": "Internal term definitions", "guide_anchor": "internal-terms", "category": "structure",
      "description": "flags terms in the ontology's own namespace that are referenced but never defined. Usually a typo or a forgotten declaration."},
     {"report_anchor": "term-inventory", "title": "Term inventory & naming", "guide_anchor": "term-inventory", "category": "structure",
-     "description": "categorises every internal term (class, object property, datatype property, datatype, individual) and checks capitalisation: classes start uppercase, properties lowercase. Coded identifiers are exempt."},
+     "description": "categorises every internal term and checks capitalisation: classes start uppercase, properties lowercase. Coded identifiers are exempt."},
     {"report_anchor": "domains-ranges", "title": "Domains & ranges", "guide_anchor": "domains-ranges", "category": "structure",
      "description": "checks directly declared domains and ranges of internal object and datatype properties. Missing declarations are recommendations; selected named class/datatype mismatches are errors. Anonymous expressions are not evaluated."},
     {"report_anchor": "datatypes", "title": "Datatypes", "guide_anchor": "datatypes", "category": "structure",
@@ -129,7 +129,7 @@ def render_checks_api_description() -> str:
         "Use `compact=true` to return findings, counts, check coverage and reasoning scope "
         "without detailed term inventories. HTTP 200 means validation completed, not that "
         "the ontology passed: inspect `severity_summary` and skipped or unavailable checks. "
-        "HTTP 422 returns a parse-error report or request-validation errors in `detail`.\n\n"
+        "HTTP 422 returns a report with `input_error` or request-validation errors in `detail`.\n\n"
         "The checks are:\n\n"
     )
     outro = (
