@@ -7,7 +7,7 @@ Check OWL ontologies during modelling and before publication. Get a report on na
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://github.com/TDCC-NES/askwol/actions/workflows/tests.yml/badge.svg)](https://github.com/TDCC-NES/askwol/actions/workflows/tests.yml)
 
-**[Try online](https://lod-4tu.tudelft.nl/askwol/)** · **[Publishing guide](https://lod-4tu.tudelft.nl/askwol/guide)**
+**[Try online](https://askwol.net)** · **[Publishing guide](https://lod-4tu.tudelft.nl/askwol/guide)**
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/TDCC-NES/askwol/main/docs/screenshot.png" alt="askwol web UI screenshot" width="720">
